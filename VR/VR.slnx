@@ -1,0 +1,9 @@
+﻿<Solution>
+  <Project Path="Inworld.Assets.csproj" />
+  <Project Path="Assembly-CSharp.csproj" />
+  <Project Path="Inworld.RPM.csproj" />
+  <Project Path="Inworld.Editor.csproj" />
+  <Project Path="Inworld.Samples.csproj" />
+  <Project Path="InworldAI.NDK.csproj" />
+  <Project Path="Assembly-CSharp-Editor.csproj" />
+</Solution>

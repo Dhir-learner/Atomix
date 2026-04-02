@@ -1,0 +1,116 @@
+﻿
+> VR\Assets\Scenes\LabScene.unity:11758:  m_text: 
+  VR\Assets\Scenes\LabScene.unity:11759:  
+m_isRightToLeft: 0
+  VR\Assets\Scenes\LabScene.unity:11760:  
+m_fontAsset: {fileID: 11400000, guid: 
+8f586378b4e144a9851e7b34d9b748ee, type: 2}
+> VR\Assets\Scenes\LabScene.unity:12109:  m_text: 
+  VR\Assets\Scenes\LabScene.unity:12110:  
+m_isRightToLeft: 0
+  VR\Assets\Scenes\LabScene.unity:12111:  
+m_fontAsset: {fileID: 11400000, guid: 
+8f586378b4e144a9851e7b34d9b748ee, type: 2}
+> VR\Assets\Scenes\LabScene.unity:12246:  m_text: 
+  VR\Assets\Scenes\LabScene.unity:12247:  
+m_isRightToLeft: 0
+  VR\Assets\Scenes\LabScene.unity:12248:  
+m_fontAsset: {fileID: 11400000, guid: 
+8f586378b4e144a9851e7b34d9b748ee, type: 2}
+> VR\Assets\Scenes\LabScene.unity:20088:  m_text: 
+Combustion Reactions
+  VR\Assets\Scenes\LabScene.unity:20089:  
+m_isRightToLeft: 0
+  VR\Assets\Scenes\LabScene.unity:20090:  
+m_fontAsset: {fileID: 11400000, guid: 
+8f586378b4e144a9851e7b34d9b748ee, type: 2}
+> VR\Assets\Scenes\LabScene.unity:36638:  m_text: 
+Hi! I'm RoboChem and I'll guide you through 
+learning chemical reactions.
+  VR\Assets\Scenes\LabScene.unity:36639:    To 
+start, you can open the book.
+  VR\Assets\Scenes\LabScene.unity:36640:  
+m_isRightToLeft: 0
+> VR\Assets\Scenes\LabScene.unity:46967:  m_text: 
+Neutralization Reactions
+  VR\Assets\Scenes\LabScene.unity:46968:  
+m_isRightToLeft: 0
+  VR\Assets\Scenes\LabScene.unity:46969:  
+m_fontAsset: {fileID: 11400000, guid: 
+8f586378b4e144a9851e7b34d9b748ee, type: 2}
+> VR\Assets\Scenes\LabScene.unity:47999:  m_text: 
+  VR\Assets\Scenes\LabScene.unity:48000:  
+m_isRightToLeft: 0
+  VR\Assets\Scenes\LabScene.unity:48001:  
+m_fontAsset: {fileID: 11400000, guid: 
+8f586378b4e144a9851e7b34d9b748ee, type: 2}
+> VR\Assets\Scenes\LabScene.unity:54998:  m_text: 
+  VR\Assets\Scenes\LabScene.unity:54999:  
+m_isRightToLeft: 0
+  VR\Assets\Scenes\LabScene.unity:55000:  
+m_fontAsset: {fileID: 11400000, guid: 
+8f586378b4e144a9851e7b34d9b748ee, type: 2}
+> VR\Assets\Scenes\LabScene.unity:73473:  m_text: 
+  VR\Assets\Scenes\LabScene.unity:73474:  
+m_isRightToLeft: 0
+  VR\Assets\Scenes\LabScene.unity:73475:  
+m_fontAsset: {fileID: 11400000, guid: 
+8f586378b4e144a9851e7b34d9b748ee, type: 2}
+> VR\Assets\Scenes\LabScene.unity:100237:  
+m_text: 
+  VR\Assets\Scenes\LabScene.unity:100238:  
+m_isRightToLeft: 0
+  VR\Assets\Scenes\LabScene.unity:100239:  
+m_fontAsset: {fileID: 11400000, guid: 
+8f586378b4e144a9851e7b34d9b748ee, type: 2}
+> VR\Assets\Scenes\LabScene.unity:103876:  
+m_text: 
+  VR\Assets\Scenes\LabScene.unity:103877:  
+m_isRightToLeft: 0
+  VR\Assets\Scenes\LabScene.unity:103878:  
+m_fontAsset: {fileID: 11400000, guid: 
+8f586378b4e144a9851e7b34d9b748ee, type: 2}
+> VR\Assets\Scenes\LabScene.unity:104608:  
+m_text: 
+  VR\Assets\Scenes\LabScene.unity:104609:  
+m_isRightToLeft: 0
+  VR\Assets\Scenes\LabScene.unity:104610:  
+m_fontAsset: {fileID: 11400000, guid: 
+8f586378b4e144a9851e7b34d9b748ee, type: 2}
+> VR\Assets\Scenes\LabScene.unity:105935:  
+m_text: 
+  VR\Assets\Scenes\LabScene.unity:105936:  
+m_isRightToLeft: 0
+  VR\Assets\Scenes\LabScene.unity:105937:  
+m_fontAsset: {fileID: 11400000, guid: 
+8f586378b4e144a9851e7b34d9b748ee, type: 2}
+> VR\Assets\Scenes\LabScene.unity:106154:  
+m_text: 
+  VR\Assets\Scenes\LabScene.unity:106155:  
+m_isRightToLeft: 0
+  VR\Assets\Scenes\LabScene.unity:106156:  
+m_fontAsset: {fileID: 11400000, guid: 
+8f586378b4e144a9851e7b34d9b748ee, type: 2}
+> VR\Assets\Scenes\LabScene.unity:106487:  
+m_text: 
+  VR\Assets\Scenes\LabScene.unity:106488:  
+m_isRightToLeft: 0
+  VR\Assets\Scenes\LabScene.unity:106489:  
+m_fontAsset: {fileID: 11400000, guid: 
+8f586378b4e144a9851e7b34d9b748ee, type: 2}
+> VR\Assets\Scenes\LabScene.unity:108888:  
+m_text: Combination Reactions
+  VR\Assets\Scenes\LabScene.unity:108889:  
+m_isRightToLeft: 0
+  VR\Assets\Scenes\LabScene.unity:108890:  
+m_fontAsset: {fileID: 11400000, guid: 
+8f586378b4e144a9851e7b34d9b748ee, type: 2}
+> VR\Assets\Scenes\LabScene.unity:109284:  
+m_text: "\rDecomposition Reactions"
+  VR\Assets\Scenes\LabScene.unity:109285:  
+m_isRightToLeft: 0
+  VR\Assets\Scenes\LabScene.unity:109286:  
+m_fontAsset: {fileID: 11400000, guid: 
+8f586378b4e144a9851e7b34d9b748ee, type: 2}
+
+
