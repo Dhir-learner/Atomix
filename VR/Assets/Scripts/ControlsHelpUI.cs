@@ -26,6 +26,7 @@ INTERACTION
   Left Click   Grab, release, or activate
   R            Release held object
   T            Reset held object pose
+  V            Hold push-to-talk (Lab Assistant)
 
 HELD OBJECT ROTATION
   Q / E        Rotate left or right

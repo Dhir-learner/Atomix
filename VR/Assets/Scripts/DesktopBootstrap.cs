@@ -69,6 +69,7 @@ public class DesktopBootstrap : MonoBehaviour
         SetupHelpUi(scene);
         SetupCrosshairUi(scene);
         SetupLabAssistantSubtitleUi(scene);
+        SetupLabAssistantPushToTalkUi(scene);
     }
 
     void SetupDesktopPlayer()
@@ -244,6 +245,26 @@ public class DesktopBootstrap : MonoBehaviour
 
         GameObject subtitleObject = new GameObject("LabAssistantSubtitleUI");
         subtitleObject.AddComponent<LabAssistantSubtitleUI>();
+    }
+
+    void SetupLabAssistantPushToTalkUi(Scene scene)
+    {
+        if (scene.name != "LabAssistantScene")
+        {
+            return;
+        }
+
+        LabAssistantPushToTalkUI[] existingPushToTalkUis = FindObjectsByType<LabAssistantPushToTalkUI>(FindObjectsInactive.Include, FindObjectsSortMode.None);
+        foreach (LabAssistantPushToTalkUI pushToTalkUi in existingPushToTalkUis)
+        {
+            if (pushToTalkUi != null && pushToTalkUi.gameObject.scene == scene)
+            {
+                return;
+            }
+        }
+
+        GameObject pushToTalkObject = new GameObject("LabAssistantPushToTalkUI");
+        pushToTalkObject.AddComponent<LabAssistantPushToTalkUI>();
     }
     void RegisterGameObjectFields(MonoBehaviour behaviour, HashSet<GameObject> candidateObjects, Scene scene)
     {
