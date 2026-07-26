@@ -399,7 +399,8 @@ public class ReactionLearningController : MonoBehaviour
             new GameObject(
                 "ReactionVideoDisplay",
                 typeof(RectTransform),
-                typeof(RawImage)
+                typeof(RawImage),
+                typeof(AspectRatioFitter)
             );
 
         videoObject.transform.SetParent(
@@ -434,6 +435,14 @@ public class ReactionLearningController : MonoBehaviour
         videoDisplay.raycastTarget = false;
 
         videoDisplay.enabled = false;
+
+        AspectRatioFitter aspectFitter =
+            videoObject.GetComponent<AspectRatioFitter>();
+        
+        aspectFitter.aspectMode =
+            AspectRatioFitter.AspectMode.FitInParent;
+        
+        aspectFitter.aspectRatio = 16f / 9f; // default aspect ratio, will be updated if needed
 
         EnsureVideoComponents(videoObject);
 
@@ -970,6 +979,15 @@ public class ReactionLearningController : MonoBehaviour
 
         bodyText.text =
             "Molecular reaction explanation";
+            
+        if (source.texture != null)
+        {
+            AspectRatioFitter aspectFitter = videoDisplay.GetComponent<AspectRatioFitter>();
+            if (aspectFitter != null)
+            {
+                aspectFitter.aspectRatio = (float)source.texture.width / (float)source.texture.height;
+            }
+        }
 
         source.Play();
 
