@@ -247,6 +247,23 @@ public class FlipPages : MonoBehaviour
         }
     }
 
+    bool TryOpenReactionLearningFlow(int reactionId)
+    {
+        ReactionLearningController learningController = ReactionLearningController.GetOrCreate(this);
+        if (learningController == null)
+        {
+            return false;
+        }
+
+        return learningController.TryRequestReaction(reactionId);
+    }
+
+    public void StartReactionExperiment(int reactionId)
+    {
+        selectedReaction = reactionId;
+        closeTheBook();
+    }
+
     public void InitialState()
     {
         for (int i = 0; i < pages.Count; i++)
@@ -278,6 +295,7 @@ public class FlipPages : MonoBehaviour
 
     public void closeTheBook()
     {
+        ReactionLearningController.NotifyBookClosed(gameObject.scene);
         InitialState();
 
         BookCanvasManager bookManager = bookCanvas.GetComponent<BookCanvasManager>();
@@ -456,49 +474,65 @@ public class FlipPages : MonoBehaviour
 
     public void Reaction1()
     {
-        selectedReaction = 1;
-        closeTheBook();
+        if (!TryOpenReactionLearningFlow(1))
+        {
+            StartReactionExperiment(1);
+        }
     }
 
     public void Reaction2()
     {
-        selectedReaction = 2;
-        closeTheBook();
+        if (!TryOpenReactionLearningFlow(2))
+        {
+            StartReactionExperiment(2);
+        }
     }
 
     public void Reaction3()
     {
-        selectedReaction = 3;
-        closeTheBook();
+        if (!TryOpenReactionLearningFlow(3))
+        {
+            StartReactionExperiment(3);
+        }
     }
 
     public void Reaction4()
     {
-        selectedReaction = 4;
-        closeTheBook();
+        if (!TryOpenReactionLearningFlow(4))
+        {
+            StartReactionExperiment(4);
+        }
     }
 
     public void Reaction5()
     {
-        selectedReaction = 5;
-        closeTheBook();
+        if (!TryOpenReactionLearningFlow(5))
+        {
+            StartReactionExperiment(5);
+        }
     }
 
     public void Reaction6()
     {
-        selectedReaction = 6;
-        closeTheBook();
+        if (!TryOpenReactionLearningFlow(6))
+        {
+            StartReactionExperiment(6);
+        }
     }
 
     public void Reaction7()
     {
-        selectedReaction = 7;
-        closeTheBook();
+        if (!TryOpenReactionLearningFlow(7))
+        {
+            StartReactionExperiment(7);
+        }
     }
 
     public void Reaction8()
     {
-        selectedReaction = 8;
-        closeTheBook();
+        if (!TryOpenReactionLearningFlow(8))
+        {
+            StartReactionExperiment(8);
+        }
     }
 }
