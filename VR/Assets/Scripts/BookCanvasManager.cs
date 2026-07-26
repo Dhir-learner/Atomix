@@ -34,6 +34,7 @@ public class BookCanvasManager : MonoBehaviour
 
     public void CloseBook()
     {
+        ReactionLearningController.NotifyBookClosed(gameObject.scene);
         bookCanvas.SetActive(false);
         FirstPersonController.SetCursorLock(true);
     }

@@ -1,0 +1,47 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 3d0d97d3c8ee4a4f9f12a4bb1c2b5d11, type: 3}
+  m_Name: ReactionLearningVideoCatalog
+  m_EditorClassIdentifier: 
+  entries:
+  - reactionId: 1
+    reactionName: 2Na + 2H2O -> 2NaOH + H2
+    displayTitle: Sodium + Water
+    videoClip: {fileID: 0}
+  - reactionId: 2
+    reactionName: H2SO4 + CuO -> CuSO4 + H2O
+    displayTitle: Sulfuric Acid + Copper Oxide
+    videoClip: {fileID: 32900000, guid: 7e30599e05f68b048895c38d2c0a98b8, type: 3}
+  - reactionId: 3
+    reactionName: HCl + NaHCO3 -> NaCl + H2O + CO2
+    displayTitle: Hydrochloric Acid + Sodium Bicarbonate
+    videoClip: {fileID: 32900000, guid: df56c20743dd37b48b54a144ea6a996e, type: 3}
+  - reactionId: 4
+    reactionName: 2K + 2H2O -> 2KOH + H2
+    displayTitle: Potassium + Water
+    videoClip: {fileID: 32900000, guid: fabbe60a261c31d4796e774e0e20b6a0, type: 3}
+  - reactionId: 5
+    reactionName: Al + I -> AlI3
+    displayTitle: Aluminum + Iodine
+    videoClip: {fileID: 32900000, guid: 1b481d1dba0551441974ad7817a9e846, type: 3}
+  - reactionId: 6
+    reactionName: CaO + H2O -> Ca(OH)2
+    displayTitle: Calcium Oxide + Water
+    videoClip: {fileID: 32900000, guid: 78921d8019ccef8458f89370b074a0ce, type: 3}
+  - reactionId: 7
+    reactionName: CaCO3 -> CaO + CO2
+    displayTitle: Calcium Carbonate Decomposition
+    videoClip: {fileID: 32900000, guid: cd87a6b212e11b44ea851e07d3e9fbf1, type: 3}
+  - reactionId: 8
+    reactionName: FeSO4 -> Fe2O3 + SO2 + SO3
+    displayTitle: Iron Sulfate Decomposition
+    videoClip: {fileID: 0}
