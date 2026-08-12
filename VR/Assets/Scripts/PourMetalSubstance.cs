@@ -10,6 +10,7 @@ public class PourMetalSubstance : MonoBehaviour
     private bool play = false;
     private GameObject StartForSubstanceLeak;
     public bool containsNatrium = false;
+    public bool IsPouring => play;
 
     void Start()
     {

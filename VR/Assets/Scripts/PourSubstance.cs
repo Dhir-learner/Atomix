@@ -10,6 +10,7 @@ public class PourSubstance : MonoBehaviour
     public AudioSource audioSource;
     public AudioClip clip;
     public bool containsWater = false;
+    public bool IsPouring => play;
 
     private bool play = false;
     private bool isPlaying = false;
@@ -82,3 +83,4 @@ public class PourSubstance : MonoBehaviour
         }
     }
 }
+

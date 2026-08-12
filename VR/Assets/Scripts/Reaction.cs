@@ -21,6 +21,20 @@ public class Reaction : MonoBehaviour
     public AudioClip clip_guidance2;
     public AudioClip clip_guidance3;
 
+    [Header("Intelligent Proportions (Zero-Collision Math)")]
+    public bool enableIntelligentMode = true;
+    public float targetWaterMl = 50.0f;
+    public float targetSodiumG = 5.0f;
+    public float tolerance = 0.05f; // 5% deviation
+
+    private float currentWaterMl = 0.0f;
+    private float currentSodiumG = 0.0f;
+    private bool reactionFailed = false;
+    private float settleTimer = 0.0f;
+
+    private TextMeshPro floatingToolTip;
+    private GameObject floatingToolTipObj;
+
     private DateTime timpInitial;
     private bool explosionActive = false;
     private bool phenolphthaleinAdded = false;
@@ -35,28 +49,183 @@ public class Reaction : MonoBehaviour
         natriumMetal.SetActive(false);
         explosion.Stop();
         explosion.Clear();
+
+        if (enableIntelligentMode && floatingToolTipObj == null)
+        {
+            floatingToolTipObj = new GameObject("BeakerFloatingTooltip_Reaction");
+            floatingToolTipObj.layer = 2; // Layer 2 is Ignore Raycast (cannot interfere with pointer grabs)
+            floatingToolTip = floatingToolTipObj.AddComponent<TextMeshPro>();
+            floatingToolTip.alignment = TextAlignmentOptions.Center;
+            floatingToolTip.fontSize = 1.8f;
+            floatingToolTip.color = new Color(0.1f, 0.9f, 1.0f); // Bright cyan
+            if (canvasText != null && canvasText.font != null)
+            {
+                floatingToolTip.font = canvasText.font;
+            }
+            floatingToolTip.text = $"Water: 0.0 / {targetWaterMl} ml\nSodium: 0.0 / {targetSodiumG} g";
+        }
+    }
+
+    void OnEnable()
+    {
+        if (floatingToolTipObj != null)
+        {
+            floatingToolTipObj.SetActive(true);
+        }
+    }
+
+    void OnDisable()
+    {
+        if (floatingToolTipObj != null)
+        {
+            floatingToolTipObj.SetActive(false);
+        }
+    }
+
+    void OnDestroy()
+    {
+        if (floatingToolTipObj != null)
+        {
+            Destroy(floatingToolTipObj);
+        }
     }
 
     void Update()
     {
-        if (water.containsWater == true && metal.containsNatrium == false)
-        {
-            if (canvasText)
-            {
-                canvasText.text = "Now you can add Sodium. For this, press twice on the lid with the grep button, and when the lid has disappeared you can grab the glass.";
-            }
-            if(!audioSource1Started)
-            {
-                audioSource_guidance.Stop();
-                audioSource_guidance.PlayOneShot(clip_guidance1);
-                audioSource1Started = true;
-            }
-        }
         if (metal.containsNatrium == true)
         {
             natriumMetal.SetActive(true);
+            currentSodiumG = targetSodiumG; // Discrete solid block added successfully!
         }
-        if (oneExplosion == false && metal.containsNatrium == true && water.containsWater == true)
+
+        string trackerText = "";
+        if (enableIntelligentMode && !oneExplosion && !reactionFailed)
+        {
+            bool isCurrentlyPouring = false;
+            if (water != null && water.IsPouring)
+            {
+                currentWaterMl += 10.0f * Time.deltaTime; // Smooth 10 ml/sec pouring flow rate
+                isCurrentlyPouring = true;
+            }
+
+            trackerText = $"[Lab Measurement Tracker]\nWater: {currentWaterMl:F1} ml / {targetWaterMl} ml (Target: ~50 ml)\nSodium: {currentSodiumG:F1} g / {targetSodiumG} g\n\n";
+            if (isCurrentlyPouring && canvasText != null)
+            {
+                canvasText.text = trackerText + "Pouring water... Stop between 47.5 ml and 52.5 ml for correct chemical equilibrium!";
+            }
+
+            // Check Overdose during pouring
+            float maxWater = targetWaterMl * (1.0f + tolerance);
+            if (currentWaterMl > maxWater)
+            {
+                reactionFailed = true;
+                showPopup = true;
+                timpInitial = DateTime.Now;
+                if (canvasText != null)
+                {
+                    canvasText.text = $"Experiment Failed! You poured too much water.\nAdded: {currentWaterMl:F1} ml (Expected ~{targetWaterMl} ml)\n\nExcessive water alters concentration and disrupts the controlled reaction! Ask your AI Assistant why excessive quantities cause failures.";
+                }
+                if (audioSource != null && clip != null) audioSource.PlayOneShot(clip);
+                return;
+            }
+
+            // Settle timer check after pouring pauses
+            if (currentWaterMl > 0f && currentSodiumG > 0f && !isCurrentlyPouring)
+            {
+                settleTimer += Time.deltaTime;
+                if (settleTimer >= 1.5f && !oneExplosion)
+                {
+                    float minWater = targetWaterMl * (1.0f - tolerance);
+                    if (currentWaterMl < minWater)
+                    {
+                        reactionFailed = true;
+                        showPopup = true;
+                        timpInitial = DateTime.Now;
+                        if (canvasText != null)
+                        {
+                            canvasText.text = $"Experiment Failed! Incorrect proportions.\nWater added: {currentWaterMl:F1} ml (Expected ~{targetWaterMl} ml)\n\nInsufficient solvent prevents proper ion dissociation! Ask your AI Assistant why correct stoichiometric ratios are critical.";
+                        }
+                        if (audioSource != null && clip != null) audioSource.PlayOneShot(clip);
+                        return;
+                    }
+                }
+            }
+            else if (!isCurrentlyPouring)
+            {
+                settleTimer = 0f;
+            }
+        }
+
+        // Update floating tooltip position above target beaker with billboard camera facing
+        if (floatingToolTipObj != null && floatingToolTip != null)
+        {
+            Vector3 targetPosition = Vector3.zero;
+            if (water != null && water.SecondGlass != null)
+            {
+                targetPosition = water.SecondGlass.transform.position + Vector3.up * 0.28f;
+            }
+            else if (explosion != null)
+            {
+                targetPosition = explosion.transform.position + Vector3.up * 0.20f;
+            }
+
+            if (targetPosition != Vector3.zero)
+            {
+                floatingToolTipObj.transform.position = targetPosition;
+                if (Camera.main != null)
+                {
+                    floatingToolTipObj.transform.rotation = Quaternion.LookRotation(floatingToolTipObj.transform.position - Camera.main.transform.position);
+                }
+            }
+
+            if (!oneExplosion && !reactionFailed)
+            {
+                floatingToolTip.color = new Color(0.1f, 0.9f, 1.0f); // Cyan
+                floatingToolTip.text = $"Water: {currentWaterMl:F1} / {targetWaterMl} ml\nSodium: {currentSodiumG:F1} / {targetSodiumG} g";
+            }
+            else if (oneExplosion)
+            {
+                floatingToolTip.color = Color.green;
+                floatingToolTip.text = "Reaction Success!\n2H₂O + 2Na = 2NaOH + H₂";
+            }
+            else if (reactionFailed)
+            {
+                floatingToolTip.color = Color.red;
+                if (currentWaterMl > targetWaterMl * (1.0f + tolerance))
+                    floatingToolTip.text = $"FAILED: Overdose!\nWater: {currentWaterMl:F1} ml (Max {targetWaterMl * (1.0f + tolerance):F1} ml)";
+                else
+                    floatingToolTip.text = $"FAILED: Incorrect Ratios\nWater: {currentWaterMl:F1} ml | Na: {currentSodiumG:F1} g";
+            }
+        }
+
+        if (water.containsWater == true && metal.containsNatrium == false)
+        {
+            if (canvasText && (!enableIntelligentMode || !water.IsPouring))
+            {
+                canvasText.text = trackerText + "Now you can add Sodium. For this, press twice on the lid with the grep button, and when the lid has disappeared you can grab the glass.";
+            }
+            if (!audioSource1Started)
+            {
+                if (audioSource_guidance != null && clip_guidance1 != null)
+                {
+                    audioSource_guidance.Stop();
+                    audioSource_guidance.PlayOneShot(clip_guidance1);
+                }
+                audioSource1Started = true;
+            }
+        }
+
+        bool canTriggerSuccess = false;
+        if (!enableIntelligentMode)
+        {
+            canTriggerSuccess = (metal.containsNatrium == true && water.containsWater == true);
+        }
+        else if (!reactionFailed && currentWaterMl > 0f && currentSodiumG > 0f && settleTimer >= 1.5f)
+        {
+            canTriggerSuccess = true;
+        }
+
+        if (oneExplosion == false && canTriggerSuccess)
         {
             explosionActive = true;
             showPopup = true;
@@ -71,12 +240,15 @@ public class Reaction : MonoBehaviour
             audioSource.PlayOneShot(clip);
             if (!audioSource2Started)
             {
-                audioSource_guidance.Stop();
-                audioSource_guidance.PlayOneShot(clip_guidance2);
+                if (audioSource_guidance != null && clip_guidance2 != null)
+                {
+                    audioSource_guidance.Stop();
+                    audioSource_guidance.PlayOneShot(clip_guidance2);
+                }
                 audioSource2Started = true;
             }
         }
-        if (phenolphthalein.containsPhenolphthalein == true && !phenolphthaleinAdded)
+        if ((!enableIntelligentMode || oneExplosion) && phenolphthalein.containsPhenolphthalein == true && !phenolphthaleinAdded)
         {
             phenolphthaleinAdded = true;
             showPopup = true;
@@ -86,9 +258,12 @@ public class Reaction : MonoBehaviour
             }
             if (!audioSource3Started)
             {
-                audioSource_guidance.Stop();
-                audioSource_guidance.PlayOneShot(clip_guidance3);
-                audioSource2Started = true;
+                if (audioSource_guidance != null && clip_guidance3 != null)
+                {
+                    audioSource_guidance.Stop();
+                    audioSource_guidance.PlayOneShot(clip_guidance3);
+                }
+                audioSource3Started = true;
             }
             timpInitial = DateTime.Now;
             popupWindow.SetActive(true);

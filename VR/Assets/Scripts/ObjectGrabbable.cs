@@ -44,6 +44,27 @@ public class ObjectGrabbable : MonoBehaviour
     {
         originalPosition = transform.position;
         originalRotation = transform.rotation;
+
+        // Prevent annoying physical collisions between glassware (beakers, bottles, test tubes) during experiments
+        Collider[] myColliders = GetComponentsInChildren<Collider>(true);
+        ObjectGrabbable[] allGrabbables = FindObjectsByType<ObjectGrabbable>(FindObjectsInactive.Include, FindObjectsSortMode.None);
+        foreach (ObjectGrabbable other in allGrabbables)
+        {
+            if (other != null && other != this)
+            {
+                Collider[] otherColliders = other.GetComponentsInChildren<Collider>(true);
+                foreach (Collider c1 in myColliders)
+                {
+                    foreach (Collider c2 in otherColliders)
+                    {
+                        if (c1 != null && c2 != null)
+                        {
+                            Physics.IgnoreCollision(c1, c2, true);
+                        }
+                    }
+                }
+            }
+        }
     }
 
     public Rigidbody Rigidbody => rb;
