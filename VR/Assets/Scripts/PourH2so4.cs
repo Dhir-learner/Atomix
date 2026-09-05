@@ -10,6 +10,8 @@ public class PourH2so4 : MonoBehaviour
     public AudioSource audioSource;
     public AudioClip clip;
     public bool containsHCL = false;
+    // Exposed for FreeHandReactionEngine quantity tracking (containsHCL behaviour unchanged).
+    public bool IsPouring { get { return play; } }
 
     private bool play = false;
     private bool isPlaying = false;

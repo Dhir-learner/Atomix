@@ -26,14 +26,16 @@ public class Reaction : MonoBehaviour
     public float targetWaterMl = 50.0f;
     public float targetSodiumG = 5.0f;
     public float tolerance = 0.05f; // 5% deviation
+    public float tooltipHeightOffset = 0.20f;
+    [Tooltip("World-space font size for the floating tracker. TMP renders roughly (fontSize x 0.12) metres per line, so keep this small.")]
+    public float tooltipFontSize = 0.55f;
 
     private float currentWaterMl = 0.0f;
     private float currentSodiumG = 0.0f;
     private bool reactionFailed = false;
     private float settleTimer = 0.0f;
 
-    private TextMeshPro floatingToolTip;
-    private GameObject floatingToolTipObj;
+    private FreeHandTooltip tooltip;
 
     private DateTime timpInitial;
     private bool explosionActive = false;
@@ -50,43 +52,36 @@ public class Reaction : MonoBehaviour
         explosion.Stop();
         explosion.Clear();
 
-        if (enableIntelligentMode && floatingToolTipObj == null)
+        if (enableIntelligentMode && tooltip == null)
         {
-            floatingToolTipObj = new GameObject("BeakerFloatingTooltip_Reaction");
-            floatingToolTipObj.layer = 2; // Layer 2 is Ignore Raycast (cannot interfere with pointer grabs)
-            floatingToolTip = floatingToolTipObj.AddComponent<TextMeshPro>();
-            floatingToolTip.alignment = TextAlignmentOptions.Center;
-            floatingToolTip.fontSize = 1.8f;
-            floatingToolTip.color = new Color(0.1f, 0.9f, 1.0f); // Bright cyan
-            if (canvasText != null && canvasText.font != null)
-            {
-                floatingToolTip.font = canvasText.font;
-            }
-            floatingToolTip.text = $"Water: 0.0 / {targetWaterMl} ml\nSodium: 0.0 / {targetSodiumG} g";
+            tooltip = new FreeHandTooltip();
+            tooltip.Create("BeakerFloatingTooltip_Reaction", canvasText, tooltipFontSize);
+            tooltip.Show(FreeHandTooltip.ProgressColor,
+                $"Water: 0.0 / {targetWaterMl} ml\nSodium: 0.0 / {targetSodiumG} g");
         }
     }
 
     void OnEnable()
     {
-        if (floatingToolTipObj != null)
+        if (tooltip != null)
         {
-            floatingToolTipObj.SetActive(true);
+            tooltip.SetActive(true);
         }
     }
 
     void OnDisable()
     {
-        if (floatingToolTipObj != null)
+        if (tooltip != null)
         {
-            floatingToolTipObj.SetActive(false);
+            tooltip.SetActive(false);
         }
     }
 
     void OnDestroy()
     {
-        if (floatingToolTipObj != null)
+        if (tooltip != null)
         {
-            Destroy(floatingToolTipObj);
+            tooltip.Destroy();
         }
     }
 
@@ -157,44 +152,41 @@ public class Reaction : MonoBehaviour
         }
 
         // Update floating tooltip position above target beaker with billboard camera facing
-        if (floatingToolTipObj != null && floatingToolTip != null)
+        if (tooltip != null && tooltip.Exists)
         {
-            Vector3 targetPosition = Vector3.zero;
+            Transform anchor = null;
             if (water != null && water.SecondGlass != null)
             {
-                targetPosition = water.SecondGlass.transform.position + Vector3.up * 0.28f;
+                anchor = water.SecondGlass.transform;
             }
             else if (explosion != null)
             {
-                targetPosition = explosion.transform.position + Vector3.up * 0.20f;
+                anchor = explosion.transform;
             }
 
-            if (targetPosition != Vector3.zero)
-            {
-                floatingToolTipObj.transform.position = targetPosition;
-                if (Camera.main != null)
-                {
-                    floatingToolTipObj.transform.rotation = Quaternion.LookRotation(floatingToolTipObj.transform.position - Camera.main.transform.position);
-                }
-            }
+            tooltip.UpdatePose(anchor, tooltipHeightOffset);
 
             if (!oneExplosion && !reactionFailed)
             {
-                floatingToolTip.color = new Color(0.1f, 0.9f, 1.0f); // Cyan
-                floatingToolTip.text = $"Water: {currentWaterMl:F1} / {targetWaterMl} ml\nSodium: {currentSodiumG:F1} / {targetSodiumG} g";
+                tooltip.Show(FreeHandTooltip.ProgressColor,
+                    $"Water: {currentWaterMl:F1} / {targetWaterMl} ml\nSodium: {currentSodiumG:F1} / {targetSodiumG} g");
             }
             else if (oneExplosion)
             {
-                floatingToolTip.color = Color.green;
-                floatingToolTip.text = "Reaction Success!\n2H₂O + 2Na = 2NaOH + H₂";
+                tooltip.Show(FreeHandTooltip.SuccessColor, "Reaction Success!\n2H2O + 2Na = 2NaOH + H2");
             }
             else if (reactionFailed)
             {
-                floatingToolTip.color = Color.red;
                 if (currentWaterMl > targetWaterMl * (1.0f + tolerance))
-                    floatingToolTip.text = $"FAILED: Overdose!\nWater: {currentWaterMl:F1} ml (Max {targetWaterMl * (1.0f + tolerance):F1} ml)";
+                {
+                    tooltip.Show(FreeHandTooltip.FailureColor,
+                        $"FAILED: Overdose!\nWater: {currentWaterMl:F1} ml (Max {targetWaterMl * (1.0f + tolerance):F1} ml)");
+                }
                 else
-                    floatingToolTip.text = $"FAILED: Incorrect Ratios\nWater: {currentWaterMl:F1} ml | Na: {currentSodiumG:F1} g";
+                {
+                    tooltip.Show(FreeHandTooltip.FailureColor,
+                        $"FAILED: Incorrect Ratios\nWater: {currentWaterMl:F1} ml | Na: {currentSodiumG:F1} g");
+                }
             }
         }
 

@@ -10,6 +10,8 @@ public class PourCuO : MonoBehaviour
     public AudioSource audioSource;
     public AudioClip clip;
     public bool containsCuO = false;
+    // Exposed for FreeHandReactionEngine quantity tracking (containsCuO behaviour unchanged).
+    public bool IsPouring { get { return play; } }
 
     private bool play = false;
     private bool isPlaying = false;

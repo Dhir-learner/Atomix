@@ -10,6 +10,8 @@ public class PourNahco3 : MonoBehaviour
     private bool play = false;
     private GameObject StartForSubstanceLeak;
     public bool containsNahco3 = false;
+    // Exposed for FreeHandReactionEngine quantity tracking (containsNahco3 behaviour unchanged).
+    public bool IsPouring { get { return play; } }
 
     void Start()
     {
