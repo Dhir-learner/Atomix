@@ -285,4 +285,103 @@ MOD  VR/Assets/Scripts/InLabAssistantController.cs
 
 ---
 
+---
+
+## 8. Provider switched to Convai, Inworld removed (6 Sep)
+
+Inworld's account kept refusing the session (`method is not allowed`), so the assistant was moved to
+**Convai** and Inworld was deleted from the project. Full setup instructions live in
+`CONVAI_SETUP_GUIDE.md`; this section records what changed in the code.
+
+### The assistant now runs on Convai's REST API
+
+No SDK, no Asset Store package, no scene wiring — `ConvaiAssistantBackend.cs` is pure
+`UnityWebRequest` + `Microphone` + `AudioSource`:
+
+```
+POST https://api.convai.com/character/getResponse
+header  CONVAI-API-KEY: <key>
+form    charID, sessionID, voiceResponse, and either userText or a mono WAV file
+returns { "text": "...", "audio": "<base64 wav>", "sessionID": "..." }
+```
+
+Credentials live in `Assets/Resources/LabAssistantSettings.asset`, which ships **empty** so no key is
+committed. Everything from 3B and 3C carries over unchanged: the same context briefing, the same
+history logging, the same panel and keys.
+
+**Context wrinkle worth knowing:** Convai takes *either* text *or* audio, never both. So when a
+question is spoken, the briefing is sent as its own silent text turn immediately before it, and only
+when the experiment state has actually changed.
+
+### The assistant works in both scenes now
+
+`enabledScenes` defaults to `{ "LabScene", "LabAssistantScene" }`. The old exclusion existed only to
+stop two Inworld sessions colliding; Convai has no persistent session, so it is gone.
+
+### The visible character
+
+| Scene | Assistant |
+|---|---|
+| `LabScene` | Side panel + voice only |
+| `LabAssistantScene` | Side panel + voice **+ visible character** |
+
+Controlled by a separate `characterScenes` list, so the main lab stays uncluttered.
+
+`LabAssistantCharacter.cs` spawns the model in front of the player and gives it presence: it turns
+to face you (faster while listening), hovers gently and more actively while speaking, and the
+Convai voice plays **from the character** rather than flatly in your ear.
+
+Two details that needed care:
+- **Auto-scaling by measured render bounds**, not a fixed number. The robot is authored at an odd
+  native size — its copy in LabScene sits at a non-uniform scale of ~12x23x27 — so any hard-coded
+  value would have been wrong.
+- **Imported colliders are stripped**, otherwise the model would block the player walking past.
+
+**Model selection:** it loads `Resources/LabAssistantAvatar` first and falls back to
+`Resources/LabAssistantRobot.fbx` (a copy of the robot already used elsewhere in the project). The
+original Inworld avatar was a `.glb` whose importer was bundled *inside* the Inworld package, so it
+cannot import on its own — restoring it needs the free `com.unity.cloud.gltfast` package. Pivot,
+height and hover amount all adapt automatically depending on which model is found.
+
+### Startup effects fixed
+
+Every leak, fume and explosion particle system in the lab is authored with `playOnAwake` +
+`looping`. Two faults stacked:
+
+1. `PourCuO` and `PourNahco3` never stopped theirs, and `PourMetalSubstance` had its `Stop()`
+   **commented out**.
+2. More importantly, `ControlReactions` deactivates most recipient GameObjects at startup, so those
+   scripts' `Start()` never runs — while the particle systems they reference are *separate* scene
+   objects that stay active and keep emitting. That is why the tap appeared to run from launch.
+
+Fixed in the three scripts, plus `LabEffectsInitializer.cs` which sweeps every reaction particle
+system one frame after each scene load regardless of whether the owning script woke up.
+
+### Inworld deleted — 564 MB freed
+
+The SDK, samples, manual, user data, the `com.inworld.unity.core` package entry, the generated
+Inworld `.csproj` files, and the now-dead `LabAssistantPushToTalkUI`, `LabAssistantSubtitleUI` and
+`LabAssistantHistoryBridge` scripts. `InLabAssistantController` was rewritten Convai-only,
+`DesktopBootstrap` no longer builds the old UI, and `ExperimentHistoryManager` no longer creates the
+Inworld bridge.
+
+**The `kalytheo` API key is out of the working tree** (verified by search). It remains in git
+history and should be rotated before the repo is published.
+
+### Verification
+
+```
+Build succeeded.
+    0 Error(s)
+```
+
+**Expect missing-script warnings in LabAssistantScene** — it still contains the old Inworld
+controller and avatar GameObjects whose scripts no longer exist. They are inert and the scene loads
+fine; deleting those objects by hand in the Editor would tidy it up.
+
+**Not verified:** no Editor run from this session. The Convai call, the microphone, the startup
+particle fix, and the character's placement all still want a Play-mode check.
+
+---
+
 *Generated on completing Task 3. Session limit was not reached during this task.*

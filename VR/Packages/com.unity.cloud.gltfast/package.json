@@ -1,0 +1,41 @@
+{
+  "name": "com.unity.cloud.gltfast",
+  "version": "6.20.0",
+  "displayName": "Unity glTFast",
+  "description": "Use glTFast to import and export glTF 3D files efficiently at runtime or in the Editor",
+  "unity": "6000.0",
+  "keywords": [
+    "mesh",
+    "gltf",
+    "asset",
+    "format",
+    "draco",
+    "ktx",
+    "basis",
+    "universal",
+    "basisu"
+  ],
+  "dependencies": {
+    "com.unity.modules.jsonserialize": "1.0.0",
+    "com.unity.modules.unitywebrequest": "1.0.0",
+    "com.unity.mathematics": "1.3.3",
+    "com.unity.burst": "1.8.30",
+    "com.unity.collections": "2.6.8"
+  },
+  "relatedPackages": {
+    "com.unity.cloud.gltfast.tests": "0.0.0"
+  },
+  "_upm": {
+    "changelog": "### Added\n- [IInstantiator.AddMesh](xref:GLTFast.IInstantiator.AddMesh*) and [IInstantiator.AddMeshInstanced](xref:GLTFast.IInstantiator.AddMeshInstanced*), replacing the `Primitive` naming.\n- `LogCode.AnimationComponentFail`\n- [SaveToFileAndDispose](xref:GLTFast.Export.GameObjectExport.SaveToFileAndDispose*) and [SaveToStreamAndDispose](xref:GLTFast.Export.GameObjectExport.SaveToStreamAndDispose*) overloads with `forceSync` parameter to enforce synchronous I/O. Recommended when exporting from Editor scripts (menu items, inspectors, post-processors), where the main-thread `SynchronizationContext` is not pumped in Edit Mode and awaited I/O continuations may never resume.\n- [IInstantiator.CreateNode](xref:GLTFast.IInstantiator.CreateNode*) overload that receives the node's name, so instantiators no longer need a separate naming call. It has a default implementation that routes to the previous `CreateNode` and `SetNodeName`, so existing implementations keep working unchanged. [GameObjectInstantiator](xref:GLTFast.GameObjectInstantiator) and `EntityInstantiator` implement it as a virtual method.\n\n### Changed\n- (Performance) Internal mesh export, buffer view and image data methods return `ValueTask` instead of `Task`, which removes an allocation per vertex stream and per index buffer when exporting a readable mesh.\n- Moved documentation code examples from `DocExamples` into `Runtime/DocExamples` to comply with package assembly layout requirements.\n- Clarified [IDeferAgent.ShouldDefer](xref:GLTFast.IDeferAgent.ShouldDefer) documentation to note that it must eventually return `false`, otherwise imports may stall indefinitely without raising an error.\n- Removed legacy .NET Framework fallback code paths (`#if NET_STANDARD` / `#if NET_STANDARD_2_1`). They were only needed for Unity versions prior to 2021.2, which are no longer supported (minimum is now Unity 6.0 LTS).\n- Bumped `com.unity.collections` to 2.6.8 and `com.unity.burst` to 1.8.30, the versions recommended for Unity 6000.0.\n- (Documentation) Improved installation instructions.\n- (Test) Updated tests dependency Graphics Test Framework (com.unity.testframework.graphics) to 9.0.0-pre.25.\n- (Test) Graphics tests generate their test cases via the Graphics Test Framework, so reference images are resolved by the framework (including per-platform overrides) and failures are inspectable in the Graphics Tests window. The per-view test methods collapsed into a single parameterized one.\n- (Import) (Performance) The Editor's glTF importer reads glTF, buffer and image files straight into native memory via [AsyncReadManager](xref:Unity.IO.LowLevel.Unsafe.AsyncReadManager). It previously read each file into a managed `byte[]` that stayed pinned for the duration of the import.\n\n### Fixed\n- Corrected invalid `cref` references in XML documentation comments (parameters, type parameters and a stale method reference) that produced warnings during documentation generation.\n- Fixed false positives in export to stream tests because it actually validated results from non-stream tests.\n- Prevent exception when Animation component was not created successfully.\n- Removed useless `SerializeFieldAttribute` from `MaterialsVariantsComponent.Control` to avoid compiler warning in Unity 6.6 and newer.\n- Removed usage of obsolete `FindObjectsByType` overloads.\n- (Test) Avoid `Animation` component conflict by accidentally loading glTF twice in `DocExamplesTest`.\n- [IsTextureYFlipped](xref:GLTFast.GltfImportBase.IsTextureYFlipped(System.Int32)) returns correct value when multiple textures reference one image.\n- (Export) Exceptions thrown during synchronous mesh export (`BakeMesh` / `BakeMeshDraco`) are now surfaced instead of being silently swallowed by unobserved tasks.\n- (Documentation) Updated the features' animation section to reflect that Playables support was removed and to list animation import into custom animation systems via add-ons.\n- (Performance) Removed unnecessary texture file read during Editor imports.\n\n### Deprecated\n- `IInstantiator.CreateNode` without a `name` parameter and `IInstantiator."
+  },
+  "upmCi": {
+    "footprint": "79c7a5cd141da060456a3c051fad9e455f57aa2f"
+  },
+  "documentationUrl": "https://docs.unity3d.com/Packages/com.unity.cloud.gltfast@6.20/manual/index.html",
+  "repository": {
+    "url": "https://github.cds.internal.unity3d.com/unity/com.unity.cloud.gltfast.src.git",
+    "type": "git",
+    "revision": "7625689b3a88aead413063a3154d465273c629da"
+  },
+  "_fingerprint": "11ddc2436f976fb498cfe518dd0ef7af58654d3a"
+}

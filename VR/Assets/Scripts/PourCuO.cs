@@ -19,6 +19,9 @@ public class PourCuO : MonoBehaviour
 
     void Start()
     {
+        // Leak particles are authored with playOnAwake, so silence them until we pour.
+        substanceLeak.Stop();
+        substanceLeak.Clear();
         Quaternion firstGlassRotation = Container.transform.rotation;
         StartForSubstanceLeak = Container.transform.Find("pivott").gameObject;
         Debug.Log(StartForSubstanceLeak);

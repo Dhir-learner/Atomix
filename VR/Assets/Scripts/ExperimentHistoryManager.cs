@@ -239,10 +239,6 @@ public class ExperimentHistoryManager : MonoBehaviour
         {
             manager.gameObject.AddComponent<ExperimentHistoryUI>();
         }
-        if (manager.gameObject.GetComponent<LabAssistantHistoryBridge>() == null)
-        {
-            manager.gameObject.AddComponent<LabAssistantHistoryBridge>();
-        }
     }
 
     void Awake()

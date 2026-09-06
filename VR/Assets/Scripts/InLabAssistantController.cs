@@ -1,37 +1,30 @@
 using System.Collections.Generic;
-using Inworld;
-using Inworld.Entities;
-using Inworld.Interactions;
-using Inworld.Packet;
 using TMPro;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 using UnityEngine.UI;
 
 /// <summary>
-/// Brings the Inworld lab assistant into the main lab as an always-available side panel, instead
-/// of it only existing in the separate LabAssistantScene.
+/// The lab assistant side panel: an always-available chemistry tutor in the lab scenes.
 ///
-/// It boots the SDK itself: no scene or prefab edits are needed. The Inworld session data lives in
-/// Assets/Resources/InLabAssistantGameData.asset (a copy of the chemist game data), the controller
-/// and a voice-only character are built from code, and the connection state machine is pumped the
-/// same way Inworld's own ConnectButton does it.
+/// Answers come from Convai over its REST API (see <see cref="ConvaiAssistantBackend"/>), so there
+/// is no SDK to import and no scene wiring - this controller creates itself before the first scene
+/// and builds its own screen-space panel.
 ///
-/// LabAssistantScene is deliberately left alone - this controller disables itself there and tears
-/// down anything it created, so the standalone assistant scene keeps working exactly as before.
+/// Credentials live in Assets/Resources/LabAssistantSettings.
 /// </summary>
 public class InLabAssistantController : MonoBehaviour
 {
-    public const string GameDataResourceName = "InLabAssistantGameData";
-    public const string ControllerPrefabResourceName = "InLabInworldController";
-    private const string LabAssistantSceneName = "LabAssistantScene";
-
     [Header("Scenes")]
-    [Tooltip("Scenes the in-lab side panel appears in. LabAssistantScene is always excluded.")]
-    public string[] enabledScenes = { "LabScene" };
+    [Tooltip("Scenes the assistant panel appears in.")]
+    public string[] enabledScenes = { "LabScene", "LabAssistantScene" };
+
+    [Tooltip("Scenes the assistant also appears as a visible character in. The main lab is kept " +
+             "panel-only on purpose so nothing stands around the benches.")]
+    public string[] characterScenes = { "LabAssistantScene" };
 
     [Header("Input")]
-    [Tooltip("Hold to talk. Matches the key used in LabAssistantScene.")]
+    [Tooltip("Hold to talk.")]
     public KeyCode pushToTalkKey = KeyCode.V;
     [Tooltip("Collapse / expand the side panel.")]
     public KeyCode minimizeKey = KeyCode.M;
@@ -46,11 +39,12 @@ public class InLabAssistantController : MonoBehaviour
     [Tooltip("Brief the assistant on the current experiment before the student speaks.")]
     public bool sendExperimentContext = true;
 
-    // --- Inworld runtime objects we own (and may therefore destroy) --------------------
-    private GameObject spawnedControllerObject;
-    private GameObject spawnedCharacterObject;
-    private InworldCharacter assistantCharacter;
-    private bool inworldOwnedByUs = false;
+    // --- Provider ---------------------------------------------------------------------
+    private LabAssistantSettings settings;
+    private LabAssistantProvider activeProvider = LabAssistantProvider.Convai;
+    private ConvaiAssistantBackend convai;
+    private LabAssistantCharacter character;
+    private string pendingQuestion = string.Empty;
 
     // --- UI ---------------------------------------------------------------------------
     private Canvas canvas;
@@ -62,22 +56,12 @@ public class InLabAssistantController : MonoBehaviour
     private Image micDot;
 
     private readonly List<string> chatLines = new List<string>();
-    private string pendingAssistantLine = string.Empty;
-    private bool assistantLineOpen = false;
 
     // --- State ------------------------------------------------------------------------
     private bool isActiveScene = false;
     private bool minimized = false;
     private bool pushToTalkHeld = false;
-    private bool micRecording = false;
-    private bool audioEventsBound = false;
-    private bool packetsBound = false;
     private string lastContextDigest = string.Empty;
-    private float nextConnectionPump = 0.0f;
-    private bool statusEventsBound = false;
-    private bool reportedProblem = false;
-    private int connectionAttempts = 0;
-    private const int maxConnectionAttempts = 3;
 
     private static readonly Color MicActiveColor = new Color(1.0f, 0.25f, 0.25f, 1.0f);
     private static readonly Color MicIdleColor = new Color(0.28f, 0.12f, 0.12f, 0.9f);
@@ -107,7 +91,6 @@ public class InLabAssistantController : MonoBehaviour
     {
         SceneManager.activeSceneChanged -= HandleActiveSceneChanged;
         StopPushToTalk();
-        UnbindAudioEvents();
     }
 
     void Start()
@@ -126,28 +109,21 @@ public class InLabAssistantController : MonoBehaviour
 
         if (!isActiveScene)
         {
-            // Leaving the lab: hide the panel and give up the session so LabAssistantScene (or the
-            // main menu) is never fighting a second InworldController.
             SetPanelVisible(false);
             StopPushToTalk();
-            UnbindAudioEvents();
-            TearDownOwnedInworld();
+            DespawnCharacter();
+            TearDownConvai();
             return;
         }
 
         EnsureUiBuilt();
         SetPanelVisible(true);
-        EnsureInworldSession();
+        EnsureAssistantSession();
     }
 
     private bool IsEnabledScene(string sceneName)
     {
-        if (string.IsNullOrEmpty(sceneName) || sceneName == LabAssistantSceneName)
-        {
-            return false;
-        }
-
-        if (enabledScenes == null || enabledScenes.Length == 0)
+        if (string.IsNullOrEmpty(sceneName) || enabledScenes == null)
         {
             return false;
         }
@@ -174,286 +150,143 @@ public class InLabAssistantController : MonoBehaviour
             SetMinimized(!minimized);
         }
 
-        PumpConnection();
-        EnsurePushToTalkMode();
-        BindAudioEvents();
-        BindCharacterPackets();
         HandlePushToTalkInput();
         RefreshStatusUi();
     }
 
     // =========================================================
-    // INWORLD SESSION
+    // SESSION
     // =========================================================
 
-    /// <summary>
-    /// Builds a controller and a voice-only character if the scene has none. The avatar mesh is
-    /// deliberately not spawned - the student gets the panel, the subtitles and the voice.
-    /// </summary>
-    private void EnsureInworldSession()
+    private void EnsureAssistantSession()
     {
-        if (InworldController.Instance != null)
+        settings = LabAssistantSettings.Load();
+        activeProvider = settings != null ? settings.ResolvedProvider : LabAssistantProvider.Convai;
+
+        if (activeProvider == LabAssistantProvider.None)
         {
-            EnsureAssistantCharacter();
+            AppendSystemLine("Assistant is turned off in Resources/LabAssistantSettings.");
             return;
         }
 
-        InworldGameData gameData = Resources.Load<InworldGameData>(GameDataResourceName);
-        if (gameData == null)
-        {
-            AppendSystemLine("Assistant unavailable: Resources/" + GameDataResourceName + " is missing.");
-            return;
-        }
-
-        // The controller MUST come from the prefab, not AddComponent. InworldClient keeps its
-        // server URLs in an InworldServerConfig ScriptableObject held in a [SerializeField]
-        // reference, and AudioCapture relies on serialized UnityEvents. A component added at
-        // runtime gets none of that, and the SDK then null-references deep inside
-        // InworldClient._GetAccessToken.
-        GameObject controllerPrefab = Resources.Load<GameObject>(ControllerPrefabResourceName);
-        if (controllerPrefab == null)
-        {
-            AppendSystemLine("Assistant unavailable: Resources/" + ControllerPrefabResourceName + " is missing.");
-            return;
-        }
-
-        GameObject controllerObject = Instantiate(controllerPrefab);
-        controllerObject.name = "InworldController (In-Lab)";
-
-        InworldController controller = controllerObject.GetComponent<InworldController>();
-        if (controller == null)
-        {
-            AppendSystemLine("Assistant unavailable: the controller prefab has no InworldController.");
-            Destroy(controllerObject);
-            return;
-        }
-
-        spawnedControllerObject = controllerObject;
-        inworldOwnedByUs = true;
-
-        // LoadData rather than the GameData property: the property setter calls
-        // AssetDatabase.SaveAssets() inside UNITY_EDITOR, which we do not want during play.
-        controller.LoadData(gameData);
-
-        SpawnAssistantCharacter(controllerObject.transform, gameData);
-        BindStatusEvents();
-        AppendSystemLine("Connecting to your lab assistant...");
-    }
-
-    private void SpawnAssistantCharacter(Transform parent, InworldGameData gameData)
-    {
-        if (gameData.characters == null || gameData.characters.Count == 0)
-        {
-            AppendSystemLine("Assistant unavailable: the Inworld game data lists no characters.");
-            return;
-        }
-
-        GameObject characterObject = new GameObject("LabAssistant (Voice Only)");
-        // Built while INACTIVE on purpose. InworldInteraction.Awake sets enabled = false, and on a
-        // freshly added component that flips OnDisable, which calls StopCoroutine on a routine that
-        // has not started yet and throws. Adding the components before the object is ever enabled
-        // means Awake runs once, in order, with enabled already false.
-        characterObject.SetActive(false);
-        characterObject.transform.SetParent(parent, false);
-
-        // Audio interaction first: InworldCharacter requires an InworldInteraction, and the audio
-        // subclass satisfies that while also giving us spoken replies.
-        characterObject.AddComponent<AudioSource>();
-        InworldAudioInteraction interaction = characterObject.AddComponent<InworldAudioInteraction>();
-        interaction.enabled = false;
-
-        InworldCharacter character = characterObject.AddComponent<InworldCharacter>();
-        character.Data = gameData.characters[0];
-
-        characterObject.SetActive(true);
-
-        spawnedCharacterObject = characterObject;
-        assistantCharacter = character;
-    }
-
-    private void EnsureAssistantCharacter()
-    {
-        if (assistantCharacter != null)
+        if (convai != null)
         {
             return;
         }
 
-        InworldCharacter[] characters =
-            FindObjectsByType<InworldCharacter>(FindObjectsInactive.Include, FindObjectsSortMode.None);
-        if (characters != null && characters.Length > 0)
+        convai = gameObject.AddComponent<ConvaiAssistantBackend>();
+        convai.Initialise(settings);
+        convai.UserAsked += HandleUserAsked;
+        convai.AssistantReplied += HandleAssistantReply;
+        convai.Failed += HandleFailure;
+
+        if (!convai.IsReady)
         {
-            assistantCharacter = characters[0];
+            AppendSystemLine("Convai has no credentials yet.");
+            AppendSystemLine("Add your API key and character ID to Resources/LabAssistantSettings.");
+            return;
         }
+
+        EnsureCharacter();
+        AppendSystemLine("Lab assistant ready. Hold [" + pushToTalkKey + "] to ask a question.");
     }
 
     /// <summary>
-    /// Walks the session from Idle to Connected. Mirrors Inworld's own ConnectButton: nothing in
-    /// the SDK advances these steps on its own.
+    /// Gives the assistant a body in the scenes listed in <see cref="characterScenes"/>, and routes
+    /// its voice through that body so replies come from the character rather than from nowhere.
     /// </summary>
-    private void PumpConnection()
+    private void EnsureCharacter()
     {
-        if (InworldController.Instance == null || Time.unscaledTime < nextConnectionPump)
+        if (character != null || !IsCharacterScene(SceneManager.GetActiveScene().name))
         {
             return;
         }
 
-        nextConnectionPump = Time.unscaledTime + 1.0f;
-        BindStatusEvents();
-
-        switch (InworldController.Status)
+        character = gameObject.AddComponent<LabAssistantCharacter>();
+        if (character.Spawn(convai) && convai != null)
         {
-            case InworldConnectionStatus.Idle:
-                // Only retry from Idle a limited number of times: if the account itself is
-                // rejecting the session, hammering it every second helps nobody.
-                if (connectionAttempts < maxConnectionAttempts)
-                {
-                    connectionAttempts++;
-                    InworldController.Instance.Reconnect();
-                }
-                break;
-            case InworldConnectionStatus.Initialized:
-                InworldController.Client.StartSession();
-                break;
-            case InworldConnectionStatus.Connected:
-                SelectAssistantCharacter();
-                break;
-            case InworldConnectionStatus.Error:
-            case InworldConnectionStatus.Exhausted:
-                ReportConnectionProblem();
-                break;
+            convai.SetVoiceAnchor(character.VoiceAnchor);
         }
     }
 
-    private void BindStatusEvents()
+    private void DespawnCharacter()
     {
-        if (statusEventsBound || InworldController.Client == null)
+        if (character == null)
         {
             return;
         }
 
-        InworldController.Client.OnStatusChanged += HandleStatusChanged;
-        statusEventsBound = true;
+        if (convai != null)
+        {
+            convai.SetVoiceAnchor(null);
+        }
+
+        character.Despawn();
+        Destroy(character);
+        character = null;
     }
 
-    private void UnbindStatusEvents()
+    private bool IsCharacterScene(string sceneName)
     {
-        if (!statusEventsBound)
+        if (string.IsNullOrEmpty(sceneName) || characterScenes == null)
         {
-            return;
+            return false;
         }
 
-        if (InworldController.Client != null)
+        for (int i = 0; i < characterScenes.Length; i++)
         {
-            InworldController.Client.OnStatusChanged -= HandleStatusChanged;
+            if (characterScenes[i] == sceneName)
+            {
+                return true;
+            }
         }
-        statusEventsBound = false;
+        return false;
     }
 
-    private void HandleStatusChanged(InworldConnectionStatus status)
+    private void TearDownConvai()
     {
-        if (status == InworldConnectionStatus.Connected)
-        {
-            reportedProblem = false;
-            AppendSystemLine("Assistant connected. Hold [" + pushToTalkKey + "] to ask a question.");
-            return;
-        }
+        DespawnCharacter();
 
-        if (status == InworldConnectionStatus.Error || status == InworldConnectionStatus.Exhausted)
-        {
-            ReportConnectionProblem();
-        }
-    }
-
-    /// <summary>
-    /// Puts the server's own words in front of the student instead of leaving the panel stuck on
-    /// "Connecting...". A rejection here is an Inworld account/session problem, not a lab problem.
-    /// </summary>
-    private void ReportConnectionProblem()
-    {
-        if (reportedProblem)
-        {
-            return;
-        }
-        reportedProblem = true;
-
-        string detail = InworldController.Client != null ? InworldController.Client.ErrorMessage : null;
-        if (string.IsNullOrEmpty(detail))
-        {
-            detail = "the Inworld session was refused";
-        }
-
-        AppendSystemLine("Assistant unavailable: " + detail);
-        AppendSystemLine("This is an Inworld account/session problem, not a lab problem. " +
-                         "Check the workspace, scene and API key in Inworld Studio.");
-    }
-
-    private void SelectAssistantCharacter()
-    {
-        CharacterHandler handler = InworldController.CharacterHandler;
-        if (handler == null || handler.CurrentCharacter != null)
+        if (convai == null)
         {
             return;
         }
 
-        List<InworldCharacter> live = handler.CurrentCharacters;
-        if (live != null && live.Count > 0)
-        {
-            handler.CurrentCharacter = live[0];
-            assistantCharacter = live[0];
-        }
-    }
-
-    private void TearDownOwnedInworld()
-    {
-        if (!inworldOwnedByUs)
-        {
-            return;
-        }
-
-        UnbindCharacterPackets();
-        UnbindStatusEvents();
-
-        if (InworldController.Instance != null)
-        {
-            InworldController.Instance.Disconnect();
-        }
-
-        if (spawnedCharacterObject != null)
-        {
-            Destroy(spawnedCharacterObject);
-        }
-        if (spawnedControllerObject != null)
-        {
-            Destroy(spawnedControllerObject);
-        }
-
-        spawnedCharacterObject = null;
-        spawnedControllerObject = null;
-        assistantCharacter = null;
-        inworldOwnedByUs = false;
+        convai.UserAsked -= HandleUserAsked;
+        convai.AssistantReplied -= HandleAssistantReply;
+        convai.Failed -= HandleFailure;
+        Destroy(convai);
+        convai = null;
+        pendingQuestion = string.Empty;
         lastContextDigest = string.Empty;
-        reportedProblem = false;
-        connectionAttempts = 0;
     }
 
-    // =========================================================
-    // PUSH TO TALK  (same behaviour as LabAssistantPushToTalkUI)
-    // =========================================================
-
-    private void EnsurePushToTalkMode()
+    private void HandleUserAsked(string text)
     {
-        if (InworldController.CharacterHandler != null)
-        {
-            InworldController.CharacterHandler.ManualAudioHandling = true;
-        }
-
-        AudioCapture audio = InworldController.Audio;
-        if (audio != null)
-        {
-            audio.AutoPush = false;
-            audio.IsBlocked = false;
-        }
+        pendingQuestion = text;
+        AppendLine("<color=#7ADFFF><b>You:</b></color> " + text);
     }
+
+    private void HandleAssistantReply(string text)
+    {
+        AppendLine("<color=#86F7A0><b>Assistant:</b></color> " + text);
+
+        ExperimentHistoryManager manager = ExperimentHistoryManager.Instance;
+        if (manager != null)
+        {
+            manager.LogAIInteraction(manager.ActiveAttemptId, pendingQuestion, text);
+        }
+        pendingQuestion = string.Empty;
+    }
+
+    private void HandleFailure(string message)
+    {
+        AppendSystemLine(message);
+    }
+
+    // =========================================================
+    // PUSH TO TALK
+    // =========================================================
 
     private void HandlePushToTalkInput()
     {
@@ -469,20 +302,13 @@ public class InLabAssistantController : MonoBehaviour
 
     private void StartPushToTalk()
     {
-        if (pushToTalkHeld || InworldController.Instance == null)
+        if (pushToTalkHeld || convai == null || !convai.IsReady)
         {
             return;
         }
-
-        if (InworldController.Status != InworldConnectionStatus.Connected)
-        {
-            return;
-        }
-
-        SendExperimentContextIfChanged();
 
         pushToTalkHeld = true;
-        InworldController.Instance.StartAudio();
+        convai.StartListening();
     }
 
     private void StopPushToTalk()
@@ -494,191 +320,41 @@ public class InLabAssistantController : MonoBehaviour
 
         pushToTalkHeld = false;
 
-        if (InworldController.Instance == null)
+        if (convai != null)
         {
-            return;
+            convai.StopListeningAndSend(TakeFreshContext());
         }
-
-        if (InworldController.Status == InworldConnectionStatus.Connected)
-        {
-            InworldController.Instance.PushAudio();
-        }
-        else
-        {
-            InworldController.Instance.StopAudio();
-        }
-    }
-
-    private void BindAudioEvents()
-    {
-        if (audioEventsBound)
-        {
-            return;
-        }
-
-        AudioCapture audio = InworldController.Audio;
-        if (audio == null || audio.OnRecordingStart == null || audio.OnRecordingEnd == null)
-        {
-            return; // AudioCapture has not finished initialising its serialized events yet.
-        }
-
-        audio.OnRecordingStart.AddListener(OnRecordingStart);
-        audio.OnRecordingEnd.AddListener(OnRecordingEnd);
-        audioEventsBound = true;
-    }
-
-    private void UnbindAudioEvents()
-    {
-        if (!audioEventsBound)
-        {
-            return;
-        }
-
-        AudioCapture audio = InworldController.Audio;
-        if (audio != null && audio.OnRecordingStart != null && audio.OnRecordingEnd != null)
-        {
-            audio.OnRecordingStart.RemoveListener(OnRecordingStart);
-            audio.OnRecordingEnd.RemoveListener(OnRecordingEnd);
-        }
-
-        audioEventsBound = false;
-    }
-
-    private void OnRecordingStart()
-    {
-        micRecording = true;
-    }
-
-    private void OnRecordingEnd()
-    {
-        micRecording = false;
     }
 
     private bool IsMicActive()
     {
-        AudioCapture audio = InworldController.Audio;
-        bool capturing = audio != null && audio.IsCapturing && !audio.IsBlocked;
-        return pushToTalkHeld || micRecording || capturing;
+        return convai != null && convai.IsRecording;
     }
 
-    // =========================================================
-    // EXPERIMENT CONTEXT
-    // =========================================================
-
     /// <summary>
-    /// Sends the current experiment state as a narrative action just before the student speaks.
-    /// A narrative action is stage direction rather than a player utterance, so it steers the
-    /// answer without appearing as if the student said it.
+    /// Returns the experiment briefing the first time the state changes, and an empty string after
+    /// that, so the same numbers are not repeated on every follow-up question.
     /// </summary>
-    private void SendExperimentContextIfChanged()
+    private string TakeFreshContext()
     {
-        if (!sendExperimentContext || InworldController.Instance == null)
+        if (!sendExperimentContext || !ExperimentContextProvider.HasContext)
         {
-            return;
-        }
-
-        if (!ExperimentContextProvider.HasContext)
-        {
-            return;
+            return string.Empty;
         }
 
         string digest = ExperimentContextProvider.BuildDigest();
         if (digest == lastContextDigest)
         {
-            return;
+            return string.Empty;
         }
 
         lastContextDigest = digest;
-        InworldController.Instance.SendNarrativeAction(ExperimentContextProvider.BuildContext());
+        return ExperimentContextProvider.BuildContext();
     }
 
     // =========================================================
-    // SUBTITLES  (3C: history logging is handled by LabAssistantHistoryBridge)
+    // CHAT LOG
     // =========================================================
-
-    private void BindCharacterPackets()
-    {
-        if (packetsBound)
-        {
-            return;
-        }
-
-        EnsureAssistantCharacter();
-        if (assistantCharacter == null || assistantCharacter.Event == null ||
-            assistantCharacter.Event.onPacketReceived == null)
-        {
-            return;
-        }
-
-        assistantCharacter.Event.onPacketReceived.AddListener(HandlePacket);
-        packetsBound = true;
-    }
-
-    private void UnbindCharacterPackets()
-    {
-        if (!packetsBound)
-        {
-            return;
-        }
-
-        if (assistantCharacter != null && assistantCharacter.Event != null &&
-            assistantCharacter.Event.onPacketReceived != null)
-        {
-            assistantCharacter.Event.onPacketReceived.RemoveListener(HandlePacket);
-        }
-
-        packetsBound = false;
-    }
-
-    private void HandlePacket(InworldPacket packet)
-    {
-        TextPacket textPacket = packet as TextPacket;
-        if (textPacket == null || textPacket.text == null)
-        {
-            return;
-        }
-
-        string body = textPacket.text.text;
-        if (string.IsNullOrEmpty(body) || string.IsNullOrWhiteSpace(body))
-        {
-            return;
-        }
-
-        body = body.Trim();
-
-        if (packet.Source == SourceType.PLAYER)
-        {
-            if (!textPacket.text.final)
-            {
-                return;
-            }
-            CloseAssistantLine();
-            AppendLine("<color=#7ADFFF><b>You:</b></color> " + body);
-            return;
-        }
-
-        if (packet.Source == SourceType.AGENT)
-        {
-            // Replies stream in as chunks - keep rewriting the same line so it reads as one answer.
-            pendingAssistantLine = pendingAssistantLine.Length == 0 ? body : pendingAssistantLine + " " + body;
-
-            if (!assistantLineOpen)
-            {
-                assistantLineOpen = true;
-                chatLines.Add(string.Empty);
-            }
-
-            chatLines[chatLines.Count - 1] = "<color=#86F7A0><b>Assistant:</b></color> " + pendingAssistantLine;
-            TrimChat();
-            RefreshChatUi();
-        }
-    }
-
-    private void CloseAssistantLine()
-    {
-        assistantLineOpen = false;
-        pendingAssistantLine = string.Empty;
-    }
 
     private void AppendSystemLine(string text)
     {
@@ -688,17 +364,14 @@ public class InLabAssistantController : MonoBehaviour
     private void AppendLine(string line)
     {
         chatLines.Add(line);
-        TrimChat();
-        RefreshChatUi();
-    }
 
-    private void TrimChat()
-    {
         int limit = Mathf.Max(4, maxChatLines);
         while (chatLines.Count > limit)
         {
             chatLines.RemoveAt(0);
         }
+
+        RefreshChatUi();
     }
 
     /// <summary>
@@ -910,14 +583,28 @@ public class InLabAssistantController : MonoBehaviour
             return;
         }
 
-        string connection = InworldController.Instance == null
-            ? "offline"
-            : InworldController.Status.ToString().ToLower();
+        string connection;
+        if (activeProvider == LabAssistantProvider.None)
+        {
+            connection = "disabled";
+        }
+        else if (convai == null)
+        {
+            connection = "starting";
+        }
+        else if (!convai.IsReady)
+        {
+            connection = "not configured";
+        }
+        else
+        {
+            connection = convai.StatusDetail;
+        }
 
         string experiment = ExperimentContextProvider.CurrentReactionName;
         statusText.text = string.IsNullOrEmpty(experiment)
-            ? "Session: " + connection
-            : "Session: " + connection + "\nExperiment: " + experiment;
+            ? "Convai: " + connection
+            : "Convai: " + connection + "\nExperiment: " + experiment;
 
         if (micDot != null)
         {
@@ -926,11 +613,10 @@ public class InLabAssistantController : MonoBehaviour
 
         if (footerText != null)
         {
-            bool connected = InworldController.Instance != null &&
-                             InworldController.Status == InworldConnectionStatus.Connected;
-            footerText.text = connected
+            bool ready = convai != null && convai.IsReady;
+            footerText.text = ready
                 ? "Hold [" + pushToTalkKey + "] to talk    [" + minimizeKey + "] minimise"
-                : "Waiting for the assistant to connect...    [" + minimizeKey + "] minimise";
+                : "Assistant not available    [" + minimizeKey + "] minimise";
         }
     }
 }
