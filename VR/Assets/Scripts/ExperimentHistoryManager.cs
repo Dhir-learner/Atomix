@@ -239,6 +239,13 @@ public class ExperimentHistoryManager : MonoBehaviour
         {
             manager.gameObject.AddComponent<ExperimentHistoryUI>();
         }
+
+        // The graph panel rides on the same DontDestroyOnLoad object, so it survives the scene
+        // change to the assistant and back without needing any scene edits either.
+        if (manager.gameObject.GetComponent<ReactionGraphUI>() == null)
+        {
+            manager.gameObject.AddComponent<ReactionGraphUI>();
+        }
     }
 
     void Awake()
@@ -742,7 +749,20 @@ public class ReactionHistoryRecorder
         }
 
         manager.EndAttempt(attemptId, outcome);
+
+        // Every one of the eight reactions closes its attempt through here, so this is the single
+        // place the scientific graphs need to hook into - no per-reaction wiring.
+        if (outcome == ExperimentOutcome.Success && Completed != null)
+        {
+            Completed(reactionId, reactionName, outcome);
+        }
     }
+
+    /// <summary>
+    /// Raised when any experiment finishes successfully, with its reaction id and name.
+    /// <see cref="ReactionGraphUI"/> listens for this to show the graphs.
+    /// </summary>
+    public static event System.Action<int, string, ExperimentOutcome> Completed;
 
     /// <summary>Closes an unfinished attempt when the student walks away from the experiment.</summary>
     public void Abandon()
