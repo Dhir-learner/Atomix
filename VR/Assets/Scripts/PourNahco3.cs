@@ -10,9 +10,14 @@ public class PourNahco3 : MonoBehaviour
     private bool play = false;
     private GameObject StartForSubstanceLeak;
     public bool containsNahco3 = false;
+    // Exposed for FreeHandReactionEngine quantity tracking (containsNahco3 behaviour unchanged).
+    public bool IsPouring { get { return play; } }
 
     void Start()
     {
+        // Leak particles are authored with playOnAwake, so silence them until we pour.
+        substanceLeak.Stop();
+        substanceLeak.Clear();
         Quaternion firstGlassRotation = Container.transform.rotation;
         StartForSubstanceLeak = Container.transform.Find("pivott").gameObject;
         Debug.Log(StartForSubstanceLeak);

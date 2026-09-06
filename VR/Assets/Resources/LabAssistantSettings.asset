@@ -1,0 +1,20 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 38fc9c443185418299132097b3fdf8b8, type: 3}
+  m_Name: LabAssistantSettings
+  m_EditorClassIdentifier: 
+  provider: 0
+  convaiApiKey: 76ca45c75d4e35c5709ad484b42e0479
+  convaiCharacterId: 1a6a75f2-25e5-4ad4-ba27-47779e0efd98
+  convaiVoiceResponse: 1
+  maxRecordingSeconds: 15
+  microphoneSampleRate: 16000

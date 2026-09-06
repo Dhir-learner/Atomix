@@ -10,6 +10,8 @@ public class PourCuO : MonoBehaviour
     public AudioSource audioSource;
     public AudioClip clip;
     public bool containsCuO = false;
+    // Exposed for FreeHandReactionEngine quantity tracking (containsCuO behaviour unchanged).
+    public bool IsPouring { get { return play; } }
 
     private bool play = false;
     private bool isPlaying = false;
@@ -17,6 +19,9 @@ public class PourCuO : MonoBehaviour
 
     void Start()
     {
+        // Leak particles are authored with playOnAwake, so silence them until we pour.
+        substanceLeak.Stop();
+        substanceLeak.Clear();
         Quaternion firstGlassRotation = Container.transform.rotation;
         StartForSubstanceLeak = Container.transform.Find("pivott").gameObject;
         Debug.Log(StartForSubstanceLeak);

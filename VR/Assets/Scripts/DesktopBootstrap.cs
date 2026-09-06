@@ -68,8 +68,6 @@ public class DesktopBootstrap : MonoBehaviour
         SetupInteractables(scene);
         SetupHelpUi(scene);
         SetupCrosshairUi(scene);
-        SetupLabAssistantSubtitleUi(scene);
-        SetupLabAssistantPushToTalkUi(scene);
     }
 
     void SetupDesktopPlayer()
@@ -227,45 +225,6 @@ public class DesktopBootstrap : MonoBehaviour
         crosshairObject.AddComponent<DesktopCrosshairUI>();
     }
 
-    void SetupLabAssistantSubtitleUi(Scene scene)
-    {
-        if (scene.name != "LabAssistantScene")
-        {
-            return;
-        }
-
-        LabAssistantSubtitleUI[] existingSubtitleUis = FindObjectsByType<LabAssistantSubtitleUI>(FindObjectsInactive.Include, FindObjectsSortMode.None);
-        foreach (LabAssistantSubtitleUI subtitleUi in existingSubtitleUis)
-        {
-            if (subtitleUi != null && subtitleUi.gameObject.scene == scene)
-            {
-                return;
-            }
-        }
-
-        GameObject subtitleObject = new GameObject("LabAssistantSubtitleUI");
-        subtitleObject.AddComponent<LabAssistantSubtitleUI>();
-    }
-
-    void SetupLabAssistantPushToTalkUi(Scene scene)
-    {
-        if (scene.name != "LabAssistantScene")
-        {
-            return;
-        }
-
-        LabAssistantPushToTalkUI[] existingPushToTalkUis = FindObjectsByType<LabAssistantPushToTalkUI>(FindObjectsInactive.Include, FindObjectsSortMode.None);
-        foreach (LabAssistantPushToTalkUI pushToTalkUi in existingPushToTalkUis)
-        {
-            if (pushToTalkUi != null && pushToTalkUi.gameObject.scene == scene)
-            {
-                return;
-            }
-        }
-
-        GameObject pushToTalkObject = new GameObject("LabAssistantPushToTalkUI");
-        pushToTalkObject.AddComponent<LabAssistantPushToTalkUI>();
-    }
     void RegisterGameObjectFields(MonoBehaviour behaviour, HashSet<GameObject> candidateObjects, Scene scene)
     {
         FieldInfo[] fields = behaviour.GetType().GetFields(FieldFlags);

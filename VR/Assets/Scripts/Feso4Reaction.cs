@@ -31,6 +31,29 @@ public class Feso4Reaction : MonoBehaviour
     public float heatingDuration = 10f;
     public float time;
 
+    [Header("Free-Hand Mode (heating time matters)")]
+    public bool enableFreeHandMode = true;
+    [Tooltip("Percentage tolerance around heatingDuration that still counts as a correct decomposition.")]
+    public float tolerancePercent = 15.0f;
+    public float tooltipHeightOffset = 0.22f;
+    [Tooltip("World-space font size for the floating tracker. TMP renders roughly (fontSize x 0.12) metres per line, so keep this small.")]
+    public float tooltipFontSize = 0.55f;
+    [Tooltip("Optional - played when the experiment fails.")]
+    public AudioSource audioSource_failure;
+    public AudioClip clip_failure;
+
+    [Header("Experiment History")]
+    [Tooltip("Matches the book / StartReaction number, 1-8.")]
+    public int reactionId = 8;
+    public string reactionDisplayName = "2FeSO4 -> Fe2O3 + SO2 + SO3";
+    [Tooltip("Re-selecting this experiment from the book logs a fresh attempt.")]
+    public bool restartAttemptOnReSelect = true;
+
+    private FreeHandReactionEngine engine;
+    private FreeHandTooltip tooltip;
+    private bool failureReported = false;
+    private ReactionHistoryRecorder recorder;
+
     private bool audioSource1Started = false;
     private bool audioSource2Started = false;
     private bool reactionCompleted = false;
@@ -48,6 +71,54 @@ public class Feso4Reaction : MonoBehaviour
 
         time = 0;
         SetFumeActive(false);
+
+        if (!enableFreeHandMode)
+        {
+            return;
+        }
+
+        engine = new FreeHandReactionEngine();
+        engine.tolerancePercent = tolerancePercent;
+        engine.settleTimeRequired = 1.5f;
+        engine.trackerTitle = "[Lab Heating Tracker]";
+        engine.AddSubstance("Heating", Mathf.Max(0.1f, heatingDuration), "s",
+            overdose: "The tube was left in the flame long past full decomposition - the Fe2O3 bakes onto the glass and the SO2/SO3 fumes build up dangerously.",
+            underdose: "Insufficient heating produces incomplete decomposition - some FeSO4 never breaks down, so the solid stays green instead of turning reddish brown.");
+
+        recorder = new ReactionHistoryRecorder(reactionId, reactionDisplayName, engine);
+
+        tooltip = new FreeHandTooltip();
+        tooltip.Create("TubeFloatingTooltip_FeSO4", canvasText, tooltipFontSize);
+        tooltip.Show(FreeHandTooltip.ProgressColor, engine.GetTooltipText());
+    }
+
+    void OnEnable()
+    {
+        if (tooltip != null)
+        {
+            tooltip.SetActive(true);
+        }
+        RestartAttemptIfRequested();
+    }
+
+    void OnDisable()
+    {
+        if (tooltip != null)
+        {
+            tooltip.SetActive(false);
+        }
+        if (recorder != null)
+        {
+            recorder.Abandon(); // switching experiments away mid-run
+        }
+    }
+
+    void OnDestroy()
+    {
+        if (tooltip != null)
+        {
+            tooltip.Destroy();
+        }
     }
 
     void Update()
@@ -58,6 +129,16 @@ public class Feso4Reaction : MonoBehaviour
             audioSource_guidance.Stop();
             audioSource_guidance.PlayOneShot(clip_guidance1);
             audioSource1Started = true;
+            if (recorder != null)
+            {
+                recorder.LogAction("Lit the Bunsen burner", 0.0f, true);
+            }
+        }
+
+        if (enableFreeHandMode && engine != null)
+        {
+            UpdateFreeHandHeating(IsTubeOverFlame());
+            return;
         }
 
         if (reactionCompleted)
@@ -74,6 +155,79 @@ public class Feso4Reaction : MonoBehaviour
         {
             SetFumeActive(false);
         }
+    }
+
+    /// <summary>
+    /// Free-hand heating: the colour gradient follows however long the user actually holds the
+    /// tube in the flame, and the experiment is only judged once the tube is taken back out.
+    /// </summary>
+    void UpdateFreeHandHeating(bool overFlame)
+    {
+        if (engine.HasFailed)
+        {
+            SetFumeActive(false);
+            UpdateTooltip();
+            return;
+        }
+
+        if (!engine.IsResolved)
+        {
+            engine.UpdatePouringQuantity("Heating", 1.0f, overFlame);
+        }
+
+        ReactionResult result = engine.CheckReactionOutcome();
+        if (recorder != null)
+        {
+            recorder.Tick();
+        }
+        SetFumeActive(overFlame && !engine.IsResolved);
+
+        float duration = Mathf.Max(0.1f, heatingDuration);
+        heatingProgress = Mathf.Clamp01(engine.GetCurrent("Heating") / duration);
+        ApplySubstanceColor(EvaluateGradientColor(heatingProgress));
+
+        if (result == ReactionResult.Success && !reactionCompleted)
+        {
+            CompleteReaction();
+        }
+        else if (engine.HasFailed)
+        {
+            SetFumeActive(false);
+            if (!failureReported)
+            {
+                failureReported = true;
+                if (recorder != null)
+                {
+                    recorder.Complete(engine.LastResult);
+                }
+                if (canvasText)
+                {
+                    canvasText.text = engine.GetFailureExplanation();
+                }
+                if (audioSource_failure != null && clip_failure != null)
+                {
+                    audioSource_failure.PlayOneShot(clip_failure);
+                }
+            }
+        }
+        else if (overFlame && canvasText != null && !engine.IsResolved)
+        {
+            canvasText.text = engine.GetTrackerText();
+        }
+
+        UpdateTooltip();
+    }
+
+    void UpdateTooltip()
+    {
+        if (tooltip == null || !tooltip.Exists)
+        {
+            return;
+        }
+
+        Transform anchor = pivotEprubeta != null ? pivotEprubeta.transform : transform;
+        tooltip.UpdatePose(anchor, tooltipHeightOffset);
+        tooltip.RenderEngineState(engine, "Reaction Success!\n2FeSO4 = Fe2O3 + SO2 + SO3");
     }
 
     bool IsTubeOverFlame()
@@ -103,7 +257,16 @@ public class Feso4Reaction : MonoBehaviour
             return;
         }
 
+        CompleteReaction();
+    }
+
+    void CompleteReaction()
+    {
         reactionCompleted = true;
+        if (recorder != null)
+        {
+            recorder.Complete(ReactionResult.Success);
+        }
         SetFumeActive(false);
 
         Renderer labelRenderer = label != null ? label.GetComponent<Renderer>() : null;
@@ -259,4 +422,30 @@ public class Feso4Reaction : MonoBehaviour
             fume.SetActive(isActive);
         }
     }
+
+    /// <summary>
+    /// Called when the experiment is (re)selected from the book so a retry is logged as its
+    /// own attempt. Apparatus flags (balloon fitted, burner lit) are deliberately left alone -
+    /// that hardware stays exactly where the student left it.
+    /// </summary>
+    void RestartAttemptIfRequested()
+    {
+        if (!restartAttemptOnReSelect || engine == null)
+        {
+            return; // OnEnable also runs before Start on the very first activation.
+        }
+
+        if (recorder != null)
+        {
+            recorder.Abandon();
+            recorder.ResetForNewAttempt();
+        }
+
+        engine.Reset();
+        failureReported = false;
+        reactionCompleted = false;
+        audioSource2Started = false;
+        heatingProgress = 0.0f;
+    }
+
 }
