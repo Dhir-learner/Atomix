@@ -353,6 +353,37 @@ public class FreeHandReactionEngine
         return currentQuantities.TryGetValue(substanceName, out value) ? value : 0.0f;
     }
 
+    /// <summary>Is this specific input being added right now? Used by the history recorder to
+    /// log a step when a pour starts and again when it stops.</summary>
+    public bool IsPouring(string substanceName)
+    {
+        return pouringSubstances.Contains(substanceName);
+    }
+
+    /// <summary>True when the measured amount is inside the accepted window.</summary>
+    public bool IsWithinTolerance(string substanceName)
+    {
+        if (!targetQuantities.ContainsKey(substanceName))
+        {
+            return false;
+        }
+
+        float current = currentQuantities[substanceName];
+        return current >= MinAllowed(substanceName) && current <= MaxAllowed(substanceName);
+    }
+
+    /// <summary>Snapshot of what has actually been added, for the experiment history.</summary>
+    public Dictionary<string, float> GetQuantitiesSnapshot()
+    {
+        return new Dictionary<string, float>(currentQuantities);
+    }
+
+    /// <summary>Snapshot of what should have been added, for the experiment history.</summary>
+    public Dictionary<string, float> GetTargetsSnapshot()
+    {
+        return new Dictionary<string, float>(targetQuantities);
+    }
+
     public string UnitFor(string substanceName)
     {
         string unit;

@@ -38,9 +38,17 @@ public class CaCO3Reaction : MonoBehaviour
     public AudioSource audioSource_failure;
     public AudioClip clip_failure;
 
+    [Header("Experiment History")]
+    [Tooltip("Matches the book / StartReaction number, 1-8.")]
+    public int reactionId = 7;
+    public string reactionDisplayName = "CaCO3 -> CaO + CO2 (thermal decomposition)";
+    [Tooltip("Re-selecting this experiment from the book logs a fresh attempt.")]
+    public bool restartAttemptOnReSelect = true;
+
     private FreeHandReactionEngine engine;
     private FreeHandTooltip tooltip;
     private bool failureReported = false;
+    private ReactionHistoryRecorder recorder;
 
     private float targetPoint;
     private Vector3 initialScale;
@@ -79,6 +87,8 @@ public class CaCO3Reaction : MonoBehaviour
             overdose: "The tube was held in the flame far too long - the CaO sinters and the trapped CO2 over-pressurises the balloon.",
             underdose: "Insufficient heating leaves undissociated CaCO3 - thermal decomposition needs sustained heat above 800 C to drive the CO2 off.");
 
+        recorder = new ReactionHistoryRecorder(reactionId, reactionDisplayName, engine);
+
         tooltip = new FreeHandTooltip();
         tooltip.Create("TubeFloatingTooltip_CaCO3", canvasText, tooltipFontSize);
         tooltip.Show(FreeHandTooltip.ProgressColor, engine.GetTooltipText());
@@ -90,6 +100,7 @@ public class CaCO3Reaction : MonoBehaviour
         {
             tooltip.SetActive(true);
         }
+        RestartAttemptIfRequested();
     }
 
     void OnDisable()
@@ -97,6 +108,10 @@ public class CaCO3Reaction : MonoBehaviour
         if (tooltip != null)
         {
             tooltip.SetActive(false);
+        }
+        if (recorder != null)
+        {
+            recorder.Abandon(); // switching experiments away mid-run
         }
     }
 
@@ -122,6 +137,10 @@ public class CaCO3Reaction : MonoBehaviour
                 audioSource_guidance.PlayOneShot(clip_guidance1);
                 audioSource1Started = true;
                 balon_ok = true;
+                if (recorder != null)
+                {
+                    recorder.LogAction("Attached the balloon to the test tube", 0.0f, true);
+                }
             }
         }
         if(balon_ok == true && foc.esteAprins == true)
@@ -132,6 +151,10 @@ public class CaCO3Reaction : MonoBehaviour
                 audioSource_guidance.Stop();
                 audioSource_guidance.PlayOneShot(clip_guidance2);
                 audioSource2Started = true;
+                if (recorder != null)
+                {
+                    recorder.LogAction("Lit the Bunsen burner", 0.0f, true);
+                }
             }
         }
         bool overFlame = IsTubeOverFlame();
@@ -223,6 +246,10 @@ public class CaCO3Reaction : MonoBehaviour
         }
 
         ReactionResult result = engine.CheckReactionOutcome();
+        if (recorder != null)
+        {
+            recorder.Tick();
+        }
         fume.SetActive(overFlame && !engine.IsResolved);
 
         if (balon_ok && !reactionCompleted)
@@ -251,6 +278,10 @@ public class CaCO3Reaction : MonoBehaviour
     void CompleteFreeHandReaction()
     {
         reactionCompleted = true;
+        if (recorder != null)
+        {
+            recorder.Complete(ReactionResult.Success);
+        }
         targetPoint = 1.0f;
         if (balon_ok && balon != null)
         {
@@ -286,6 +317,10 @@ public class CaCO3Reaction : MonoBehaviour
         }
 
         failureReported = true;
+        if (recorder != null)
+        {
+            recorder.Complete(engine.LastResult);
+        }
         if (canvasText)
         {
             canvasText.text = engine.GetFailureExplanation();
@@ -442,4 +477,30 @@ public class CaCO3Reaction : MonoBehaviour
 
         AlignBalloonRootToSocket(snappedBalloonTransform.gameObject);
     }
+
+    /// <summary>
+    /// Called when the experiment is (re)selected from the book so a retry is logged as its
+    /// own attempt. Apparatus flags (balloon fitted, burner lit) are deliberately left alone -
+    /// that hardware stays exactly where the student left it.
+    /// </summary>
+    void RestartAttemptIfRequested()
+    {
+        if (!restartAttemptOnReSelect || engine == null)
+        {
+            return; // OnEnable also runs before Start on the very first activation.
+        }
+
+        if (recorder != null)
+        {
+            recorder.Abandon();
+            recorder.ResetForNewAttempt();
+        }
+
+        engine.Reset();
+        failureReported = false;
+        reactionCompleted = false;
+        audioSource3Started = false;
+        targetPoint = 0.0f;
+    }
+
 }

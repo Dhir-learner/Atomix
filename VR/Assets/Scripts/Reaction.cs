@@ -30,12 +30,22 @@ public class Reaction : MonoBehaviour
     [Tooltip("World-space font size for the floating tracker. TMP renders roughly (fontSize x 0.12) metres per line, so keep this small.")]
     public float tooltipFontSize = 0.55f;
 
+    [Header("Experiment History")]
+    [Tooltip("Matches the book / StartReaction number, 1-8.")]
+    public int reactionId = 1;
+    public string reactionDisplayName = "Na + H2O -> NaOH + H2";
+    [Tooltip("Re-selecting this experiment from the book logs a fresh attempt.")]
+    public bool restartAttemptOnReSelect = true;
+
     private float currentWaterMl = 0.0f;
     private float currentSodiumG = 0.0f;
     private bool reactionFailed = false;
     private float settleTimer = 0.0f;
 
     private FreeHandTooltip tooltip;
+    private ReactionHistoryRecorder recorder;
+    private bool waterWasPouring = false;
+    private bool sodiumLogged = false;
 
     private DateTime timpInitial;
     private bool explosionActive = false;
@@ -52,6 +62,13 @@ public class Reaction : MonoBehaviour
         explosion.Stop();
         explosion.Clear();
 
+        if (recorder == null)
+        {
+            // No FreeHandReactionEngine here - this reaction tracks its quantities inline,
+            // so the recorder is fed by hand rather than by ReactionHistoryRecorder.Tick().
+            recorder = new ReactionHistoryRecorder(reactionId, reactionDisplayName, null);
+        }
+
         if (enableIntelligentMode && tooltip == null)
         {
             tooltip = new FreeHandTooltip();
@@ -67,6 +84,7 @@ public class Reaction : MonoBehaviour
         {
             tooltip.SetActive(true);
         }
+        RestartAttemptIfRequested();
     }
 
     void OnDisable()
@@ -74,6 +92,10 @@ public class Reaction : MonoBehaviour
         if (tooltip != null)
         {
             tooltip.SetActive(false);
+        }
+        if (recorder != null)
+        {
+            recorder.Abandon(); // switching experiments away mid-run
         }
     }
 
@@ -91,6 +113,12 @@ public class Reaction : MonoBehaviour
         {
             natriumMetal.SetActive(true);
             currentSodiumG = targetSodiumG; // Discrete solid block added successfully!
+            if (!sodiumLogged && recorder != null)
+            {
+                sodiumLogged = true;
+                recorder.LogAction(string.Format("Added {0:F1} g of Sodium", currentSodiumG),
+                    currentSodiumG, true);
+            }
         }
 
         string trackerText = "";
@@ -101,6 +129,26 @@ public class Reaction : MonoBehaviour
             {
                 currentWaterMl += 10.0f * Time.deltaTime; // Smooth 10 ml/sec pouring flow rate
                 isCurrentlyPouring = true;
+            }
+
+            if (isCurrentlyPouring && !waterWasPouring)
+            {
+                waterWasPouring = true;
+                if (recorder != null)
+                {
+                    recorder.LogAction("Started pouring Water", currentWaterMl, true);
+                }
+            }
+            else if (!isCurrentlyPouring && waterWasPouring)
+            {
+                waterWasPouring = false;
+                if (recorder != null)
+                {
+                    bool inRange = currentWaterMl >= targetWaterMl * (1.0f - tolerance) &&
+                                   currentWaterMl <= targetWaterMl * (1.0f + tolerance);
+                    recorder.LogAction(string.Format("Added {0:F1} ml of Water (target {1:F1})",
+                        currentWaterMl, targetWaterMl), currentWaterMl, inRange);
+                }
             }
 
             trackerText = $"[Lab Measurement Tracker]\nWater: {currentWaterMl:F1} ml / {targetWaterMl} ml (Target: ~50 ml)\nSodium: {currentSodiumG:F1} g / {targetSodiumG} g\n\n";
@@ -121,6 +169,8 @@ public class Reaction : MonoBehaviour
                     canvasText.text = $"Experiment Failed! You poured too much water.\nAdded: {currentWaterMl:F1} ml (Expected ~{targetWaterMl} ml)\n\nExcessive water alters concentration and disrupts the controlled reaction! Ask your AI Assistant why excessive quantities cause failures.";
                 }
                 if (audioSource != null && clip != null) audioSource.PlayOneShot(clip);
+                CompleteAttempt(ExperimentOutcome.FailOverdose,
+                    "Excess water alters the concentration and disrupts the controlled reaction.");
                 return;
             }
 
@@ -141,6 +191,8 @@ public class Reaction : MonoBehaviour
                             canvasText.text = $"Experiment Failed! Incorrect proportions.\nWater added: {currentWaterMl:F1} ml (Expected ~{targetWaterMl} ml)\n\nInsufficient solvent prevents proper ion dissociation! Ask your AI Assistant why correct stoichiometric ratios are critical.";
                         }
                         if (audioSource != null && clip != null) audioSource.PlayOneShot(clip);
+                        CompleteAttempt(ExperimentOutcome.FailUnderdose,
+                            "Insufficient solvent prevents proper ion dissociation.");
                         return;
                     }
                 }
@@ -226,6 +278,7 @@ public class Reaction : MonoBehaviour
                 canvasText.text = "Chemical reaction equation: 2H2O + 2Na = 2NaOH + H2. Now, you can highlight the basicity of the solution by adding phenolphthalein.";
             }
             oneExplosion = true;
+            CompleteAttempt(ExperimentOutcome.Success, null);
             timpInitial = DateTime.Now;
             explosion.Clear();
             explosion.Play();
@@ -243,6 +296,10 @@ public class Reaction : MonoBehaviour
         if ((!enableIntelligentMode || oneExplosion) && phenolphthalein.containsPhenolphthalein == true && !phenolphthaleinAdded)
         {
             phenolphthaleinAdded = true;
+            if (recorder != null)
+            {
+                recorder.LogAction("Added phenolphthalein indicator", 0.0f, true);
+            }
             showPopup = true;
             if (canvasText)
             {
@@ -274,6 +331,64 @@ public class Reaction : MonoBehaviour
             popupWindow.SetActive(false);
         }
     }
+
+    /// <summary>Writes the final quantities and closes the history attempt.</summary>
+    void CompleteAttempt(ExperimentOutcome outcome, string reason)
+    {
+        if (recorder == null)
+        {
+            return;
+        }
+
+        recorder.BeginIfNeeded();
+
+        Dictionary<string, float> used = new Dictionary<string, float>();
+        used["Water"] = currentWaterMl;
+        used["Sodium"] = currentSodiumG;
+
+        Dictionary<string, float> targets = new Dictionary<string, float>();
+        targets["Water"] = targetWaterMl;
+        targets["Sodium"] = targetSodiumG;
+
+        ExperimentHistoryManager.Instance.RecordQuantities(recorder.AttemptId, used, targets);
+
+        if (!string.IsNullOrEmpty(reason))
+        {
+            recorder.LogAction("Why it failed: " + reason, 0.0f, false);
+        }
+
+        recorder.Complete(outcome);
+    }
+
+    /// <summary>
+    /// Called when the experiment is (re)selected from the book so a retry is logged as its
+    /// own attempt.
+    /// </summary>
+    void RestartAttemptIfRequested()
+    {
+        if (!restartAttemptOnReSelect || recorder == null)
+        {
+            return; // OnEnable also runs before Start on the very first activation.
+        }
+
+        recorder.Abandon();
+        recorder.ResetForNewAttempt();
+
+        currentWaterMl = 0.0f;
+        currentSodiumG = 0.0f;
+        settleTimer = 0.0f;
+        reactionFailed = false;
+        oneExplosion = false;
+        explosionActive = false;
+        phenolphthaleinAdded = false;
+        showPopup = false;
+        waterWasPouring = false;
+        sodiumLogged = false;
+        audioSource1Started = false;
+        audioSource2Started = false;
+        audioSource3Started = false;
+    }
+
 }
 
 

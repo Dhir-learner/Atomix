@@ -35,9 +35,17 @@ public class Reaction_h2so4_cuo : MonoBehaviour
     public AudioSource audioSource_failure;
     public AudioClip clip_failure;
 
+    [Header("Experiment History")]
+    [Tooltip("Matches the book / StartReaction number, 1-8.")]
+    public int reactionId = 2;
+    public string reactionDisplayName = "H2SO4 + CuO -> CuSO4 + H2O";
+    [Tooltip("Re-selecting this experiment from the book logs a fresh attempt.")]
+    public bool restartAttemptOnReSelect = true;
+
     private FreeHandReactionEngine engine;
     private FreeHandTooltip tooltip;
     private bool failureReported = false;
+    private ReactionHistoryRecorder recorder;
 
     private DateTime timpInitial;
     private bool oneReaction = false;
@@ -65,6 +73,8 @@ public class Reaction_h2so4_cuo : MonoBehaviour
             underdose: "Insufficient CuO leaves unreacted acid, so the solution stays strongly acidic instead of turning blue.");
 
         tooltip = new FreeHandTooltip();
+        recorder = new ReactionHistoryRecorder(reactionId, reactionDisplayName, engine);
+
         tooltip.Create("BeakerFloatingTooltip_H2SO4_CuO", canvasText, tooltipFontSize);
         tooltip.Show(FreeHandTooltip.ProgressColor, engine.GetTooltipText());
     }
@@ -75,6 +85,7 @@ public class Reaction_h2so4_cuo : MonoBehaviour
         {
             tooltip.SetActive(true);
         }
+        RestartAttemptIfRequested();
     }
 
     void OnDisable()
@@ -82,6 +93,10 @@ public class Reaction_h2so4_cuo : MonoBehaviour
         if (tooltip != null)
         {
             tooltip.SetActive(false);
+        }
+        if (recorder != null)
+        {
+            recorder.Abandon(); // switching experiments away mid-run
         }
     }
 
@@ -109,6 +124,11 @@ public class Reaction_h2so4_cuo : MonoBehaviour
             ReactionResult result = engine.CheckReactionOutcome();
             trackerText = engine.GetTrackerText() + "\n\n";
 
+            if (recorder != null)
+            {
+                recorder.Tick();
+            }
+
             if (result == ReactionResult.Success)
             {
                 freeHandSuccess = true;
@@ -118,6 +138,10 @@ public class Reaction_h2so4_cuo : MonoBehaviour
                 if (!failureReported)
                 {
                     failureReported = true;
+                    if (recorder != null)
+                    {
+                        recorder.Complete(engine.LastResult);
+                    }
                     if (canvasText)
                     {
                         canvasText.text = engine.GetFailureExplanation();
@@ -164,6 +188,10 @@ public class Reaction_h2so4_cuo : MonoBehaviour
         if (oneReaction == false && canTriggerSuccess)
         {
             oneReaction = true;
+            if (recorder != null)
+            {
+                recorder.Complete(ReactionResult.Success);
+            }
             showPopup = true;
             canvasText.text = "Chemical reaction equation: H2SO4 + CuO = CuSO4 + H2O. Now you can learn another reaction.";
             if (!audioSource2Started)
@@ -215,4 +243,31 @@ public class Reaction_h2so4_cuo : MonoBehaviour
         tooltip.UpdatePose(anchor, tooltipHeightOffset);
         tooltip.RenderEngineState(engine, "Reaction Success!\nH2SO4 + CuO = CuSO4 + H2O");
     }
+
+    /// <summary>
+    /// Called when the experiment is (re)selected from the book. Closes any attempt left
+    /// hanging, clears the measured quantities and the one-shot gates so the student can
+    /// try the same experiment again and have it logged as a separate attempt.
+    /// </summary>
+    void RestartAttemptIfRequested()
+    {
+        if (!restartAttemptOnReSelect || engine == null)
+        {
+            return; // OnEnable also runs before Start on the very first activation.
+        }
+
+        if (recorder != null)
+        {
+            recorder.Abandon();
+            recorder.ResetForNewAttempt();
+        }
+
+        engine.Reset();
+        failureReported = false;
+        oneReaction = false;
+        showPopup = false;
+        audioSource1Started = false;
+        audioSource2Started = false;
+    }
+
 }

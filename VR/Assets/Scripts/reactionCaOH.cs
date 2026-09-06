@@ -41,9 +41,17 @@ public class reactionCaOH : MonoBehaviour
     public AudioSource audioSource_failure;
     public AudioClip clip_failure;
 
+    [Header("Experiment History")]
+    [Tooltip("Matches the book / StartReaction number, 1-8.")]
+    public int reactionId = 6;
+    public string reactionDisplayName = "CaO + H2O -> Ca(OH)2";
+    [Tooltip("Re-selecting this experiment from the book logs a fresh attempt.")]
+    public bool restartAttemptOnReSelect = true;
+
     private FreeHandReactionEngine engine;
     private FreeHandTooltip tooltip;
     private bool failureReported = false;
+    private ReactionHistoryRecorder recorder;
 
     private DateTime timpInitial;
     private bool isPlaying = false;
@@ -79,6 +87,8 @@ public class reactionCaOH : MonoBehaviour
             underdose: "Too little quicklime leaves mostly water in the beaker, so hardly any Ca(OH)2 forms.");
 
         tooltip = new FreeHandTooltip();
+        recorder = new ReactionHistoryRecorder(reactionId, reactionDisplayName, engine);
+
         tooltip.Create("BeakerFloatingTooltip_CaOH", canvasText, tooltipFontSize);
         tooltip.Show(FreeHandTooltip.ProgressColor, engine.GetTooltipText());
     }
@@ -89,6 +99,7 @@ public class reactionCaOH : MonoBehaviour
         {
             tooltip.SetActive(true);
         }
+        RestartAttemptIfRequested();
     }
 
     void OnDisable()
@@ -96,6 +107,10 @@ public class reactionCaOH : MonoBehaviour
         if (tooltip != null)
         {
             tooltip.SetActive(false);
+        }
+        if (recorder != null)
+        {
+            recorder.Abandon(); // switching experiments away mid-run
         }
     }
 
@@ -123,6 +138,11 @@ public class reactionCaOH : MonoBehaviour
             ReactionResult result = engine.CheckReactionOutcome();
             trackerText = engine.GetTrackerText() + "\n\n";
 
+            if (recorder != null)
+            {
+                recorder.Tick();
+            }
+
             if (result == ReactionResult.Success)
             {
                 freeHandSuccess = true;
@@ -132,6 +152,10 @@ public class reactionCaOH : MonoBehaviour
                 if (!failureReported)
                 {
                     failureReported = true;
+                    if (recorder != null)
+                    {
+                        recorder.Complete(engine.LastResult);
+                    }
                     if (canvasText)
                     {
                         canvasText.text = engine.GetFailureExplanation();
@@ -178,6 +202,10 @@ public class reactionCaOH : MonoBehaviour
         if (oneExplosion == false && canTriggerSuccess)
         {
             done = true;
+            if (recorder != null)
+            {
+                recorder.Complete(ReactionResult.Success);
+            }
             explosionActive = true;
             explosionGameObject.SetActive(true);
             showPopup = true;
@@ -263,4 +291,34 @@ public class reactionCaOH : MonoBehaviour
             yield return new WaitForSeconds(clip.length);
         }
     }
+
+    /// <summary>
+    /// Called when the experiment is (re)selected from the book. Closes any attempt left
+    /// hanging, clears the measured quantities and the one-shot gates so the student can
+    /// try the same experiment again and have it logged as a separate attempt.
+    /// </summary>
+    void RestartAttemptIfRequested()
+    {
+        if (!restartAttemptOnReSelect || engine == null)
+        {
+            return; // OnEnable also runs before Start on the very first activation.
+        }
+
+        if (recorder != null)
+        {
+            recorder.Abandon();
+            recorder.ResetForNewAttempt();
+        }
+
+        engine.Reset();
+        failureReported = false;
+        oneExplosion = false;
+        explosionActive = false;
+        showPopup = false;
+        done = false;
+        audioSource1Started = false;
+        audioSource2Started = false;
+        audioSource3Started = false;
+    }
+
 }

@@ -40,9 +40,17 @@ public class KOHReaction : MonoBehaviour
     public AudioSource audioSource_failure;
     public AudioClip clip_failure;
 
+    [Header("Experiment History")]
+    [Tooltip("Matches the book / StartReaction number, 1-8.")]
+    public int reactionId = 4;
+    public string reactionDisplayName = "K + H2O -> KOH + H2";
+    [Tooltip("Re-selecting this experiment from the book logs a fresh attempt.")]
+    public bool restartAttemptOnReSelect = true;
+
     private FreeHandReactionEngine engine;
     private FreeHandTooltip tooltip;
     private bool failureReported = false;
+    private ReactionHistoryRecorder recorder;
     private bool potassiumDropped = false;
     private float potassiumContactTimer = 0.0f;
 
@@ -81,6 +89,8 @@ public class KOHReaction : MonoBehaviour
             underdose: "Too little potassium leaves most of the water unreacted, so hardly any KOH is formed.");
 
         tooltip = new FreeHandTooltip();
+        recorder = new ReactionHistoryRecorder(reactionId, reactionDisplayName, engine);
+
         tooltip.Create("BeakerFloatingTooltip_KOH", canvasText, tooltipFontSize);
         tooltip.Show(FreeHandTooltip.ProgressColor, engine.GetTooltipText());
     }
@@ -91,6 +101,7 @@ public class KOHReaction : MonoBehaviour
         {
             tooltip.SetActive(true);
         }
+        RestartAttemptIfRequested();
     }
 
     void OnDisable()
@@ -98,6 +109,10 @@ public class KOHReaction : MonoBehaviour
         if (tooltip != null)
         {
             tooltip.SetActive(false);
+        }
+        if (recorder != null)
+        {
+            recorder.Abandon(); // switching experiments away mid-run
         }
     }
 
@@ -130,6 +145,11 @@ public class KOHReaction : MonoBehaviour
             ReactionResult result = engine.CheckReactionOutcome();
             trackerText = engine.GetTrackerText() + "\n\n";
 
+            if (recorder != null)
+            {
+                recorder.Tick();
+            }
+
             if (result == ReactionResult.Success)
             {
                 freeHandSuccess = true;
@@ -139,6 +159,10 @@ public class KOHReaction : MonoBehaviour
                 if (!failureReported)
                 {
                     failureReported = true;
+                    if (recorder != null)
+                    {
+                        recorder.Complete(engine.LastResult);
+                    }
                     if (canvasText)
                     {
                         canvasText.text = engine.GetFailureExplanation();
@@ -185,6 +209,10 @@ public class KOHReaction : MonoBehaviour
         if (oneExplosion == false && canTriggerSuccess)
         {
             explosionActive = true;
+            if (recorder != null)
+            {
+                recorder.Complete(ReactionResult.Success);
+            }
             showPopup = true;
             if (canvasText)
             {
@@ -296,4 +324,35 @@ public class KOHReaction : MonoBehaviour
         tooltip.UpdatePose(anchor, tooltipHeightOffset);
         tooltip.RenderEngineState(engine, "Reaction Success!\n2H2O + 2K = 2KOH + H2");
     }
+
+    /// <summary>
+    /// Called when the experiment is (re)selected from the book. Closes any attempt left
+    /// hanging, clears the measured quantities and the one-shot gates so the student can
+    /// try the same experiment again and have it logged as a separate attempt.
+    /// </summary>
+    void RestartAttemptIfRequested()
+    {
+        if (!restartAttemptOnReSelect || engine == null)
+        {
+            return; // OnEnable also runs before Start on the very first activation.
+        }
+
+        if (recorder != null)
+        {
+            recorder.Abandon();
+            recorder.ResetForNewAttempt();
+        }
+
+        engine.Reset();
+        failureReported = false;
+        potassiumDropped = false;
+        potassiumContactTimer = 0.0f;
+        oneExplosion = false;
+        explosionActive = false;
+        phenolphthaleinAdded = false;
+        audioSource1Started = false;
+        audioSource2Started = false;
+        audioSource3Started = false;
+    }
+
 }

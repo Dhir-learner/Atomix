@@ -42,9 +42,17 @@ public class Feso4Reaction : MonoBehaviour
     public AudioSource audioSource_failure;
     public AudioClip clip_failure;
 
+    [Header("Experiment History")]
+    [Tooltip("Matches the book / StartReaction number, 1-8.")]
+    public int reactionId = 8;
+    public string reactionDisplayName = "2FeSO4 -> Fe2O3 + SO2 + SO3";
+    [Tooltip("Re-selecting this experiment from the book logs a fresh attempt.")]
+    public bool restartAttemptOnReSelect = true;
+
     private FreeHandReactionEngine engine;
     private FreeHandTooltip tooltip;
     private bool failureReported = false;
+    private ReactionHistoryRecorder recorder;
 
     private bool audioSource1Started = false;
     private bool audioSource2Started = false;
@@ -77,6 +85,8 @@ public class Feso4Reaction : MonoBehaviour
             overdose: "The tube was left in the flame long past full decomposition - the Fe2O3 bakes onto the glass and the SO2/SO3 fumes build up dangerously.",
             underdose: "Insufficient heating produces incomplete decomposition - some FeSO4 never breaks down, so the solid stays green instead of turning reddish brown.");
 
+        recorder = new ReactionHistoryRecorder(reactionId, reactionDisplayName, engine);
+
         tooltip = new FreeHandTooltip();
         tooltip.Create("TubeFloatingTooltip_FeSO4", canvasText, tooltipFontSize);
         tooltip.Show(FreeHandTooltip.ProgressColor, engine.GetTooltipText());
@@ -88,6 +98,7 @@ public class Feso4Reaction : MonoBehaviour
         {
             tooltip.SetActive(true);
         }
+        RestartAttemptIfRequested();
     }
 
     void OnDisable()
@@ -95,6 +106,10 @@ public class Feso4Reaction : MonoBehaviour
         if (tooltip != null)
         {
             tooltip.SetActive(false);
+        }
+        if (recorder != null)
+        {
+            recorder.Abandon(); // switching experiments away mid-run
         }
     }
 
@@ -114,6 +129,10 @@ public class Feso4Reaction : MonoBehaviour
             audioSource_guidance.Stop();
             audioSource_guidance.PlayOneShot(clip_guidance1);
             audioSource1Started = true;
+            if (recorder != null)
+            {
+                recorder.LogAction("Lit the Bunsen burner", 0.0f, true);
+            }
         }
 
         if (enableFreeHandMode && engine != null)
@@ -157,6 +176,10 @@ public class Feso4Reaction : MonoBehaviour
         }
 
         ReactionResult result = engine.CheckReactionOutcome();
+        if (recorder != null)
+        {
+            recorder.Tick();
+        }
         SetFumeActive(overFlame && !engine.IsResolved);
 
         float duration = Mathf.Max(0.1f, heatingDuration);
@@ -173,6 +196,10 @@ public class Feso4Reaction : MonoBehaviour
             if (!failureReported)
             {
                 failureReported = true;
+                if (recorder != null)
+                {
+                    recorder.Complete(engine.LastResult);
+                }
                 if (canvasText)
                 {
                     canvasText.text = engine.GetFailureExplanation();
@@ -236,6 +263,10 @@ public class Feso4Reaction : MonoBehaviour
     void CompleteReaction()
     {
         reactionCompleted = true;
+        if (recorder != null)
+        {
+            recorder.Complete(ReactionResult.Success);
+        }
         SetFumeActive(false);
 
         Renderer labelRenderer = label != null ? label.GetComponent<Renderer>() : null;
@@ -391,4 +422,30 @@ public class Feso4Reaction : MonoBehaviour
             fume.SetActive(isActive);
         }
     }
+
+    /// <summary>
+    /// Called when the experiment is (re)selected from the book so a retry is logged as its
+    /// own attempt. Apparatus flags (balloon fitted, burner lit) are deliberately left alone -
+    /// that hardware stays exactly where the student left it.
+    /// </summary>
+    void RestartAttemptIfRequested()
+    {
+        if (!restartAttemptOnReSelect || engine == null)
+        {
+            return; // OnEnable also runs before Start on the very first activation.
+        }
+
+        if (recorder != null)
+        {
+            recorder.Abandon();
+            recorder.ResetForNewAttempt();
+        }
+
+        engine.Reset();
+        failureReported = false;
+        reactionCompleted = false;
+        audioSource2Started = false;
+        heatingProgress = 0.0f;
+    }
+
 }

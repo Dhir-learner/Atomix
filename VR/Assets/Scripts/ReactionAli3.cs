@@ -52,9 +52,17 @@ public class ReactionAli3 : MonoBehaviour
     public AudioSource audioSource_failure;
     public AudioClip clip_failure;
 
+    [Header("Experiment History")]
+    [Tooltip("Matches the book / StartReaction number, 1-8.")]
+    public int reactionId = 5;
+    public string reactionDisplayName = "2Al + 3I2 -> 2AlI3";
+    [Tooltip("Re-selecting this experiment from the book logs a fresh attempt.")]
+    public bool restartAttemptOnReSelect = true;
+
     private FreeHandReactionEngine engine;
     private FreeHandTooltip tooltip;
     private bool failureReported = false;
+    private ReactionHistoryRecorder recorder;
 
     private DateTime timpInitial;
     private bool explosionActive = false;
@@ -109,6 +117,8 @@ public class ReactionAli3 : MonoBehaviour
             orderGroup: 1);
 
         tooltip = new FreeHandTooltip();
+        recorder = new ReactionHistoryRecorder(reactionId, reactionDisplayName, engine);
+
         tooltip.Create("DishFloatingTooltip_AlI3", canvasText, tooltipFontSize);
         tooltip.Show(FreeHandTooltip.ProgressColor, engine.GetTooltipText());
     }
@@ -119,6 +129,7 @@ public class ReactionAli3 : MonoBehaviour
         {
             tooltip.SetActive(true);
         }
+        RestartAttemptIfRequested();
     }
 
     void OnDisable()
@@ -126,6 +137,10 @@ public class ReactionAli3 : MonoBehaviour
         if (tooltip != null)
         {
             tooltip.SetActive(false);
+        }
+        if (recorder != null)
+        {
+            recorder.Abandon(); // switching experiments away mid-run
         }
     }
 
@@ -157,6 +172,11 @@ public class ReactionAli3 : MonoBehaviour
             ReactionResult result = engine.CheckReactionOutcome();
             trackerText = engine.GetTrackerText() + "\n\n";
 
+            if (recorder != null)
+            {
+                recorder.Tick();
+            }
+
             if (result == ReactionResult.Success)
             {
                 freeHandSuccess = true;
@@ -166,6 +186,10 @@ public class ReactionAli3 : MonoBehaviour
                 if (!failureReported)
                 {
                     failureReported = true;
+                    if (recorder != null)
+                    {
+                        recorder.Complete(engine.LastResult);
+                    }
                     if (canvasText)
                     {
                         canvasText.text = engine.GetFailureExplanation();
@@ -240,6 +264,10 @@ public class ReactionAli3 : MonoBehaviour
 
         if (soundStarted == false && canTriggerSuccess)
         {
+            if (recorder != null)
+            {
+                recorder.Complete(ReactionResult.Success);
+            }
             if (canvasText)
             {
                 canvasText.text = "Chemical reaction equation: 2Al + 3I2 = 2AlI3. Now you can learn another reaction.";
@@ -328,4 +356,34 @@ public class ReactionAli3 : MonoBehaviour
         tooltip.UpdatePose(anchor, tooltipHeightOffset);
         tooltip.RenderEngineState(engine, "Reaction Success!\n2Al + 3I2 = 2AlI3");
     }
+
+    /// <summary>
+    /// Called when the experiment is (re)selected from the book. Closes any attempt left
+    /// hanging, clears the measured quantities and the one-shot gates so the student can
+    /// try the same experiment again and have it logged as a separate attempt.
+    /// </summary>
+    void RestartAttemptIfRequested()
+    {
+        if (!restartAttemptOnReSelect || engine == null)
+        {
+            return; // OnEnable also runs before Start on the very first activation.
+        }
+
+        if (recorder != null)
+        {
+            recorder.Abandon();
+            recorder.ResetForNewAttempt();
+        }
+
+        engine.Reset();
+        failureReported = false;
+        soundStarted = false;
+        explosionActive = false;
+        state2 = false;
+        audioSource1Started = false;
+        audioSource2Started = false;
+        audioSource3Started = false;
+        audioSource4Started = false;
+    }
+
 }

@@ -37,9 +37,17 @@ public class Reaction_hcl_nahco3 : MonoBehaviour
     public AudioSource audioSource_failure;
     public AudioClip clip_failure;
 
+    [Header("Experiment History")]
+    [Tooltip("Matches the book / StartReaction number, 1-8.")]
+    public int reactionId = 3;
+    public string reactionDisplayName = "HCl + NaHCO3 -> NaCl + H2O + CO2";
+    [Tooltip("Re-selecting this experiment from the book logs a fresh attempt.")]
+    public bool restartAttemptOnReSelect = true;
+
     private FreeHandReactionEngine engine;
     private FreeHandTooltip tooltip;
     private bool failureReported = false;
+    private ReactionHistoryRecorder recorder;
 
     private DateTime timpInitial;
     private bool isPlaying = false;
@@ -73,6 +81,8 @@ public class Reaction_hcl_nahco3 : MonoBehaviour
             underdose: "Insufficient bicarbonate leaves an acidic solution, so the neutralisation to NaCl is incomplete.");
 
         tooltip = new FreeHandTooltip();
+        recorder = new ReactionHistoryRecorder(reactionId, reactionDisplayName, engine);
+
         tooltip.Create("BeakerFloatingTooltip_HCl_NaHCO3", canvasText, tooltipFontSize);
         tooltip.Show(FreeHandTooltip.ProgressColor, engine.GetTooltipText());
     }
@@ -83,6 +93,7 @@ public class Reaction_hcl_nahco3 : MonoBehaviour
         {
             tooltip.SetActive(true);
         }
+        RestartAttemptIfRequested();
     }
 
     void OnDisable()
@@ -90,6 +101,10 @@ public class Reaction_hcl_nahco3 : MonoBehaviour
         if (tooltip != null)
         {
             tooltip.SetActive(false);
+        }
+        if (recorder != null)
+        {
+            recorder.Abandon(); // switching experiments away mid-run
         }
     }
 
@@ -117,6 +132,11 @@ public class Reaction_hcl_nahco3 : MonoBehaviour
             ReactionResult result = engine.CheckReactionOutcome();
             trackerText = engine.GetTrackerText() + "\n\n";
 
+            if (recorder != null)
+            {
+                recorder.Tick();
+            }
+
             if (result == ReactionResult.Success)
             {
                 freeHandSuccess = true;
@@ -126,6 +146,10 @@ public class Reaction_hcl_nahco3 : MonoBehaviour
                 if (!failureReported)
                 {
                     failureReported = true;
+                    if (recorder != null)
+                    {
+                        recorder.Complete(engine.LastResult);
+                    }
                     if (canvasText)
                     {
                         canvasText.text = engine.GetFailureExplanation();
@@ -172,6 +196,10 @@ public class Reaction_hcl_nahco3 : MonoBehaviour
         if (oneExplosion == false && canTriggerSuccess)
         {
             explosionActive = true;
+            if (recorder != null)
+            {
+                recorder.Complete(ReactionResult.Success);
+            }
             explosionGameObject.SetActive(true);
             showPopup = true;
             canvasText.text = "Chemical reaction equation: HCl + NaHCO3 = NaCl + H2O + CO2. Now you can learn another reaction.";
@@ -239,4 +267,32 @@ public class Reaction_hcl_nahco3 : MonoBehaviour
             yield return new WaitForSeconds(clip.length);
         }
     }
+
+    /// <summary>
+    /// Called when the experiment is (re)selected from the book. Closes any attempt left
+    /// hanging, clears the measured quantities and the one-shot gates so the student can
+    /// try the same experiment again and have it logged as a separate attempt.
+    /// </summary>
+    void RestartAttemptIfRequested()
+    {
+        if (!restartAttemptOnReSelect || engine == null)
+        {
+            return; // OnEnable also runs before Start on the very first activation.
+        }
+
+        if (recorder != null)
+        {
+            recorder.Abandon();
+            recorder.ResetForNewAttempt();
+        }
+
+        engine.Reset();
+        failureReported = false;
+        oneExplosion = false;
+        explosionActive = false;
+        showPopup = false;
+        audioSource1Started = false;
+        audioSource2Started = false;
+    }
+
 }
