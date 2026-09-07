@@ -69,6 +69,9 @@ public class InLabAssistantController : MonoBehaviour
     private static readonly Color AccentColor = new Color(0.42f, 0.84f, 1.0f, 1.0f);
     private static readonly Color MutedColor = new Color(0.72f, 0.78f, 0.86f, 1.0f);
 
+    /// <summary>The live controller, so other in-lab UI can hand the assistant a question.</summary>
+    public static InLabAssistantController Instance { get; private set; }
+
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
     private static void Bootstrap()
     {
@@ -82,6 +85,53 @@ public class InLabAssistantController : MonoBehaviour
         DontDestroyOnLoad(host);
     }
 
+    void Awake()
+    {
+        if (Instance == null)
+        {
+            Instance = this;
+        }
+    }
+
+    /// <summary>
+    /// Asks the assistant a question on the student's behalf - used by the graph panel's
+    /// "Ask AI to Explain" button. The reply comes back through the normal path, so it is spoken,
+    /// shown in the chat log and logged to the experiment history exactly like a spoken question.
+    /// </summary>
+    /// <param name="question">What to ask, phrased as the student would.</param>
+    /// <param name="context">Briefing sent ahead of the question, or null to use the usual one.</param>
+    /// <returns>False when the assistant is not available, so the caller can say so.</returns>
+    public bool AskAssistant(string question, string context)
+    {
+        if (string.IsNullOrEmpty(question))
+        {
+            return false;
+        }
+
+        if (!isActiveScene || convai == null || !convai.IsReady)
+        {
+            return false;
+        }
+
+        // A question the student did not speak is worth surfacing, so expand the panel for it.
+        if (minimized)
+        {
+            SetMinimized(false);
+        }
+
+        convai.SendTextQuestion(
+            string.IsNullOrEmpty(context) ? TakeFreshContext() : context,
+            question);
+
+        return true;
+    }
+
+    /// <summary>True when a question sent through <see cref="AskAssistant"/> would actually go out.</summary>
+    public bool CanAsk
+    {
+        get { return isActiveScene && convai != null && convai.IsReady; }
+    }
+
     void OnEnable()
     {
         SceneManager.activeSceneChanged += HandleActiveSceneChanged;
@@ -91,6 +141,14 @@ public class InLabAssistantController : MonoBehaviour
     {
         SceneManager.activeSceneChanged -= HandleActiveSceneChanged;
         StopPushToTalk();
+    }
+
+    void OnDestroy()
+    {
+        if (Instance == this)
+        {
+            Instance = null;
+        }
     }
 
     void Start()

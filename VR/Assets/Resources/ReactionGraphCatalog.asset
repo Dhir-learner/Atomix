@@ -1,0 +1,519 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 97739e2a83e94540931d8986cfeb7611, type: 3}
+  m_Name: ReactionGraphCatalog
+  m_EditorClassIdentifier: 
+  entries:
+  - {fileID: 1128739201}
+  - {fileID: 1128739202}
+  - {fileID: 1128739203}
+  - {fileID: 1128739204}
+  - {fileID: 1128739205}
+  - {fileID: 1128739206}
+  - {fileID: 1128739207}
+  - {fileID: 1128739208}
+--- !u!114 &1128739201
+MonoBehaviour:
+  m_ObjectHideFlags: 1
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ee6a7d7db7d649be83682c58bb1023f2, type: 3}
+  m_Name: ReactionGraphData_1
+  m_EditorClassIdentifier: 
+  reactionId: 1
+  reactionName: "2Na + 2H2O -> 2NaOH + H2"
+  displayTitle: "Sodium + Water"
+  reactionType: 0
+  activationEnergy: 10
+  enthalpyChange: -368.6
+  entropyChange: -15.5
+  energyProfilePoints:
+  - {x: 0, y: 0.0612}
+  - {x: 0.025, y: 0.1514}
+  - {x: 0.05, y: 0.3542}
+  - {x: 0.075, y: 0.7839}
+  - {x: 0.1, y: 1.6411}
+  - {x: 0.125, y: 3.2502}
+  - {x: 0.15, y: 5.7407}
+  - {x: 0.175, y: 6.6515}
+  - {x: 0.2, y: 6.3031}
+  - {x: 0.225, y: 5.7901}
+  - {x: 0.25, y: 5.9576}
+  - {x: 0.275, y: 7.1361}
+  - {x: 0.3, y: 8.9066}
+  - {x: 0.325, y: 10}
+  - {x: 0.35, y: 8.4234}
+  - {x: 0.375, y: 1.8421}
+  - {x: 0.4, y: -11.8499}
+  - {x: 0.425, y: -33.9318}
+  - {x: 0.45, y: -64.4257}
+  - {x: 0.475, y: -101.9861}
+  - {x: 0.5, y: -144.1506}
+  - {x: 0.525, y: -187.86}
+  - {x: 0.55, y: -230.0687}
+  - {x: 0.575, y: -268.2542}
+  - {x: 0.6, y: -300.6995}
+  - {x: 0.625, y: -326.5204}
+  - {x: 0.65, y: -345.4981}
+  - {x: 0.675, y: -357.8209}
+  - {x: 0.7, y: -363.8314}
+  - {x: 0.725, y: -366.1106}
+  - {x: 0.75, y: -367.3706}
+  - {x: 0.775, y: -368.0257}
+  - {x: 0.8, y: -368.3462}
+  - {x: 0.825, y: -368.4939}
+  - {x: 0.85, y: -368.5581}
+  - {x: 0.875, y: -368.5843}
+  - {x: 0.9, y: -368.5944}
+  - {x: 0.925, y: -368.5981}
+  - {x: 0.95, y: -368.5994}
+  - {x: 0.975, y: -368.5998}
+  - {x: 1, y: -368.6}
+  graphExplanationText: "This is one of the most strongly exothermic reactions in the lab: 368.6 kilojoules come out for every two moles of sodium, which is why the curve falls off a cliff on the product side. The activation energy is only about 10 kilojoules per mole, essentially no barrier at all, so the reaction begins the instant the metal touches the water - nothing has to be heated first, and that is exactly why sodium is stored under oil. The entropy is the interesting part: it drops slightly, by 15.5 joules per mole per kelvin, even though hydrogen gas is being given off. The sodium and hydroxide ions that form drag the surrounding water molecules into tight, ordered hydration shells, and that ordering slightly outweighs the disorder gained from the escaping hydrogen. The reaction still runs away with itself because the enormous energy release completely dominates that small entropy penalty."
+--- !u!114 &1128739202
+MonoBehaviour:
+  m_ObjectHideFlags: 1
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ee6a7d7db7d649be83682c58bb1023f2, type: 3}
+  m_Name: ReactionGraphData_2
+  m_EditorClassIdentifier: 
+  reactionId: 2
+  reactionName: "H2SO4 + CuO -> CuSO4 + H2O"
+  displayTitle: "Sulfuric Acid + Copper Oxide"
+  reactionType: 0
+  activationEnergy: 48
+  enthalpyChange: -63.7
+  entropyChange: -43
+  energyProfilePoints:
+  - {x: 0, y: 0.0306}
+  - {x: 0.025, y: 0.0758}
+  - {x: 0.05, y: 0.1773}
+  - {x: 0.075, y: 0.3923}
+  - {x: 0.1, y: 0.8214}
+  - {x: 0.125, y: 1.6267}
+  - {x: 0.15, y: 2.9873}
+  - {x: 0.175, y: 4.6854}
+  - {x: 0.2, y: 7.017}
+  - {x: 0.225, y: 10.4011}
+  - {x: 0.25, y: 15.1315}
+  - {x: 0.275, y: 21.2448}
+  - {x: 0.3, y: 28.4024}
+  - {x: 0.325, y: 35.8401}
+  - {x: 0.35, y: 42.4314}
+  - {x: 0.375, y: 46.8791}
+  - {x: 0.4, y: 48}
+  - {x: 0.425, y: 45.025}
+  - {x: 0.45, y: 37.8141}
+  - {x: 0.475, y: 26.9118}
+  - {x: 0.5, y: 13.4215}
+  - {x: 0.525, y: -1.2546}
+  - {x: 0.55, y: -15.7213}
+  - {x: 0.575, y: -28.845}
+  - {x: 0.6, y: -39.8953}
+  - {x: 0.625, y: -48.5586}
+  - {x: 0.65, y: -54.8544}
+  - {x: 0.675, y: -59.0058}
+  - {x: 0.7, y: -61.3134}
+  - {x: 0.725, y: -62.4541}
+  - {x: 0.75, y: -63.0847}
+  - {x: 0.775, y: -63.4126}
+  - {x: 0.8, y: -63.573}
+  - {x: 0.825, y: -63.6469}
+  - {x: 0.85, y: -63.679}
+  - {x: 0.875, y: -63.6921}
+  - {x: 0.9, y: -63.6972}
+  - {x: 0.925, y: -63.6991}
+  - {x: 0.95, y: -63.6997}
+  - {x: 0.975, y: -63.6999}
+  - {x: 1, y: -63.7}
+  graphExplanationText: "This is a moderate exothermic reaction - 63.7 kilojoules per mole released, enough to warm the beaker noticeably but nothing dramatic. Notice that the barrier at 48 kilojoules per mole is comparable to the energy released, which is why it is not instantaneous the way sodium and water is: the acid has to attack the solid copper oxide surface one site at a time, and that surface step is what sets the rate. It is also why stirring and warming speed it up so much. Entropy falls by 43 joules per mole per kelvin because a solid is being consumed to make dissolved copper and sulfate ions, and those ions hold water molecules around them in an ordered shell. The reaction is still spontaneous at room temperature because the energy released more than pays for that loss of disorder."
+--- !u!114 &1128739203
+MonoBehaviour:
+  m_ObjectHideFlags: 1
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ee6a7d7db7d649be83682c58bb1023f2, type: 3}
+  m_Name: ReactionGraphData_3
+  m_EditorClassIdentifier: 
+  reactionId: 3
+  reactionName: "HCl + NaHCO3 -> NaCl + H2O + CO2"
+  displayTitle: "Hydrochloric Acid + Sodium Bicarbonate"
+  reactionType: 1
+  activationEnergy: 45
+  enthalpyChange: 31.4
+  entropyChange: 241
+  energyProfilePoints:
+  - {x: 0, y: 0.0}
+  - {x: 0.025, y: 0.0}
+  - {x: 0.05, y: 0.0001}
+  - {x: 0.075, y: 0.0003}
+  - {x: 0.1, y: 0.001}
+  - {x: 0.125, y: 0.0028}
+  - {x: 0.15, y: 0.0075}
+  - {x: 0.175, y: 0.0191}
+  - {x: 0.2, y: 0.0456}
+  - {x: 0.225, y: 0.1033}
+  - {x: 0.25, y: 0.221}
+  - {x: 0.275, y: 0.4476}
+  - {x: 0.3, y: 0.8574}
+  - {x: 0.325, y: 1.7357}
+  - {x: 0.35, y: 3.3692}
+  - {x: 0.375, y: 5.8567}
+  - {x: 0.4, y: 9.2692}
+  - {x: 0.425, y: 13.6047}
+  - {x: 0.45, y: 18.7414}
+  - {x: 0.475, y: 24.4079}
+  - {x: 0.5, y: 30.1878}
+  - {x: 0.525, y: 35.5708}
+  - {x: 0.55, y: 40.0441}
+  - {x: 0.575, y: 43.2022}
+  - {x: 0.6, y: 44.8404}
+  - {x: 0.625, y: 45}
+  - {x: 0.65, y: 43.9481}
+  - {x: 0.675, y: 42.1007}
+  - {x: 0.7, y: 39.9147}
+  - {x: 0.725, y: 37.7857}
+  - {x: 0.75, y: 35.979}
+  - {x: 0.775, y: 34.6074}
+  - {x: 0.8, y: 33.6484}
+  - {x: 0.825, y: 32.9875}
+  - {x: 0.85, y: 32.4651}
+  - {x: 0.875, y: 31.9844}
+  - {x: 0.9, y: 31.6951}
+  - {x: 0.925, y: 31.5409}
+  - {x: 0.95, y: 31.4637}
+  - {x: 0.975, y: 31.4272}
+  - {x: 1, y: 31.411}
+  graphExplanationText: "This is the one endothermic reaction that happens at room temperature, and it is the best example in the whole lab of why entropy matters. It absorbs 31.4 kilojoules per mole - the beaker actually gets colder as it fizzes - so on energy alone it should not happen at all. What drives it is the entropy change of plus 241 joules per mole per kelvin, which is huge: a solid and a dissolved acid turn into dissolved ions, liquid water and a whole mole of carbon dioxide gas that escapes into the room. Put those into the Gibbs equation and delta G comes out at about minus 40 kilojoules per mole at room temperature, comfortably negative. So the reaction is spontaneous not because it releases energy, but because it creates so much disorder that it is worth paying the energy cost."
+--- !u!114 &1128739204
+MonoBehaviour:
+  m_ObjectHideFlags: 1
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ee6a7d7db7d649be83682c58bb1023f2, type: 3}
+  m_Name: ReactionGraphData_4
+  m_EditorClassIdentifier: 
+  reactionId: 4
+  reactionName: "2K + 2H2O -> 2KOH + H2"
+  displayTitle: "Potassium + Water"
+  reactionType: 0
+  activationEnergy: 6
+  enthalpyChange: -393.2
+  entropyChange: 44.7
+  energyProfilePoints:
+  - {x: 0, y: 0.0591}
+  - {x: 0.025, y: 0.1461}
+  - {x: 0.05, y: 0.3419}
+  - {x: 0.075, y: 0.7566}
+  - {x: 0.1, y: 1.5841}
+  - {x: 0.125, y: 3.1372}
+  - {x: 0.15, y: 5.5057}
+  - {x: 0.175, y: 6}
+  - {x: 0.2, y: 4.8873}
+  - {x: 0.225, y: 3.2642}
+  - {x: 0.25, y: 1.9863}
+  - {x: 0.275, y: 1.4127}
+  - {x: 0.3, y: 1.1787}
+  - {x: 0.325, y: 0.0995}
+  - {x: 0.35, y: -3.7088}
+  - {x: 0.375, y: -12.4595}
+  - {x: 0.4, y: -28.1456}
+  - {x: 0.425, y: -51.9619}
+  - {x: 0.45, y: -83.8896}
+  - {x: 0.475, y: -122.5901}
+  - {x: 0.5, y: -165.6467}
+  - {x: 0.525, y: -210.0667}
+  - {x: 0.55, y: -252.8703}
+  - {x: 0.575, y: -291.583}
+  - {x: 0.6, y: -324.5073}
+  - {x: 0.625, y: -350.75}
+  - {x: 0.65, y: -370.0599}
+  - {x: 0.675, y: -382.5787}
+  - {x: 0.7, y: -388.5972}
+  - {x: 0.725, y: -390.7971}
+  - {x: 0.75, y: -392.0134}
+  - {x: 0.775, y: -392.6457}
+  - {x: 0.8, y: -392.955}
+  - {x: 0.825, y: -393.0976}
+  - {x: 0.85, y: -393.1595}
+  - {x: 0.875, y: -393.1849}
+  - {x: 0.9, y: -393.1946}
+  - {x: 0.925, y: -393.1982}
+  - {x: 0.95, y: -393.1994}
+  - {x: 0.975, y: -393.1998}
+  - {x: 1, y: -393.2}
+  graphExplanationText: "Compare this with the sodium experiment and you can see reactivity down the group in the numbers. Potassium releases 393.2 kilojoules per two moles against sodium's 368.6, and its activation barrier is lower still - about 6 kilojoules per mole against 10 - because potassium gives up its outer electron more easily. A lower barrier and more energy released is exactly why potassium ignites the hydrogen while sodium usually does not. There is a second difference worth noticing: entropy rises here, by 44.7 joules per mole per kelvin, where it fell for sodium. The potassium ion is larger and holds the surrounding water far less tightly than the sodium ion does, so it orders the solvent much less, and the hydrogen gas released wins out. This reaction is spontaneous at any temperature: it both releases energy and increases disorder."
+--- !u!114 &1128739205
+MonoBehaviour:
+  m_ObjectHideFlags: 1
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ee6a7d7db7d649be83682c58bb1023f2, type: 3}
+  m_Name: ReactionGraphData_5
+  m_EditorClassIdentifier: 
+  reactionId: 5
+  reactionName: "2Al + 3I2 -> 2AlI3"
+  displayTitle: "Aluminium + Iodine"
+  reactionType: 0
+  activationEnergy: 85
+  enthalpyChange: -627.6
+  entropyChange: -86.9
+  energyProfilePoints:
+  - {x: 0, y: 0.1388}
+  - {x: 0.025, y: 0.3433}
+  - {x: 0.05, y: 0.8032}
+  - {x: 0.075, y: 1.7776}
+  - {x: 0.1, y: 3.7216}
+  - {x: 0.125, y: 7.3705}
+  - {x: 0.15, y: 13.2149}
+  - {x: 0.175, y: 17.4226}
+  - {x: 0.2, y: 20.9537}
+  - {x: 0.225, y: 26.0685}
+  - {x: 0.25, y: 34.4609}
+  - {x: 0.275, y: 46.658}
+  - {x: 0.3, y: 61.4873}
+  - {x: 0.325, y: 75.8486}
+  - {x: 0.35, y: 85}
+  - {x: 0.375, y: 83.4251}
+  - {x: 0.4, y: 66.1254}
+  - {x: 0.425, y: 29.9778}
+  - {x: 0.45, y: -25.29}
+  - {x: 0.475, y: -96.8493}
+  - {x: 0.5, y: -179.3384}
+  - {x: 0.525, y: -266.0425}
+  - {x: 0.55, y: -350.2773}
+  - {x: 0.575, y: -426.5451}
+  - {x: 0.6, y: -491.1746}
+  - {x: 0.625, y: -542.3829}
+  - {x: 0.65, y: -579.8965}
+  - {x: 0.675, y: -604.3646}
+  - {x: 0.7, y: -616.7863}
+  - {x: 0.725, y: -621.9547}
+  - {x: 0.75, y: -624.8122}
+  - {x: 0.775, y: -626.2977}
+  - {x: 0.8, y: -627.0245}
+  - {x: 0.825, y: -627.3594}
+  - {x: 0.85, y: -627.5049}
+  - {x: 0.875, y: -627.5644}
+  - {x: 0.9, y: -627.5874}
+  - {x: 0.925, y: -627.5958}
+  - {x: 0.95, y: -627.5987}
+  - {x: 0.975, y: -627.5996}
+  - {x: 1, y: -627.5999}
+  graphExplanationText: "This is by far the most exothermic reaction in the lab - 627.6 kilojoules per mole of reaction - which is why it produces that violent cloud of purple iodine vapour. But look at the barrier: 85 kilojoules per mole, the highest of any of the room-temperature experiments. Two dry solids simply cannot reach each other well enough to react, which is why the mixture sits there doing nothing until you add water. The water acts as a catalyst: it dissolves a little iodine and lets it reach the aluminium surface, lowering the effective barrier so the reaction can start. Once started, the energy it releases keeps it going. Entropy falls by 86.9 joules per mole per kelvin, because five moles of solid reactants become two moles of solid product - fewer particles, less disorder. Only the sheer size of the energy release makes it spontaneous anyway."
+--- !u!114 &1128739206
+MonoBehaviour:
+  m_ObjectHideFlags: 1
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ee6a7d7db7d649be83682c58bb1023f2, type: 3}
+  m_Name: ReactionGraphData_6
+  m_EditorClassIdentifier: 
+  reactionId: 6
+  reactionName: "CaO + H2O -> Ca(OH)2"
+  displayTitle: "Calcium Oxide + Water"
+  reactionType: 0
+  activationEnergy: 46
+  enthalpyChange: -65.2
+  entropyChange: -26.3
+  energyProfilePoints:
+  - {x: 0, y: 0.0301}
+  - {x: 0.025, y: 0.0744}
+  - {x: 0.05, y: 0.1742}
+  - {x: 0.075, y: 0.3855}
+  - {x: 0.1, y: 0.8071}
+  - {x: 0.125, y: 1.5984}
+  - {x: 0.15, y: 2.9329}
+  - {x: 0.175, y: 4.5746}
+  - {x: 0.2, y: 6.8115}
+  - {x: 0.225, y: 10.058}
+  - {x: 0.25, y: 14.6058}
+  - {x: 0.275, y: 20.4935}
+  - {x: 0.3, y: 27.391}
+  - {x: 0.325, y: 34.5504}
+  - {x: 0.35, y: 40.8677}
+  - {x: 0.375, y: 45.0708}
+  - {x: 0.4, y: 46}
+  - {x: 0.425, y: 42.9023}
+  - {x: 0.45, y: 35.6431}
+  - {x: 0.475, y: 24.7599}
+  - {x: 0.5, y: 11.34}
+  - {x: 0.525, y: -3.2363}
+  - {x: 0.55, y: -17.595}
+  - {x: 0.575, y: -30.6197}
+  - {x: 0.6, y: -41.5897}
+  - {x: 0.625, y: -50.1942}
+  - {x: 0.65, y: -56.4496}
+  - {x: 0.675, y: -60.5724}
+  - {x: 0.7, y: -62.8549}
+  - {x: 0.725, y: -63.9758}
+  - {x: 0.75, y: -64.5954}
+  - {x: 0.775, y: -64.9176}
+  - {x: 0.8, y: -65.0752}
+  - {x: 0.825, y: -65.1478}
+  - {x: 0.85, y: -65.1794}
+  - {x: 0.875, y: -65.1923}
+  - {x: 0.9, y: -65.1973}
+  - {x: 0.925, y: -65.1991}
+  - {x: 0.95, y: -65.1997}
+  - {x: 0.975, y: -65.1999}
+  - {x: 1, y: -65.2}
+  graphExplanationText: "This is lime slaking, and it releases 65.2 kilojoules per mole - enough to boil some of the water and send steam off the dish, which is exactly what you saw. The barrier is 46 kilojoules per mole, so it needs the water to actually wet the solid surface before it gets going, and then the heat it releases accelerates the rest. Entropy falls by 26.3 joules per mole per kelvin because a solid and a liquid combine into a single ordered solid - two things becoming one, with the water molecules locked into the hydroxide lattice. The reaction is spontaneous at room temperature on the strength of the energy released, but that negative entropy is why the reverse process works: heat calcium hydroxide strongly enough and it gives the water back."
+--- !u!114 &1128739207
+MonoBehaviour:
+  m_ObjectHideFlags: 1
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ee6a7d7db7d649be83682c58bb1023f2, type: 3}
+  m_Name: ReactionGraphData_7
+  m_EditorClassIdentifier: 
+  reactionId: 7
+  reactionName: "CaCO3 -> CaO + CO2"
+  displayTitle: "Calcium Carbonate Decomposition"
+  reactionType: 1
+  activationEnergy: 185
+  enthalpyChange: 178.3
+  entropyChange: 160.7
+  energyProfilePoints:
+  - {x: 0, y: 0.0}
+  - {x: 0.025, y: 0.0001}
+  - {x: 0.05, y: 0.0003}
+  - {x: 0.075, y: 0.0009}
+  - {x: 0.1, y: 0.0028}
+  - {x: 0.125, y: 0.0079}
+  - {x: 0.15, y: 0.021}
+  - {x: 0.175, y: 0.0532}
+  - {x: 0.2, y: 0.1273}
+  - {x: 0.225, y: 0.2881}
+  - {x: 0.25, y: 0.6167}
+  - {x: 0.275, y: 1.2487}
+  - {x: 0.3, y: 2.392}
+  - {x: 0.325, y: 5.3687}
+  - {x: 0.35, y: 11.4399}
+  - {x: 0.375, y: 20.7846}
+  - {x: 0.4, y: 33.5041}
+  - {x: 0.425, y: 49.4959}
+  - {x: 0.45, y: 68.3233}
+  - {x: 0.475, y: 89.1323}
+  - {x: 0.5, y: 110.6644}
+  - {x: 0.525, y: 131.3991}
+  - {x: 0.55, y: 149.8088}
+  - {x: 0.575, y: 164.6654}
+  - {x: 0.6, y: 175.301}
+  - {x: 0.625, y: 181.7337}
+  - {x: 0.65, y: 184.6122}
+  - {x: 0.675, y: 185}
+  - {x: 0.7, y: 184.0752}
+  - {x: 0.725, y: 182.8447}
+  - {x: 0.75, y: 181.9519}
+  - {x: 0.775, y: 181.6141}
+  - {x: 0.8, y: 181.6726}
+  - {x: 0.825, y: 181.7106}
+  - {x: 0.85, y: 181.1858}
+  - {x: 0.875, y: 179.9304}
+  - {x: 0.9, y: 179.1232}
+  - {x: 0.925, y: 178.6932}
+  - {x: 0.95, y: 178.4777}
+  - {x: 0.975, y: 178.3759}
+  - {x: 1, y: 178.3307}
+  graphExplanationText: "This is a thermal decomposition, so it is endothermic - it absorbs 178.3 kilojoules per mole, which is why it only happens while you hold it over the flame. Notice how close the activation energy is to the enthalpy change: 185 against 178.3. That means there is almost no extra barrier beyond simply paying the uphill energy cost, so the reaction is controlled by temperature rather than by kinetics. Entropy rises sharply, by 160.7 joules per mole per kelvin, because an ordered solid releases a mole of carbon dioxide gas. Divide the enthalpy by the entropy and you get the temperature where delta G changes sign - about 837 degrees Celsius. That is a real prediction you can check: industrial lime kilns calcine limestone at roughly 850 to 900 degrees, just above the figure these two numbers give."
+--- !u!114 &1128739208
+MonoBehaviour:
+  m_ObjectHideFlags: 1
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ee6a7d7db7d649be83682c58bb1023f2, type: 3}
+  m_Name: ReactionGraphData_8
+  m_EditorClassIdentifier: 
+  reactionId: 8
+  reactionName: "2FeSO4 -> Fe2O3 + SO2 + SO3"
+  displayTitle: "Iron(II) Sulfate Decomposition"
+  reactionType: 1
+  activationEnergy: 365
+  enthalpyChange: 340.1
+  entropyChange: 377.4
+  energyProfilePoints:
+  - {x: 0, y: 0.0001}
+  - {x: 0.025, y: 0.0002}
+  - {x: 0.05, y: 0.0006}
+  - {x: 0.075, y: 0.002}
+  - {x: 0.1, y: 0.0059}
+  - {x: 0.125, y: 0.0166}
+  - {x: 0.15, y: 0.0445}
+  - {x: 0.175, y: 0.1124}
+  - {x: 0.2, y: 0.2689}
+  - {x: 0.225, y: 0.6085}
+  - {x: 0.25, y: 1.3027}
+  - {x: 0.275, y: 2.6379}
+  - {x: 0.3, y: 5.053}
+  - {x: 0.325, y: 11.1291}
+  - {x: 0.35, y: 23.3443}
+  - {x: 0.375, y: 42.1155}
+  - {x: 0.4, y: 67.6959}
+  - {x: 0.425, y: 99.9078}
+  - {x: 0.45, y: 137.8681}
+  - {x: 0.475, y: 179.8113}
+  - {x: 0.5, y: 223.1183}
+  - {x: 0.525, y: 264.6158}
+  - {x: 0.55, y: 301.116}
+  - {x: 0.575, y: 330.0634}
+  - {x: 0.6, y: 350.0865}
+  - {x: 0.625, y: 361.2622}
+  - {x: 0.65, y: 365}
+  - {x: 0.675, y: 363.5856}
+  - {x: 0.7, y: 359.5468}
+  - {x: 0.725, y: 355.0492}
+  - {x: 0.75, y: 351.4916}
+  - {x: 0.775, y: 349.3718}
+  - {x: 0.8, y: 348.3935}
+  - {x: 0.825, y: 347.7153}
+  - {x: 0.85, y: 346.2308}
+  - {x: 0.875, y: 343.5441}
+  - {x: 0.9, y: 341.839}
+  - {x: 0.925, y: 340.9306}
+  - {x: 0.95, y: 340.4753}
+  - {x: 0.975, y: 340.2604}
+  - {x: 1, y: 340.1649}
+  graphExplanationText: "This is the most endothermic reaction in the lab: 340.1 kilojoules per mole of reaction have to be put in, which is why the green crystals need sustained strong heating before the reddish-brown iron oxide appears. The barrier of 365 kilojoules per mole sits only just above that, so like the limestone this is a temperature-driven decomposition rather than a kinetically hindered one. What makes it possible at all is the entropy: plus 377.4 joules per mole per kelvin, the largest change of any reaction here, because two moles of ordered solid break apart into a solid plus two different gases, sulfur dioxide and sulfur trioxide. Those two escaping gases are the whole reason it works. The crossover temperature comes out around 628 degrees Celsius, which matches how hot you actually have to get iron sulfate before it will decompose."

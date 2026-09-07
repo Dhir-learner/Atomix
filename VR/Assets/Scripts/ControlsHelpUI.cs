@@ -40,7 +40,10 @@ CHEMISTRY BOOK
   1 to 8       Start a reaction directly
 
 UI
-  H            Toggle this help";
+  H            Toggle this help
+  Tab          Experiment history
+  F            Scientific graphs
+  M            Minimise the Lab Assistant";
 
     private GameObject helpPanel;
     private Text helpTextComponent;

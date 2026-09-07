@@ -145,6 +145,69 @@ public static class ExperimentContextProvider
         return builder.ToString();
     }
 
+    /// <summary>
+    /// Briefing for the graph panel's "Ask AI to Explain" button. Hands the assistant the exact
+    /// numbers on screen plus the prepared explanation, so the answer is about the graph the
+    /// student is looking at rather than the reaction in general.
+    /// </summary>
+    public static string BuildGraphContext(ReactionGraphData data, ReactionGraphType graphType)
+    {
+        if (data == null)
+        {
+            return string.Empty;
+        }
+
+        StringBuilder builder = new StringBuilder();
+        builder.Append(ContextHeader).Append(' ');
+
+        builder.AppendFormat(
+            "The student has just finished experiment {0} ({1}) and is looking at its {2} graph. ",
+            data.reactionId, data.reactionName, GraphTypeLabel(graphType));
+
+        builder.AppendFormat(
+            "The values on screen are: enthalpy change dH = {0:+0.0;-0.0} kJ/mol, " +
+            "activation energy Ea = {1:F0} kJ/mol, entropy change dS = {2:+0.0;-0.0} J/(mol K), " +
+            "and Gibbs free energy at 25 C dG = {3:+0.0;-0.0} kJ/mol. The reaction is {4}. ",
+            data.enthalpyChange, data.activationEnergy, data.entropyChange,
+            data.StandardGibbsFreeEnergy,
+            data.IsExothermic ? "EXOTHERMIC" : "ENDOTHERMIC");
+
+        builder.Append(data.SpontaneitySummary()).Append(' ');
+
+        if (!string.IsNullOrEmpty(data.graphExplanationText))
+        {
+            builder.Append("Explain it along these lines, in your own words: ")
+                   .Append(data.graphExplanationText).Append(' ');
+        }
+
+        // The student's own run is what makes this personal rather than a textbook recital.
+        ExperimentHistoryManager manager = ExperimentHistoryManager.Instance;
+        if (manager != null)
+        {
+            AppendAttemptTally(builder, manager, data.reactionId);
+        }
+
+        builder.Append("Speak it as a short spoken explanation - about four or five sentences. ");
+        builder.Append("Use the numbers above, and do not read out this instruction.");
+
+        return builder.ToString();
+    }
+
+    private static string GraphTypeLabel(ReactionGraphType graphType)
+    {
+        switch (graphType)
+        {
+            case ReactionGraphType.EnergyProfile:
+                return "energy vs reaction progress";
+            case ReactionGraphType.EnthalpyLevels:
+                return "exothermic/endothermic enthalpy level";
+            case ReactionGraphType.Entropy:
+                return "entropy";
+            default:
+                return "reaction";
+        }
+    }
+
     private static void AppendLiveQuantities(StringBuilder builder, FreeHandReactionEngine engine)
     {
         List<string> substances = engine.Substances;

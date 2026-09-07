@@ -1,4 +1,11 @@
 ﻿<Solution>
+  <Project Path="glTFast.Editor.csproj" />
+  <Project Path="glTFast.csproj" />
   <Project Path="Assembly-CSharp.csproj" />
+  <Project Path="glTFast.Export.csproj" />
+  <Project Path="glTFast.Newtonsoft.csproj" />
+  <Project Path="glTFast.Documentation.Examples.csproj" />
+  <Project Path="glTFast.Editor.Documentation.Examples.csproj" />
+  <Project Path="glTFast.dots.csproj" />
   <Project Path="Assembly-CSharp-Editor.csproj" />
 </Solution>
