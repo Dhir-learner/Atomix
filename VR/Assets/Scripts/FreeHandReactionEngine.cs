@@ -651,8 +651,15 @@ public class FreeHandReactionEngine
     }
 
     /// <summary>Closing line for the lab, where the AI assistant is available to ask.</summary>
+    /// <summary>
+    /// Shown in the lab. The second line matters as much as the first: a failed experiment used to
+    /// be a dead end, because re-selecting it did not reset anything and the only way out was to
+    /// restart the game. <see cref="LabRetryController"/> is the way out, so the failure message is
+    /// where it has to be advertised.
+    /// </summary>
     public const string AssistantClosingLine =
-        "Ask your AI Lab Assistant what went wrong and how to correct it.";
+        "Ask your AI Lab Assistant what went wrong and how to correct it.\n" +
+        "Press F5 to reset the bench and try this experiment again.";
 
     /// <summary>
     /// Closing line for the testing scene. The assistant does not run there, and pointing the

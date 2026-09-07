@@ -38,6 +38,7 @@ CHEMISTRY BOOK
   B            Open or close the book
   Left/Right   Flip pages
   1 to 8       Start a reaction directly
+  F5           Reset the bench and retry the experiment
 
 UI
   F1           Pause, settings and achievements

@@ -287,6 +287,13 @@ public class ExperimentHistoryManager : MonoBehaviour
             manager.gameObject.AddComponent<TestResultsUI>();
         }
 
+        // F5 resets the bench and re-selects the current experiment, so a failed reaction is no
+        // longer a dead end that needs the game restarting.
+        if (manager.gameObject.GetComponent<LabRetryController>() == null)
+        {
+            manager.gameObject.AddComponent<LabRetryController>();
+        }
+
         // Pushes the saved preferences into whatever rig the scene builds at runtime.
         if (manager.gameObject.GetComponent<AtomixSettingsApplier>() == null)
         {

@@ -1328,3 +1328,113 @@ Scene analysis confirmed the reference graph in both scenes, and the grabbable f
 affected object. **Not verified:** the actual grab in Play mode — the timing fix is reasoned from
 Unity's documented callback order rather than observed, so it is worth confirming that the tube can
 now be picked up in both heating tasks.
+
+---
+
+## 18. Round 5 — retrying a failed experiment
+
+**Reported:** *"in the lab scene when i fail the reaction there is no way to restart the reaction and
+try again I need to restart my entire game"*
+
+Accurate, and there were two compounding reasons.
+
+### 18.1 Re-selecting the same experiment did nothing
+
+Every reaction resets itself in `OnEnable`, through `RestartAttemptIfRequested()`:
+
+```csharp
+recorder.Abandon();
+recorder.ResetForNewAttempt();
+engine.Reset();
+failureReported = false;  oneReaction = false;  ...
+```
+
+And `ControlReactions.StartReaction2()` brings its equipment back with:
+
+```csharp
+h2so4Recipient.SetActive(true);
+cuoRecipient.SetActive(true);
+cuso4Recipient.SetActive(true);
+```
+
+`SetActive(true)` on an object that is **already active is a no-op** — `OnEnable` never fires. So
+choosing the experiment you were already on left the engine sitting in `Failed` permanently, with no
+route back. Only switching to a *different* experiment and returning fired the reset at all.
+
+### 18.2 …and even then the bench was not reset
+
+Task 2 recorded this as a known limitation; it is what makes the first problem terminal rather than
+annoying. None of the following is cleared anywhere in the project:
+
+| State | Where it lives |
+|---|---|
+| `containsWater`, `containsCuO`, `containsHCL`, `containsNahco3`, `containsNatrium`, `containsPhenolphthalein` | the eight pour scripts — set once, never cleared |
+| The recipient's substance material (the CuSO4 blue, the NaCl white) | `transform.Find("Substance")` renderer |
+| Poured containers | wherever the student dropped them |
+| The CaCO3 balloon | snapped to the socket and `SetGrabbable(false)` |
+| The FeSO4 tube colour | baked to the final gradient value |
+
+So clearing the engine on its own would have produced a *half*-reset experiment: one that reports
+`0.0 ml` while the beaker is still full and blue. That is worse than no retry at all, because it
+looks like it worked.
+
+### 18.3 Fix — reload the lab and re-select the experiment
+
+New `LabRetryController` (154 lines), bootstrapped onto the same persistent object as the rest of
+the runtime systems.
+
+**F5** — or **Retry experiment** in the pause menu — remembers which experiment is on the bench,
+closes the open attempt, reloads `LabScene`, waits for `ControlReactions.Start()` to run, and calls
+the matching `StartReactionN()`. A toast confirms it: *"Bench reset — H2SO4 + CuO → CuSO4 + H2O -
+ready to try again"*.
+
+Chasing the state in §18.2 across eight reaction scripts, eight pour scripts, materials, transforms,
+particle systems and the balloon snap is exactly where a subtle *"sometimes it does not reset"* bug
+would live. Reloading is "wash up and start over" — what a real bench requires, and impossible to
+get half-right. Nothing earned is lost: the history, achievements and settings all live on
+DontDestroyOnLoad objects, and the failed attempt stays on the record rather than being erased.
+
+`ControlReactions` itself is **not modified** — the numbered entry points are dispatched from a
+switch in the new controller.
+
+### 18.4 Making it findable
+
+A key nobody knows about is not a fix, so it is advertised in three places:
+
+- **The failure message itself.** `FreeHandReactionEngine.AssistantClosingLine` now reads:
+
+  > Ask your AI Lab Assistant what went wrong and how to correct it.
+  > **Press F5 to reset the bench and try this experiment again.**
+
+  One constant, so it appears for all eight lab reactions — including Reaction 1, which composes its
+  failure text through the same shared helper. The testing scene keeps its own closing line, because
+  it advances by itself and has "Run the test again" on the results card.
+
+- **The pause menu footer**, as a fourth button. It hides itself when there is nothing on the bench
+  to retry, and says so if clicked in that state.
+
+- **The `H` controls overlay** and the pause menu's Controls tab.
+
+### 18.5 Verification
+
+```
+sources: 124   exit=0  errors=0  warnings=69      (0 in any new or changed file)
+```
+
+Footer re-spaced for the fourth button and checked:
+
+```
+Resume              -800 ..  -520
+Retry experiment    -500 ..  -160   gap 20
+Export lab report   -140 ..   180   gap 20
+Main menu            210 ..   490   gap 30
+span -800 .. 490 inside +-890 : True
+```
+
+**Not verified — needs Play mode:** the reload timing. The re-selection waits for
+`ControlReactions` to appear and for at least two frames to pass, and retries for up to 120 frames
+before warning, but "the scene is ready" is reasoned from Unity's callback order rather than
+observed. If the experiment comes back unselected, `reselectAttempts` is an Inspector field.
+
+`F5` is free across the project's bindings; it is a public `KeyCode` field if it clashes with
+anything on your machine.

@@ -49,6 +49,7 @@ public class PauseMenuUI : MonoBehaviour
     private RectTransform bodyRoot;
     private TMP_Text statusText;
     private Button quitToMenuButton;
+    private Button restartButton;
     private readonly List<Button> tabButtons = new List<Button>();
     private Tab activeTab = Tab.Settings;
     private bool isOpen;
@@ -152,6 +153,12 @@ public class PauseMenuUI : MonoBehaviour
                 SceneManager.GetActiveScene().name != "MainMenuScene");
         }
 
+        if (restartButton != null)
+        {
+            LabRetryController retry = GetComponent<LabRetryController>();
+            restartButton.gameObject.SetActive(retry != null && retry.CanRestart);
+        }
+
         PauseExamCountdown();
         Rebuild();
     }
@@ -249,14 +256,32 @@ public class PauseMenuUI : MonoBehaviour
             TextAlignmentOptions.Center, LabPanelBuilder.MutedTextColour);
 
         LabPanelBuilder.CreateButton("Resume", panel, "Resume  [F1]",
-            new Vector2(-460.0f, FooterY), new Vector2(300.0f, 58.0f), 22.0f, Close);
+            new Vector2(-660.0f, FooterY), new Vector2(280.0f, 58.0f), 22.0f, Close);
+
+        // A failed experiment used to be a dead end. This is the same thing F5 does, put where
+        // someone who does not know the key will still find it.
+        restartButton = LabPanelBuilder.CreateButton("RestartExperiment", panel, "Retry experiment  [F5]",
+            new Vector2(-330.0f, FooterY), new Vector2(340.0f, 58.0f), 22.0f,
+            () =>
+            {
+                LabRetryController retry = GetComponent<LabRetryController>();
+                if (retry != null && retry.CanRestart)
+                {
+                    Close();
+                    retry.RestartCurrentExperiment();
+                }
+                else if (statusText != null)
+                {
+                    statusText.text = "No experiment on the bench to retry - choose one from the book first.";
+                }
+            });
 
         LabPanelBuilder.CreateButton("ExportReport", panel, "Export lab report",
-            new Vector2(-70.0f, FooterY), new Vector2(340.0f, 58.0f), 22.0f,
+            new Vector2(20.0f, FooterY), new Vector2(320.0f, 58.0f), 22.0f,
             () => { if (statusText != null) { statusText.text = LabReportExporter.ExportAll(); } });
 
         quitToMenuButton = LabPanelBuilder.CreateButton("QuitToMenu", panel, "Main menu",
-            new Vector2(340.0f, FooterY), new Vector2(280.0f, 58.0f), 22.0f,
+            new Vector2(350.0f, FooterY), new Vector2(280.0f, 58.0f), 22.0f,
             () =>
             {
                 Close();
@@ -450,6 +475,7 @@ public class PauseMenuUI : MonoBehaviour
             { "T", "Reset held object pose" },
             { "B", "Open or close the reaction book" },
             { "1 - 8", "Jump straight to an experiment" },
+            { "F5", "Reset the bench and retry the experiment" },
             { "Tab", "Experiment history" },
             { "F", "Scientific graphs" },
             { "P", "Periodic table" },
