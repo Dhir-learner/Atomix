@@ -753,3 +753,461 @@ I could not run the Unity Editor, so these are reasoned but untested:
 - Tooltip placement above each receptacle (`tooltipHeightOffset` is an Inspector field on all eight).
 - That the failure-sound fields, which ship unassigned, are silently skipped as intended.
 - The 6-second pause on a failed task before the next one is drawn.
+
+---
+
+# Task 7 — Enhancement Pack: Settings, Periodic Table, Achievements, Report Card
+
+**Date:** 2026-09-07
+**Branch:** `kushal`
+**Status:** ✅ Built — 0 compile errors, 0 new warnings; **33/33 logic checks pass** running the real code
+**Brief:** *"completely enhance my project and add all the new features you can think of — free hand"*
+
+---
+
+## 10. Executive Summary
+
+Seven additions, chosen by looking for things the project genuinely lacked rather than things that
+would be fun to build. Every one of them is **additive, built from code at runtime, and touches no
+scene or prefab** — the same pattern Tasks 1–6 established, so all of it survives a Unity reimport
+and none of it conflicts with the VR authoring.
+
+| # | Feature | How you reach it | Why it was missing |
+|---|---|---|---|
+| 1 | **Settings** — sensitivity, invert look, move speed, FOV, volume, panel size, accessibility | `F1` | There were none. Sensitivity and FOV were compile-time constants. |
+| 2 | **Pause menu** with Settings / Achievements / Controls tabs | `F1` | The only way out of the lab was the exit sign in the corner. |
+| 3 | **Interactive periodic table** — 118 elements, category-coded, click for detail | `P` | The lab has a periodic table modelled on the wall that is a texture you cannot read. |
+| 4 | **Achievements** — 13 milestones with HUD toasts | Pause menu | Nothing read the history back as progress. |
+| 5 | **End-of-test report card** — per-task outcomes, score, grade, advice | automatic | The testing scene ended with one line of text. |
+| 6 | **Lab report export** — Markdown + CSV | Pause menu / report card | The history was JSON only: for the game, not for a student or a marker. |
+| 7 | **Fixed a real input bug** — `V` was bound to two things at once | — | Asking the assistant a question silently rolled whatever you were holding. |
+
+### The bug worth calling out
+
+`V` was **double-bound**: `InLabAssistantController.pushToTalkKey` and the roll axis in
+`ObjectInteraction.RotateHeldObject`. Both are live in `LabScene` at the same time, so holding `V`
+to talk to the assistant also spun the beaker in your hand.
+
+Roll is now one key with a modifier — `C`, or `Shift+C` to reverse — which frees `V` completely.
+While there, all five rotation keys became Inspector fields instead of hard-coded `KeyCode`
+literals, so any of them can be rebound without touching code.
+
+---
+
+## 11. File Manifest
+
+### Created
+
+```
+NEW  VR/Assets/Scripts/AtomixSettings.cs          244   persistent preference store + live apply
+NEW  VR/Assets/Scripts/AtomixSettingsApplier.cs    68   pushes settings into each loaded scene
+NEW  VR/Assets/Scripts/LabPanelBuilder.cs         342   shared world-space panel construction
+NEW  VR/Assets/Scripts/PauseMenuUI.cs             432   F1 menu, three tabs
+NEW  VR/Assets/Scripts/PeriodicTableData.cs       296   118 elements, IUPAC atomic weights
+NEW  VR/Assets/Scripts/PeriodicTableUI.cs         376   P, interactive table
+NEW  VR/Assets/Scripts/AchievementSystem.cs       343   13 milestones derived from history
+NEW  VR/Assets/Scripts/LabReportExporter.cs       365   Markdown + CSV export, grading
+NEW  VR/Assets/Scripts/TestResultsUI.cs           405   end-of-test report card
+                                                 ----
+                                                 2871   (+ 9 .meta files)
+```
+
+### Modified — 116 insertions, 27 deletions across 10 files
+
+```
+MOD  ObjectInteraction.cs          rotation keys made rebindable; V conflict fixed
+MOD  FirstPersonController.cs      invertLook option
+MOD  DesktopCrosshairUI.cs         honours the "show crosshair" setting
+MOD  CountdownTimer.cs             exposed Score and TimeRemaining (read-only)
+MOD  LabHudController.cs           ShowToast made public + a static Instance, so other
+                                   systems reuse the toast instead of building their own
+MOD  ExperimentHistoryManager.cs   bootstraps the four new components
+MOD  ExperimentHistoryUI.cs        uses the shared panel-exclusion helper
+MOD  ReactionGraphUI.cs            same, plus the "read the graphs" achievement
+MOD  PostSuccessSequencer.cs       "watched the molecular video" achievement
+MOD  ControlsHelpUI.cs             documents F1, P and the new roll binding
+```
+
+Not modified: any `.unity` scene, any prefab, any reaction script, `ControlReactions.cs`,
+`Randomize.cs`, `PourSubstance.cs`, `FreeHandReactionEngine.cs`, `ExamReactionRunner.cs`.
+
+---
+
+## 12. Design notes worth recording
+
+**Why `F1` and not `Esc`.** `Esc` is already load-bearing: it toggles the cursor lock in
+`FirstPersonController` and closes the history, graph and video panels. Hanging a pause menu off it
+would have meant unpicking all of that. `F1` was free, is the universal "help/menu" key, and is
+documented in both the `H` overlay and the menu's own Controls tab.
+
+**The pause menu does not touch `Time.timeScale`.** Several reaction scripts sequence their visuals
+with `DateTime.Now`, which ignores the time scale — R2 changes the beaker material at 2 s, 4 s and
+6 s, R6 holds its explosion to 6 s. Freezing time would desync every one of them from its own
+effects. What *would* be unfair to leave running is the testing countdown, so that one clock is
+paused directly and restored on close. The player is frozen by disabling the controller component,
+which stops WASD and mouse-look in one step.
+
+**Panels are mutually exclusive.** Every runtime panel sits at roughly the same distance in front of
+the camera, so two open at once just stack and neither is readable. Previously the history and graph
+panels closed each other by name; with three more panels that would have been a growing web of
+pairwise calls, so it is now one helper — `LabPanelBuilder.CloseOtherPanels(this)` — that the five
+panels all route through.
+
+**The settings menu uses a real mouse pointer, not the crosshair.** It is a lot of small controls.
+`DesktopUIInput` (Task 1 of the previous round) enables the UI input module exactly when the cursor
+is unlocked, so releasing the cursor makes the buttons clickable — and disabling the controller stops
+the player wandering off while it is released. The steppers use `◀ ▶` buttons rather than uGUI
+Sliders, because a Slider needs a pointer *drag*, which never arrives while the crosshair is locked.
+
+**Settings are reachable from the main menu too.** A student whose mouse is too fast needs to fix it
+*before* walking into the lab. The panel is placed 0.85 m out there, in front of the authored menu
+canvas at 1.11 m, and the "Main menu" button hides itself when you are already in it.
+
+**Achievements are derived, never incremented.** `EvaluateHistory` re-reads the stored attempts
+rather than keeping counters, so the state stays correct across sessions and after the history is
+loaded back from disk. All 13 hang off `ReactionHistoryRecorder.Completed` — the same single funnel
+the graphs and the video sequencer use — so no reaction script needed touching.
+
+**The exam keeps its secrets.** The periodic table names every element, which is a hint during an
+examination, so `P` is blocked in `TestingPhaseLab` — consistent with the Task-on-test-scene decision
+to block the history panel there for the same reason.
+
+---
+
+## 13. Grading
+
+The report card and the export share one grading routine, so the number on screen and the number in
+the file cannot disagree.
+
+| Success rate | Grade |
+|---|---|
+| ≥ 90% | A |
+| ≥ 80% | B |
+| ≥ 65% | C |
+| ≥ 50% | D |
+| below | F |
+
+with a **coverage cap**, because finishing two experiments perfectly is not an A when there are
+eight on the bench:
+
+- fewer than 4 of 8 experiments completed → capped at **C**
+- fewer than 6 of 8 completed → capped at **B**
+
+Abandoned attempts are counted separately and excluded from the rate — walking away from an
+experiment is not the same as getting it wrong.
+
+---
+
+## 14. Verification
+
+### Compilation
+
+```
+sources: 123   references: 344
+exit=0  errors=0  warnings=69
+```
+
+0 errors, and **0 warnings in any of the nine new files**. The 69 are the same pre-existing
+`CS0649` / `CS0414` / `CS0618` set as before this task.
+
+### The pure logic was executed, not just compiled
+
+`PeriodicTableData` and the grading types were extracted verbatim from the shipped sources, given
+shims for the handful of `UnityEngine` members they touch, and run:
+
+```
+PERIODIC TABLE
+  PASS 118 elements parsed (got 118)
+  PASS atomic numbers unique
+  PASS symbols unique
+  PASS every group/period/mass in range
+  PASS atomic numbers 1-118 with no gaps
+  PASS no two elements share a grid cell
+  PASS H = 1.008 / C = 12.011 / Fe = 55.845 / U = 238.03
+  PASS Og is element 118
+  PASS Tc flagged as having no stable isotope
+  PASS Au not flagged synthetic
+  PASS Ce laid out on the lanthanide strip
+  PASS U laid out on the actinide strip
+  PASS Hf back in the main body at period 6
+  PASS all 8 reactions map to real element symbols (26 references)
+
+GRADING
+  PASS 8/8 covered, no failures -> A
+  PASS 8/8 covered, 88.9% -> B, just under the A line
+  PASS 8/8 covered, 80% -> B      PASS 67% -> C      PASS 50% -> D      PASS 20% -> F
+  PASS 2/8 covered, perfect -> capped at C
+  PASS 5/8 covered, perfect -> capped at B
+  PASS 6/8 covered, perfect -> A
+  PASS empty history yields a placeholder grade, not a crash
+  PASS abandoned attempts counted separately, not as failures
+  PASS success rate ignores abandoned attempts
+
+CSV ESCAPING
+  PASS plain field unquoted      PASS comma field quoted
+  PASS embedded quotes doubled   PASS empty field stays empty
+
+ALL 33 CHECKS PASSED
+```
+
+The **"no two elements share a grid cell"** check is the one that matters most for the table: a
+single wrong group or period number would silently stack two elements on top of each other, which is
+easy to author and hard to spot by eye across 118 rows.
+
+One check failed on the first run — `8 successes, 1 failure -> A`. That was the *test* being wrong:
+8/9 is 88.9%, below the 90% A threshold, so B is correct. Expectation corrected rather than the code.
+
+### Self-review found three real problems before they shipped
+
+1. **The periodic table stacked a new "on the bench" label every time it was opened**, because it was
+   created inside the refresh rather than once at build time. Now created once and re-texted.
+2. **The pause menu left the player walking around.** Releasing the cursor for the mouse pointer does
+   not stop movement — `FirstPersonController.allowMovementWhenCursorUnlocked` is true — so WASD still
+   drove the camera behind the menu. The controller is now disabled while any full-screen panel is up.
+3. **Panels could stack.** `F1` over an open periodic table would have drawn two unreadable panels at
+   the same depth. All five now route through one exclusion helper.
+
+### Not verified — needs a Play-mode pass
+
+No Unity Editor was available this session (the `com.coplaydev.unity-mcp` package is in the manifest
+but no MCP server is connected), so the following are reasoned but untested:
+
+- **Panel proportions and legibility at 1.5–1.6 m.** All sizes are Inspector fields, and the panels
+  use the same construction and distances as the history and graph panels, so if those read
+  correctly these should too.
+- **The periodic table's 118 cells at 66 px.** The layout arithmetic is checked (no collisions, all
+  rows inside the grid rect), but the *visual* density is a judgement only Play mode can settle.
+  `CellSize` and the canvas dimensions are the two numbers to nudge.
+- **The main-menu pause panel drawing in front of the authored menu canvas.** It is placed nearer
+  (0.85 m vs 1.11 m) and given a higher `sortingOrder`, which should settle it both ways, but the
+  main menu is the one place two world-space canvases now share a view.
+- **That `F1` is not swallowed by the OS or the editor** on your machine.
+
+---
+
+## 15. Round 2 — playtest fixes
+
+Two problems reported from Play mode, with screenshots. Both reproduced from the layout arithmetic
+before anything was changed, so the fixes are aimed at the actual cause rather than nudged by eye.
+
+### 15.1 The element card covered four elements
+
+**Reported:** *"in the periodic table image some elements are hidden by the information that is
+shown when we click on the element"*
+
+**Cause.** The detail card was pinned to the top-left corner of the panel — 40 px in from the left
+edge, 190 px down from the top — which is where the s-block lives. Running the layout maths against
+every element position confirmed exactly what the screenshot showed:
+
+```
+detail pane  x[-740..-320] y[185..335]
+  Li  at ( -597.0,  287.0)  covered=True
+  Be  at ( -527.0,  287.0)  covered=True
+  Na  at ( -597.0,  217.0)  covered=True
+  Mg  at ( -527.0,  217.0)  covered=True
+  K   at ( -597.0,  147.0)  covered=False
+```
+
+Clicking any element hid Li, Be, Na and Mg.
+
+**Fix.** A periodic table has a large piece of genuinely empty space built into it: **groups 3–12
+of periods 1–3**, the notch between the s- and p-blocks. That is the conventional place to put a
+key, and nothing can ever be drawn there. The card now lives in it.
+
+The coordinates are **derived from the grid**, not hand-tuned — `blockLeft`, `blockRight`,
+`blockTop` and `blockBottom` are computed from `CellSize`, `CellGap` and the grid origin — so
+changing the cell size moves the card with the table instead of silently re-creating the overlap.
+A shared `GridCentreY` constant replaced the magic `40.0f` that the grid and the card each had
+their own copy of.
+
+Re-checked against every one of the 118 element positions plus both f-block markers:
+
+```
+detail card  centre=(-142,287)  size=680x190
+             x[-482..198] y[192..382]
+elements covered by the card: 0
+marker 57-71   at (-457,7)   covered=False
+marker 89-103  at (-457,-63) covered=False
+```
+
+### 15.2 The pause menu was a postage stamp
+
+**Reported:** *"for F1 settings menu it should be seen in full screen"*
+
+**Cause.** It was built as a **world-space** panel like the history and graph panels — a plate
+1120×800 units scaled by 0.001 and hung 1.5 m in front of the camera. That is right for something
+you read beside the glassware, but a settings screen is a lot of small controls read head-on: at
+1.5 m it has to be small enough to fit the field of view, which is why it floated in the middle of
+the lab at about a third of the screen.
+
+**Fix.** New `LabPanelBuilder.CreateFullScreenCanvas` builds a **Screen Space Overlay** canvas with
+a `CanvasScaler` in `ScaleWithScreenSize` mode against a 1920×1080 design space, `matchWidthOrHeight
+= 0.5` so the layout survives both 16:9 and wider desktops. The panel stretches to the full canvas
+less a 70 px margin.
+
+Two things this also buys:
+
+- **Crisper text.** Overlay rasterises at screen pixels, instead of scaling glyphs down by 0.001 and
+  back up again.
+- **The backdrop now absorbs clicks** (`raycastTarget = true`, unlike the world-space one), so a
+  stray click behind the menu can no longer grab a beaker you cannot see.
+
+`Menu size` in Settings now drives `CanvasScaler.scaleFactor` rather than the world-space transform
+scale, so it does what its name says at any resolution.
+
+### 15.3 A second bug found while fixing the first
+
+The screenshot also showed *"Colour-blind safe swaps the green/red result pair…"* printed straight
+through the **Reset to defaults** button. That was not a rendering artefact — the two were 2 px
+apart:
+
+```
+status line   y=-278
+reset button  y=-276
+overlap=True (gap 2 px, need ~50)
+```
+
+The layout had grown a row at a time with no check that the body still fitted above the footer. The
+bands are now named constants (`TitleY`, `TabsY`, `BodyHeight`, `StatusY`, `FooterY`) and every gap
+is verified:
+
+```
+title            bottom    372 -> subtitle         top    366  gap     6
+subtitle         bottom    338 -> tabs             top    326  gap    12
+tabs             bottom    274 -> settings row 1   top    262  gap    12
+...
+settings row 9   bottom   -230 -> reset button     top   -250  gap    20
+reset button     bottom   -298 -> status           top   -326  gap    28
+status           bottom   -378 -> footer           top   -395  gap    17
+content -453..428 inside panel -470..470 : True
+```
+
+Retuning `TabsY` from 316 to 300 also closed a fresh 4 px collision between the subtitle and the tab
+row that the first pass had introduced — caught by the same check before it shipped.
+
+### 15.4 Verification
+
+```
+exit=0  errors=0  warnings=69      (0 in any changed file)
+ALL 33 CHECKS PASSED               (periodic table data, grading, CSV escaping — unchanged)
+```
+
+Layout geometry for both panels is now asserted arithmetically rather than eyeballed: 0 of 118
+elements covered by the detail card, and no overlapping bands in the pause menu with everything
+inside the panel bounds.
+
+**Still wants a Play-mode look:** the overlay menu at your actual window size and aspect ratio (the
+scaler handles it in principle, but 21:9 is worth a glance), and whether the element card reads well
+in the table's notch now that it is wider and shorter than before.
+
+---
+
+## 16. Round 3 — settings menu redesign
+
+**Reported:** *"in the settings menu the text alignment is not proper and increase the size of text.
+you can see in the screen shot that some of the text is overlaping. and also enhance the ui of the
+settings menu"*
+
+Three separate faults, all reproduced from the layout arithmetic before anything was changed.
+
+### 16.1 The achievements header printed through the tab row
+
+```
+tabs       band 274 .. 326
+ach header band 273 .. 311
+OVERLAP: True   <- "5 of 13 unlocked" drawn over the Achievements tab button
+```
+
+**Cause, and the gap in my own check.** The round-2 verification walked the *Settings* tab bands
+against the chrome, and for the other two tabs only asserted "last row is inside the body bottom".
+It never checked either tab's **first** row against the tab buttons — so a header sitting at y = 292,
+16 px above the tab row's lower edge, sailed through.
+
+**Fix.** A named `BodyTop = 262` constant now defines the top of the usable content band, 12 px
+below the tab row, and all three tab builders start from it. The verification walks every row of
+all three tabs against both the tab row above and the status line below.
+
+### 16.2 Check marks and arrows rendered as empty boxes
+
+The earned achievements showed `□` rather than a tick, and the settings steppers showed `□ □`
+rather than `◀ ▶`. Not a layout problem — **missing glyphs**.
+
+The default TextMeshPro font atlas covers Latin-1 and General Punctuation. `U+2714 CHECK MARK`
+(Dingbats) and `U+25C0`/`U+25B6` (Geometric Shapes) are in neither, so TMP drew the "no glyph" box.
+
+**Fix.**
+
+- Steppers use plain ASCII `-` and `+`.
+- The achievement tick became `LabPanelBuilder.CreateStatusPip` — a small filled square for earned,
+  a hollow outline for not earned. Drawn from two `Image` plates, so it cannot fail to render and
+  it picks up the colour-blind-safe palette.
+- `1 – 8` became `1 - 8`, `60°` became `60 deg`.
+- A scan now asserts that **no built UI string contains a glyph outside the safe range**:
+
+```
+=== non-ASCII glyphs left in built UI strings ===
+  none - every glyph in a built UI string is inside the default TMP atlas range
+```
+
+### 16.3 The redesign
+
+| Before | After |
+|---|---|
+| 9 undifferentiated rows | Three labelled sections: **Controls**, **Display and sound**, **Accessibility** |
+| Label and value floating on the panel | Every row on its own backing plate, 48 px tall |
+| Columns drifting with label length | Label, value and buttons at fixed offsets from the row edges, so all rows line up |
+| Label 22 pt / value 22 pt | Label and value **25 pt**, section headings 20 pt, title 42 pt |
+| Achievements: glyph + two text columns | Status pip + title + description, alternating row tint |
+| Controls: 21 rows in one column at 20 pt | **Two columns**, 11 + 10, at 23/21 pt with alternating tint |
+
+Spacing is now three named constants — `HeaderStep` 42, `RowStep` 52, `SectionStep` 46 — rather
+than arithmetic inline at each call site, which is how the 2 px collision in round 2 and the 1 px
+one here both arose.
+
+### 16.4 Verification
+
+Every gap in every tab, checked by running the layout maths:
+
+```
+hdr Controls           bottom  229.0 ->   Controls 1   top  226.0  gap  3.0
+  Controls 3           bottom   74.0 -> hdr Display    top   67.0  gap  7.0
+  Accessibility 2      bottom -258.0 ->   Accessibility 3 top -262.0  gap  4.0
+
+span -310.0 .. 259.0
+first row top  259.0 vs tab row bottom 274.0 : clear
+last row bottom -310.0 vs status top -326.0  : clear
+inside body band -320..262 : True
+ALL CLEAN: True
+
+SETTINGS      rows=12  clean=True
+ACHIEVEMENTS  rows=14  clean=True
+CONTROLS      rows=11  clean=True
+```
+
+Horizontal columns too:
+
+```
+settings row (width 1100):
+  label   -530 ..   30      value    180 ..  420
+  [-]      428 ..  480      [+]      486 ..  538      toggle  412 .. 540
+  label->value 150 | value->[-] 8 | [-]->[+] 6 | [+]->edge 12
+achievement row: pip -721..-699  title -670..-270  desc -240..720  gap 30
+controls col @-430: plate -830..-30  key -810..-510  desc -465..-35   inside=True
+controls col @ 450: plate   50..850  key   70.. 370  desc  415..845   inside=True
+```
+
+```
+exit=0  errors=0  warnings=69      (0 in any changed file)
+ALL 33 CHECKS PASSED               (periodic table, grading, CSV escaping - unchanged)
+```
+
+### 16.5 A note on how these three rounds went
+
+Each round fixed what was reported and then found something adjacent that the previous round's
+checks had not covered — a 2 px collision, then a 1 px one, then a whole category of fault
+(missing glyphs) that no amount of coordinate checking would have caught.
+
+The checks are now structural rather than spot: every row of every tab against the chrome above and
+below it, every column against its neighbours, and every string against the font's glyph coverage.
+That is what should stop the next round of this, but layout at your actual resolution and aspect
+ratio is still something only Play mode can confirm.

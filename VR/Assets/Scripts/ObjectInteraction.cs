@@ -25,6 +25,14 @@ public class ObjectInteraction : MonoBehaviour
     [Tooltip("Shortcut to reset held object pose (position + rotation)")]
     public KeyCode resetHeldPoseKey = KeyCode.T;
 
+    [Header("Held Object Rotation Keys")]
+    public KeyCode yawLeftKey = KeyCode.Q;
+    public KeyCode yawRightKey = KeyCode.E;
+    public KeyCode pitchUpKey = KeyCode.Z;
+    public KeyCode pitchDownKey = KeyCode.X;
+    [Tooltip("Roll. Hold Shift to roll the other way - kept to one key so V stays free for push-to-talk.")]
+    public KeyCode rollKey = KeyCode.C;
+
     [Tooltip("Keep released lab objects fixed in place instead of letting physics drop them")]
     public bool keepReleasedObjectsStatic = false;
 
@@ -377,34 +385,35 @@ public class ObjectInteraction : MonoBehaviour
             targetRotation *= Quaternion.Euler(0f, scroll * rotationSpeed, 0f);
         }
 
-        if (Input.GetKey(KeyCode.Q))
+        float delta = rotationSpeed * Time.deltaTime;
+
+        if (Input.GetKey(yawLeftKey))
         {
-            targetRotation *= Quaternion.Euler(0f, -rotationSpeed * Time.deltaTime, 0f);
+            targetRotation *= Quaternion.Euler(0f, -delta, 0f);
         }
 
-        if (Input.GetKey(KeyCode.E))
+        if (Input.GetKey(yawRightKey))
         {
-            targetRotation *= Quaternion.Euler(0f, rotationSpeed * Time.deltaTime, 0f);
+            targetRotation *= Quaternion.Euler(0f, delta, 0f);
         }
 
-        if (Input.GetKey(KeyCode.Z))
+        if (Input.GetKey(pitchUpKey))
         {
-            targetRotation *= Quaternion.Euler(rotationSpeed * Time.deltaTime, 0f, 0f);
+            targetRotation *= Quaternion.Euler(delta, 0f, 0f);
         }
 
-        if (Input.GetKey(KeyCode.X))
+        if (Input.GetKey(pitchDownKey))
         {
-            targetRotation *= Quaternion.Euler(-rotationSpeed * Time.deltaTime, 0f, 0f);
+            targetRotation *= Quaternion.Euler(-delta, 0f, 0f);
         }
 
-        if (Input.GetKey(KeyCode.C))
+        // Roll used to be C / V, but V is also the assistant's push-to-talk key - so asking the
+        // assistant a question silently rolled whatever you were holding. Roll is now one key,
+        // reversed with Shift, which leaves V free.
+        if (Input.GetKey(rollKey))
         {
-            targetRotation *= Quaternion.Euler(0f, 0f, rotationSpeed * Time.deltaTime);
-        }
-
-        if (Input.GetKey(KeyCode.V))
-        {
-            targetRotation *= Quaternion.Euler(0f, 0f, -rotationSpeed * Time.deltaTime);
+            bool reversed = Input.GetKey(KeyCode.LeftShift) || Input.GetKey(KeyCode.RightShift);
+            targetRotation *= Quaternion.Euler(0f, 0f, reversed ? -delta : delta);
         }
     }
 

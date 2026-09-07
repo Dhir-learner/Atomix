@@ -228,6 +228,11 @@ public class PostSuccessSequencer : MonoBehaviour
 
         bool hasClip = HasVideoClip(reactionId);
 
+        if (hasClip && AchievementSystem.Instance != null)
+        {
+            AchievementSystem.Instance.Unlock("watched_video");
+        }
+
         manager.LogStep(
             sequenceAttemptId,
             hasClip

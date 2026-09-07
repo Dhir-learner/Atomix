@@ -245,11 +245,8 @@ public class ReactionGraphUI : MonoBehaviour
             return;
         }
 
-        ExperimentHistoryUI historyUi = GetComponent<ExperimentHistoryUI>();
-        if (historyUi != null)
-        {
-            historyUi.Close();
-        }
+        // Closes the history panel, and now the periodic table and pause menu too.
+        LabPanelBuilder.CloseOtherPanels(this);
 
         EnsureUiBuilt();
 
@@ -263,6 +260,11 @@ public class ReactionGraphUI : MonoBehaviour
 
         currentReactionId = reactionId;
         isOpen = true;
+
+        if (AchievementSystem.Instance != null)
+        {
+            AchievementSystem.Instance.Unlock("read_graphs");
+        }
 
         graphCanvas.gameObject.SetActive(true);
         graphRenderer.gameObject.SetActive(true);

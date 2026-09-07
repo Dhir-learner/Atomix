@@ -9,6 +9,12 @@ public class CountdownTimer : MonoBehaviour
     float currentTime = 0;
     float startingTime = 60f;
     int score;
+
+    /// <summary>Points accumulated so far. Read by the end-of-test report card.</summary>
+    public int Score { get { return score; } }
+
+    /// <summary>Seconds left on the current task, for the report card and the pause menu.</summary>
+    public float TimeRemaining { get { return Mathf.Max(0f, currentTime); } }
     public bool wasScored = false;
     public bool continua = true;
     public bool reset = false;

@@ -152,7 +152,7 @@ public class DesktopCrosshairUI : MonoBehaviour
     {
         if (crosshairRoot != null)
         {
-            crosshairRoot.SetActive(FirstPersonController.IsCursorLocked);
+            crosshairRoot.SetActive(FirstPersonController.IsCursorLocked && AtomixSettings.ShowCrosshair);
         }
     }
 }

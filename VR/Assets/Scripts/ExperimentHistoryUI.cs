@@ -126,11 +126,8 @@ public class ExperimentHistoryUI : MonoBehaviour
             return;
         }
 
-        ReactionGraphUI graphUi = GetComponent<ReactionGraphUI>();
-        if (graphUi != null)
-        {
-            graphUi.Close();
-        }
+        // Closes the graph panel, and now the periodic table and pause menu too.
+        LabPanelBuilder.CloseOtherPanels(this);
 
         EnsureUiBuilt();
         isOpen = true;

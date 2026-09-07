@@ -251,7 +251,38 @@ public class LabHudController : MonoBehaviour
     // TOAST
     // =========================================================
 
-    private void ShowToast(string message)
+    /// <summary>
+    /// Posts a short message to the HUD. Public so other systems - the achievement unlocks, for
+    /// one - can reuse the toast rather than each building their own.
+    /// </summary>
+    public static void Toast(string message)
+    {
+        if (Instance != null)
+        {
+            Instance.ShowToast(message);
+        }
+    }
+
+    /// <summary>The live HUD, set on Awake. There is only ever one, on the persistent object.</summary>
+    public static LabHudController Instance { get; private set; }
+
+    void Awake()
+    {
+        if (Instance == null)
+        {
+            Instance = this;
+        }
+    }
+
+    void OnDestroy()
+    {
+        if (Instance == this)
+        {
+            Instance = null;
+        }
+    }
+
+    public void ShowToast(string message)
     {
         EnsureToastBuilt();
 

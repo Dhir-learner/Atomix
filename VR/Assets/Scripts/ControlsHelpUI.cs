@@ -31,7 +31,7 @@ INTERACTION
 HELD OBJECT ROTATION
   Q / E        Rotate left or right
   Z / X        Tilt forward or back
-  C / V        Roll
+  C            Roll (hold Shift to reverse)
   Mouse Wheel  Spin object
 
 CHEMISTRY BOOK
@@ -40,10 +40,12 @@ CHEMISTRY BOOK
   1 to 8       Start a reaction directly
 
 UI
+  F1           Pause, settings and achievements
   H            Toggle this help
   L            Measurement label: full / compact / off
   Tab          Experiment history
   F            Scientific graphs
+  P            Periodic table
   M            Minimise the Lab Assistant";
 
     private GameObject helpPanel;

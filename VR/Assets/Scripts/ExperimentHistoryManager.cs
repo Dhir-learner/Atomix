@@ -262,6 +262,36 @@ public class ExperimentHistoryManager : MonoBehaviour
         {
             manager.gameObject.AddComponent<LabHudController>();
         }
+
+        // Progress tracking. Derived entirely from the attempts recorded here, so it needs no
+        // hooks in any reaction script.
+        if (manager.gameObject.GetComponent<AchievementSystem>() == null)
+        {
+            manager.gameObject.AddComponent<AchievementSystem>();
+        }
+
+        // F1 pause / settings, P periodic table, and the end-of-test report card. All ride on the
+        // same DontDestroyOnLoad object so they survive every scene change.
+        if (manager.gameObject.GetComponent<PauseMenuUI>() == null)
+        {
+            manager.gameObject.AddComponent<PauseMenuUI>();
+        }
+
+        if (manager.gameObject.GetComponent<PeriodicTableUI>() == null)
+        {
+            manager.gameObject.AddComponent<PeriodicTableUI>();
+        }
+
+        if (manager.gameObject.GetComponent<TestResultsUI>() == null)
+        {
+            manager.gameObject.AddComponent<TestResultsUI>();
+        }
+
+        // Pushes the saved preferences into whatever rig the scene builds at runtime.
+        if (manager.gameObject.GetComponent<AtomixSettingsApplier>() == null)
+        {
+            manager.gameObject.AddComponent<AtomixSettingsApplier>();
+        }
     }
 
     void Awake()

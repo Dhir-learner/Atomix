@@ -23,6 +23,9 @@ public class FirstPersonController : MonoBehaviour
     [Tooltip("How sensitive the mouse is for looking around")]
     public float mouseSensitivity = 2f;
 
+    [Tooltip("Invert the vertical mouse axis (flight-sim style look)")]
+    public bool invertLook = false;
+
     [Tooltip("Maximum angle you can look up (degrees)")]
     public float maxLookUpAngle = 80f;
 
@@ -130,6 +133,10 @@ public class FirstPersonController : MonoBehaviour
     {
         float mouseX = Input.GetAxis("Mouse X") * mouseSensitivity;
         float mouseY = Input.GetAxis("Mouse Y") * mouseSensitivity;
+        if (invertLook)
+        {
+            mouseY = -mouseY;
+        }
 
         pitch -= mouseY;
         pitch = Mathf.Clamp(pitch, -maxLookDownAngle, maxLookUpAngle);
