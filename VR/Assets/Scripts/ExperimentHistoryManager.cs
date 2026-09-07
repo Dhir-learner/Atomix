@@ -823,6 +823,10 @@ public class ReactionHistoryRecorder
     /// <summary>Closes an unfinished attempt when the student walks away from the experiment.</summary>
     public void Abandon()
     {
+        // The equipment is going away either way, so stop calling this the selected experiment
+        // before the early-out below.
+        Deselect();
+
         if (finished || !HasStarted)
         {
             return;
@@ -837,6 +841,32 @@ public class ReactionHistoryRecorder
         finished = false;
         wasPouring.Clear();
         everAdded.Clear();
+        Select();
+    }
+
+    /// <summary>
+    /// The experiment whose equipment is on the bench right now.
+    ///
+    /// Distinct from <see cref="Active"/>, which is the most *recent* one and is deliberately left
+    /// in place after a verdict so the AI assistant can still be asked what went wrong. The HUD
+    /// readout wants this one instead: without it, starting a fresh task left the previous
+    /// experiment's reagents and its FAILED banner on screen until the student poured something.
+    /// </summary>
+    public static ReactionHistoryRecorder Selected { get; private set; }
+
+    /// <summary>Marks this experiment as the one on the bench.</summary>
+    public void Select()
+    {
+        Selected = this;
+    }
+
+    /// <summary>Called when the equipment is put away.</summary>
+    public void Deselect()
+    {
+        if (ReferenceEquals(Selected, this))
+        {
+            Selected = null;
+        }
     }
 
     public static ExperimentOutcome ToOutcome(ReactionResult result)

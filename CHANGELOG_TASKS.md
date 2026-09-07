@@ -1211,3 +1211,120 @@ The checks are now structural rather than spot: every row of every tab against t
 below it, every column against its neighbours, and every string against the font's glyph coverage.
 That is what should stop the next round of this, but layout at your actual resolution and aspect
 ratio is still something only Play mode can confirm.
+
+---
+
+## 17. Round 4 — ungrabbable test tubes in the CaCO3 and FeSO4 test tasks
+
+**Reported:** *"In the test scene the feso4 and caco3 reactions I am not able to grab some objects"*
+
+### 17.1 Root cause: a race between two `Start`-order assumptions
+
+Desktop grabbing is retrofitted. `DesktopBootstrap.SetupInteractables` reflects over every
+MonoBehaviour in the scene, collects the `GameObject`-typed **fields** it finds, and adds an
+`ObjectGrabbable` to each. An object nothing points at never becomes grabbable.
+
+That scan runs from `[RuntimeInitializeOnLoadMethod(AfterSceneLoad)]` and `SceneManager.sceneLoaded`.
+Unity's order is:
+
+```
+Awake -> OnEnable -> [AfterSceneLoad] / sceneLoaded -> Start
+```
+
+`Randomize` locates all ~30 pieces of testing-scene equipment with `GameObject.Find` — **in
+`Start()`**, and into *private* fields, so they are also null in the scene file. The scan therefore
+reflects over `Randomize` while every one of those fields is still `null`, and registers nothing.
+
+The lab does not have this problem because `ControlReactions` holds the same equipment in
+**serialized** fields, populated in the scene asset before anything runs:
+
+```
+=== LabScene.unity
+    SuportEprubeta        <- ControlReactions.cs.testTubeSuport2
+    SuportEprubeta (1)    <- ControlReactions.cs.testTubeSuport1
+    TubeWithSubstance     <- ControlReactions.cs.testTube2
+    TubeWithSubstance (1) <- ControlReactions.cs.testTube1
+=== TestingPhaseLab.unity
+    (no script field references any tube/stand/burner)
+```
+
+**Why only these two experiments.** Every other task's glassware is reachable from a pour script's
+serialized field (`PourSubstance.SecondGlass` and friends), so it was registered anyway. The two
+heating tasks are the only ones whose central object — the test tube — is referenced by nothing but
+`Randomize`. The balloon was fine, because `CaCO3ReactionTest.balon` is a serialized field:
+
+```
+Balon                <- CaCO3ReactionTest.cs.balon
+TubeWithSubstance    <- NOTHING (only Randomize, filled in Start)
+TubeWithSubstance1   <- NOTHING (only Randomize, filled in Start)
+BunsenBurner / BunsenBurner1 / SuportEprubeta / SuportEprubeta1  <- likewise
+```
+
+A first pass at this analysis appeared to show the tubes *were* referenced. They were not: the match
+was on `m_GameObject`, which is Unity's component-to-owner link, not a script field, and
+`RegisterGameObjectFields` never sees it. Worth recording, because it nearly closed the
+investigation on the wrong answer.
+
+### 17.2 Fix
+
+`DesktopBootstrap` now re-scans for interactables after the frame has settled:
+
+```csharp
+IEnumerator RescanInteractables(Scene scene)
+{
+    yield return null;                       // Start() has now run
+    if (scene.isLoaded) SetupInteractables(scene);
+
+    yield return new WaitForSeconds(0.5f);   // and anything bound from a coroutine
+    if (scene.isLoaded) SetupInteractables(scene);
+}
+```
+
+Chosen over moving `Randomize.FindAllObjects()` into `Awake` because it is general: **any** script
+that resolves references in `Start` is now covered, not just this one. It is safe to repeat —
+`EnsureGrabbable` and `AttachInvokeAction` both no-op on anything already set up, and
+`FindObjectsByType(FindObjectsInactive.Include)` still sees the equipment after `Randomize` hides it
+on the first `Update`.
+
+Verified against the grabbable filter:
+
+| Object | Collider | Name passes filter | After fix |
+|---|---|---|---|
+| `TubeWithSubstance` (FeSO4) | yes | yes | **grabbable** |
+| `TubeWithSubstance1` (CaCO3) | yes | yes | **grabbable** |
+| `Balon` | yes | yes | grabbable (was already) |
+| stands / burners | inside `.fbx`, not resolvable offline | yes | grabbable if they carry a collider, otherwise rejected exactly as before |
+
+The burner is lit by clicking its button, which goes through `LightFire.burnerSupport` ->
+`DesktopInvokeInteractable` — a separate path that was never affected.
+
+### 17.3 A second bug, visible in the same screenshot
+
+The HUD strip read `2Al + 3I2 -> 2AlI3 [Test] | Aluminium 0.0 g | Iodine 16.5 g | ... FAILED`
+while the CaCO3 task was the one on screen.
+
+`LabHudController` read `ReactionHistoryRecorder.Active`, which is documented as the *most recent*
+experiment and is deliberately left in place after a verdict so the AI assistant can still be asked
+what went wrong. The next task's recorder does not replace it until the student actually pours
+something — so the previous task's reagents and its FAILED banner sat on screen through the whole of
+the next one.
+
+`ReactionHistoryRecorder` now also tracks **`Selected`** — the experiment whose equipment is on the
+bench — set in `ResetForNewAttempt()` and cleared in `Abandon()`. Those two are called from every
+`OnEnable`/`OnDisable` path in all sixteen reaction scripts (the eight lab ones via
+`RestartAttemptIfRequested`, the eight test ones via `ExamReactionRunner`), so one edit in one file
+covers every experiment in both scenes. The HUD prefers `Selected`, and falls back to `Active` only
+while that attempt is still running — never to a finished one.
+
+`Active` itself is untouched, so the AI assistant's context is unchanged.
+
+### 17.4 Verification
+
+```
+exit=0  errors=0  warnings=69      (0 in any changed file)
+```
+
+Scene analysis confirmed the reference graph in both scenes, and the grabbable filter for every
+affected object. **Not verified:** the actual grab in Play mode — the timing fix is reasoned from
+Unity's documented callback order rather than observed, so it is worth confirming that the tube can
+now be picked up in both heating tasks.

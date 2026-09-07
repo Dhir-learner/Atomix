@@ -1,4 +1,5 @@
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Reflection;
 using UnityEngine;
@@ -72,6 +73,35 @@ public class DesktopBootstrap : MonoBehaviour
         SetupCrosshairUi(scene);
         SetupUiInput(false);
         SetupLabBoundary(scene);
+
+        // This pass runs before Start(), so any script that resolves its object references there
+        // is still holding nulls when we reflect over it. Randomize is the one that matters:
+        // it locates all ~30 pieces of testing-scene equipment with GameObject.Find in Start,
+        // which is why the CaCO3 and FeSO4 test tubes could never be picked up. Re-scan once the
+        // frame has settled so late-bound references become grabbable too.
+        StartCoroutine(RescanInteractables(scene));
+    }
+
+    /// <summary>
+    /// Second and third passes over the scene's interactables. <see cref="EnsureGrabbable"/> and
+    /// <see cref="AttachInvokeAction"/> both no-op on anything already set up, so repeating the
+    /// scan is safe; it only ever adds what the first pass could not see yet.
+    /// </summary>
+    IEnumerator RescanInteractables(Scene scene)
+    {
+        yield return null;                       // Start() has now run
+        if (scene.isLoaded)
+        {
+            SetupInteractables(scene);
+        }
+
+        // A second, later pass catches anything bound from a coroutine or a first-Update branch -
+        // Randomize hides its equipment on the first Update, and hidden objects are still scanned.
+        yield return new WaitForSeconds(0.5f);
+        if (scene.isLoaded)
+        {
+            SetupInteractables(scene);
+        }
     }
 
     /// <summary>

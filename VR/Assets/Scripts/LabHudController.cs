@@ -82,7 +82,20 @@ public class LabHudController : MonoBehaviour
             return;
         }
 
-        ReactionHistoryRecorder active = ReactionHistoryRecorder.Active;
+        // Prefer the experiment currently on the bench. ReactionHistoryRecorder.Active is the most
+        // recent one and is kept after a verdict for the AI assistant's benefit, so reading it
+        // directly left the last task's reagents - and its FAILED banner - on screen through the
+        // whole of the next one. Fall back to Active only while that attempt is still running.
+        ReactionHistoryRecorder active = ReactionHistoryRecorder.Selected;
+        if (active == null)
+        {
+            ReactionHistoryRecorder recent = ReactionHistoryRecorder.Active;
+            if (recent != null && !recent.IsFinished)
+            {
+                active = recent;
+            }
+        }
+
         FreeHandReactionEngine engine = active != null ? active.Engine : null;
 
         // No engine means either no experiment selected, or reaction 1, which tracks its
