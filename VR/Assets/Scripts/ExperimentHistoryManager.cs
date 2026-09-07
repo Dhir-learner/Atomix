@@ -622,6 +622,13 @@ public class ReactionHistoryRecorder
     private bool finished = false;
 
     /// <summary>
+    /// Exam mode. The attempt is still recorded in full, but the target quantities are left out
+    /// of the step text and out of the stored attempt, so the history panel cannot be used as an
+    /// answer key while the student is being tested. Set by <see cref="ExamReactionRunner"/>.
+    /// </summary>
+    public bool hideTargets = false;
+
+    /// <summary>
     /// The experiment the student is working on right now (or most recently worked on). Lets the
     /// AI assistant read live experiment state without every reaction script having to know it
     /// exists. Set as soon as an attempt opens and left in place afterwards, because questions
@@ -689,8 +696,10 @@ public class ReactionHistoryRecorder
                 string unit = engine.UnitFor(substance);
                 LogAction(isHeating
                     ? string.Format("Removed from the flame after {0:F1} {1}", amount, unit)
-                    : string.Format("Added {0:F1} {1} of {2} (target {3:F1})",
-                        amount, unit, substance, engine.targetQuantities[substance]),
+                    : (hideTargets
+                        ? string.Format("Added {0:F1} {1} of {2}", amount, unit, substance)
+                        : string.Format("Added {0:F1} {1} of {2} (target {3:F1})",
+                            amount, unit, substance, engine.targetQuantities[substance])),
                     amount, correct);
             }
 
@@ -750,7 +759,8 @@ public class ReactionHistoryRecorder
 
         if (engine != null)
         {
-            manager.RecordQuantities(attemptId, engine.GetQuantitiesSnapshot(), engine.GetTargetsSnapshot());
+            manager.RecordQuantities(attemptId, engine.GetQuantitiesSnapshot(),
+                hideTargets ? new Dictionary<string, float>() : engine.GetTargetsSnapshot());
             if (engine.HasFailed && !string.IsNullOrEmpty(engine.failureReason))
             {
                 manager.LogStep(attemptId, "Why it failed: " + engine.failureReason, 0.0f, false);

@@ -23,6 +23,11 @@ public class ExperimentHistoryUI : MonoBehaviour
     [Tooltip("Metres in front of the camera the panel appears.")]
     public float distanceFromCamera = 1.5f;
 
+    [Header("Availability")]
+    [Tooltip("Scenes where the panel cannot be opened. The testing scene is excluded because past " +
+             "attempts would otherwise be an answer key while the student is being examined.")]
+    public string[] blockedScenes = { "TestingPhaseLab" };
+
     private Canvas historyCanvas;
     private RectTransform listContent;
     private ScrollRect scrollRect;
@@ -46,6 +51,15 @@ public class ExperimentHistoryUI : MonoBehaviour
 
     void Update()
     {
+        if (IsBlockedScene())
+        {
+            if (isOpen)
+            {
+                Close();
+            }
+            return;
+        }
+
         if (Input.GetKeyDown(toggleKey))
         {
             Toggle();
@@ -69,6 +83,25 @@ public class ExperimentHistoryUI : MonoBehaviour
         {
             RebuildList();
         }
+    }
+
+    bool IsBlockedScene()
+    {
+        if (blockedScenes == null || blockedScenes.Length == 0)
+        {
+            return false;
+        }
+
+        string active = UnityEngine.SceneManagement.SceneManager.GetActiveScene().name;
+        for (int i = 0; i < blockedScenes.Length; i++)
+        {
+            if (blockedScenes[i] == active)
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     public void Toggle()

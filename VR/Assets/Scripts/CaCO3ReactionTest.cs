@@ -36,11 +36,79 @@ public class CaCO3ReactionTest : MonoBehaviour
     [SerializeField] private Vector3 desktopBalloonSnapOffset = Vector3.zero;
     [SerializeField] private Vector3 desktopBalloonSnapEulerOffset = Vector3.zero;
 
+    [Header("Exam Mode (same rules as the Lab, quantities hidden)")]
+    [Tooltip("Judged by the same FreeHandReactionEngine as CaCO3Reaction, but the student is never told how long to heat for.")]
+    public bool enableExamMode = true;
+    public float targetHeatingSeconds = 10.0f;
+    public float tolerancePercent = 15.0f;
+    [Tooltip("Heating before the balloon is fitted lets the CO2 escape, and fails the task.")]
+    public bool requireBalloonBeforeHeating = true;
+    public float tooltipHeightOffset = 0.22f;
+    public float tooltipFontSize = 0.55f;
+    [Tooltip("Optional - played when the task is failed.")]
+    public AudioSource audioSource_failure;
+    public AudioClip clip_failure;
+
+    [Header("Experiment History")]
+    [Tooltip("Matches the Lab reaction number so test attempts group with lab attempts.")]
+    public int reactionId = 7;
+    public string reactionDisplayName = "CaCO3 -> CaO + CO2 [Test]";
+
+    private const string TaskPrompt = "Decompose CaCO3 and inflate the balloon.";
+
+    private ExamReactionRunner exam;
+    private bool balloonLogged = false;
+
     void Start()
     {
         fume.SetActive(false);
         InitializeBalloonInflationTargets();
         RefreshConnectedStateFromPlacement();
+
+        if (!enableExamMode)
+        {
+            return;
+        }
+
+        exam = new ExamReactionRunner();
+        exam.Begin("ExamTooltip_CaCO3", canvasText, tooltipFontSize,
+            reactionId, reactionDisplayName, countdown, randomizer, tolerancePercent,
+            "[Heating Time Used]");
+        exam.SetFailureAudio(audioSource_failure, clip_failure);
+
+        exam.engine.AddSubstance("Heating", targetHeatingSeconds, "s",
+            overdose: "The tube was held in the flame far too long - the CaO sinters and the trapped CO2 over-pressurises the balloon.",
+            underdose: "Insufficient heating leaves undissociated CaCO3 - thermal decomposition needs sustained heat above 800 C to drive the CO2 off.");
+    }
+
+    void OnEnable()
+    {
+        if (exam != null)
+        {
+            exam.SetTooltipActive(true);
+            exam.ResetForNewTask();
+        }
+        balloonLogged = false;
+        reactionCompleted = false;
+        finishedTask = false;
+        targetPoint = 0.0f;
+    }
+
+    void OnDisable()
+    {
+        if (exam != null)
+        {
+            exam.SetTooltipActive(false);
+            exam.Abandon();
+        }
+    }
+
+    void OnDestroy()
+    {
+        if (exam != null)
+        {
+            exam.DestroyTooltip();
+        }
     }
 
     void Update()
@@ -48,51 +116,142 @@ public class CaCO3ReactionTest : MonoBehaviour
         TrySnapBalloonToSocket();
         RefreshConnectedStateFromPlacement();
 
-        if (!finishedTask)
-        {
-            canvasText.text = "Decompose CaCO3 and inflate the balloon.";
-        }
         if (balloonSnapped)
         {
             balon_ok = true;
-        }
-        if (!reactionCompleted &&
-            Math.Abs(pivotFoc.transform.position.z - pivotEprubeta.transform.position.z) < 0.05 &&
-            Math.Abs(pivotFoc.transform.position.x - pivotEprubeta.transform.position.x) < 0.05 &&
-            Math.Abs(pivotFoc.transform.position.y - pivotEprubeta.transform.position.y) < 0.1 && foc.esteAprins == true
-            )
-        {
-            fume.SetActive(true);
-            if (balon_ok)
+            if (exam != null && !balloonLogged)
             {
-                targetPoint += Time.deltaTime / 10;
-                balon.transform.localScale = Vector3.Lerp(initialScale, finalScale, targetPoint);
-                balon.transform.localPosition = Vector3.Lerp(initialPosition, finalPosition, targetPoint);
-                if (targetPoint >= 1f)
+                balloonLogged = true;
+                if (exam.Recorder != null)
                 {
-                    targetPoint = 1f;
-                    reactionCompleted = true;
-                    if (targetPoint >= 1f)
-                    {
-                        targetPoint = 1f;
-                        label.GetComponent<Renderer>().material = CaO_material;
-                        timpInitial = DateTime.Now;
-                        fume.SetActive(false);
-                        canvasText.text = "Task finished!";
-                        countdown.continua = false;
-                        finishedTask = true;
-                    }
+                    exam.Recorder.LogAction("Attached the balloon to the test tube", 0.0f, true);
                 }
             }
         }
+
+        bool overFlame = IsTubeOverFlame();
+
+        if (exam != null)
+        {
+            UpdateExamHeating(overFlame);
+        }
         else
         {
-            fume.SetActive(false);
+            if (!finishedTask)
+            {
+                canvasText.text = TaskPrompt;
+            }
+            if (!reactionCompleted && overFlame)
+            {
+                fume.SetActive(true);
+                if (balon_ok)
+                {
+                    targetPoint += Time.deltaTime / 10;
+                    balon.transform.localScale = Vector3.Lerp(initialScale, finalScale, targetPoint);
+                    balon.transform.localPosition = Vector3.Lerp(initialPosition, finalPosition, targetPoint);
+                    if (targetPoint >= 1f)
+                    {
+                        targetPoint = 1f;
+                        reactionCompleted = true;
+                        CompleteTask();
+                    }
+                }
+            }
+            else
+            {
+                fume.SetActive(false);
+            }
         }
+
         if (finishedTask && !randomizer.generateNewReaction && (DateTime.Now - timpInitial).TotalSeconds >= 5)
         {
             randomizer.generateNewReaction = true;
         }
+    }
+
+    bool IsTubeOverFlame()
+    {
+        if (pivotFoc == null || pivotEprubeta == null || foc == null || !foc.esteAprins)
+        {
+            return false;
+        }
+
+        return Math.Abs(pivotFoc.transform.position.z - pivotEprubeta.transform.position.z) < 0.05 &&
+               Math.Abs(pivotFoc.transform.position.x - pivotEprubeta.transform.position.x) < 0.05 &&
+               Math.Abs(pivotFoc.transform.position.y - pivotEprubeta.transform.position.y) < 0.1;
+    }
+
+    /// <summary>
+    /// Free-hand heating: the student decides how long to hold the tube in the flame, and is not
+    /// told the right duration. Too short and the carbonate never dissociates, too long and the
+    /// trapped CO2 over-pressurises the balloon. Same rules as the Lab's CaCO3Reaction.
+    /// </summary>
+    void UpdateExamHeating(bool overFlame)
+    {
+        if (exam.HasFailed)
+        {
+            fume.SetActive(false);
+            exam.Tick();
+            exam.UpdateTooltip(transform, tooltipHeightOffset, "Task finished!");
+            return;
+        }
+
+        if (overFlame && requireBalloonBeforeHeating && !balon_ok && !exam.engine.HasSucceeded)
+        {
+            exam.engine.ForceFailure("Heating",
+                "The CaCO3 was heated before the balloon was fitted, so the carbon dioxide escaped into the room instead of being collected.",
+                ReactionResult.FailWrongOrder,
+                "FAILED: CO2 escaped\nBalloon was not fitted before heating");
+            fume.SetActive(false);
+            exam.Tick();
+            exam.UpdateTooltip(transform, tooltipHeightOffset, "Task finished!");
+            return;
+        }
+
+        exam.Pour("Heating", 1.0f, overFlame);
+        ReactionResult result = exam.Tick();
+        fume.SetActive(overFlame && !exam.IsResolved);
+
+        if (balon_ok && !reactionCompleted)
+        {
+            targetPoint = Mathf.Clamp01(exam.engine.GetCurrent("Heating") / Mathf.Max(0.1f, targetHeatingSeconds));
+            balon.transform.localScale = Vector3.Lerp(initialScale, finalScale, targetPoint);
+            balon.transform.localPosition = Vector3.Lerp(initialPosition, finalPosition, targetPoint);
+        }
+
+        if (result == ReactionResult.Success && !reactionCompleted)
+        {
+            reactionCompleted = true;
+            exam.CompleteSuccess();
+            targetPoint = 1.0f;
+            if (balon_ok && balon != null)
+            {
+                balon.transform.localScale = finalScale;
+                balon.transform.localPosition = finalPosition;
+            }
+            CompleteTask();
+        }
+        else if (!finishedTask && canvasText != null && !exam.IsResolved)
+        {
+            canvasText.text = exam.Status(TaskPrompt);
+        }
+
+        exam.UpdateTooltip(transform, tooltipHeightOffset, "Task finished!");
+    }
+
+    void CompleteTask()
+    {
+        Renderer labelRenderer = label != null ? label.GetComponent<Renderer>() : null;
+        if (labelRenderer != null && CaO_material != null)
+        {
+            labelRenderer.material = CaO_material;
+        }
+
+        timpInitial = DateTime.Now;
+        fume.SetActive(false);
+        canvasText.text = "Task finished!";
+        countdown.continua = false;
+        finishedTask = true;
     }
 
     void LateUpdate()

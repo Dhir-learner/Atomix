@@ -523,3 +523,233 @@ following are reasoned from the scene data and the code, but untested in-game:
 ---
 
 *Generated on completing the Main Menu Desktop Input and Lab Boundary tasks.*
+
+---
+
+# Task Report — Testing Scene on the Lab's Reaction Logic
+
+**Date:** 2026-09-07
+**Branch:** `master`
+**Status:** ✅ Built — 0 compile errors, 0 new warnings; **111/111 checks pass** running the real engine
+**Scope:** `TestingPhaseLab` now judges experiments exactly as `LabScene` does, with the quantities hidden
+
+---
+
+## 6. Executive Summary
+
+The testing scene's eight `*Test.cs` scripts were still on the **original pre-free-hand logic**: a plain
+boolean check such as `if (salt.containsCuO && h2so4.containsHCL) -> task finished`. Quantity,
+tolerance and procedure order were not considered at all, so any amount of anything passed.
+
+All eight now run the same `FreeHandReactionEngine` as their lab counterparts, with the same targets,
+tolerances, flow rates and chemistry-accurate failure reasons — **except that the target quantity and
+the accepted range are never disclosed.** The student sees only how much of each chemical they have
+actually used, which is the point of a test: knowing the right amount is the thing being examined.
+
+| | Lab (`LabScene`) | Test (`TestingPhaseLab`) |
+|---|---|---|
+| Tracker line | `H2SO4: 12.5 / 20.0 ml  (accept 18.4-21.6)` | `H2SO4: 12.5 ml` |
+| While pouring | `Adding H2SO4... stop between 18.4 and 21.6 ml.` | `Adding H2SO4...` |
+| Failure headline | `FAILED: Too much H2SO4` + `21.6 ml (max 21.6)` | `FAILED: Too much H2SO4` + `21.6 ml used` |
+| Failure detail | `H2SO4: 21.6 ml (expected ~20.0)` | `H2SO4: 21.6 ml used` |
+| Closing line | `Ask your AI Lab Assistant...` | `Revisit this experiment in the Lab to see the correct quantities.` |
+| Step-by-step guidance | yes ("Now you can add Copper oxide...") | none — only the task prompt |
+
+### Architectural choices
+
+**One `hideTargets` flag on the shared engine, defaulting to `false`.** Exam mode changes only what is
+*said*, never how the experiment is *judged*. The same code path decides success and failure in both
+scenes, so the two can never disagree about what a correct experiment is.
+
+**One shared `ExamReactionRunner` instead of eight copies of the lab wiring.** Each lab reaction carries
+roughly 150 lines of engine/tooltip/history plumbing. Copying that eight more times would have been
+eight chances to introduce a bug and eight places to drift. The runner owns it once; each test script
+gained about 25 lines.
+
+**No scene or prefab was edited.** The tooltip anchors to the script's own transform (or an existing
+`currentBerzelius` reference), so nothing new needs wiring in the Inspector.
+
+---
+
+## 7. File Manifest
+
+```
+NEW  VR/Assets/Scripts/ExamReactionRunner.cs   (+ .meta)  shared exam driver
+
+MOD  VR/Assets/Scripts/FreeHandReactionEngine.cs      hideTargets + exam closing line
+MOD  VR/Assets/Scripts/ExperimentHistoryManager.cs    ReactionHistoryRecorder.hideTargets
+MOD  VR/Assets/Scripts/ExperimentHistoryUI.cs         blockedScenes gate
+
+MOD  VR/Assets/Scripts/ReactionTest.cs                test task 1  (lab reaction 1)
+MOD  VR/Assets/Scripts/ReactionTestHClNaOH.cs         test task 2  (lab reaction 3)
+MOD  VR/Assets/Scripts/ReactionTestH2so4CuO.cs        test task 3  (lab reaction 2)
+MOD  VR/Assets/Scripts/KOHReactionTest.cs             test task 4  (lab reaction 4)
+MOD  VR/Assets/Scripts/ReactionAlI3Test.cs            test task 5  (lab reaction 5)
+MOD  VR/Assets/Scripts/ReactionCaOHTest.cs            test task 6  (lab reaction 6)
+MOD  VR/Assets/Scripts/CaCO3ReactionTest.cs           test task 7  (lab reaction 7)
+MOD  VR/Assets/Scripts/FeSO4ReactionTest.cs           test task 8  (lab reaction 8)
+```
+
+**Note the numbering.** `Randomize` numbers its tasks differently from the book: test tasks 2 and 3 are
+lab reactions 3 and 2. Each script records the **lab** reaction id so test attempts group with lab
+attempts in the history, with `[Test]` appended to the display name so the two stay distinguishable.
+
+Not modified: `ControlReactions.cs`, `PourSubstance.cs`, any pour script, `Randomize.cs`,
+`CountdownTimer.cs`, `TheoreticalTasksManager.cs`, any lab reaction script, any scene, any prefab.
+
+---
+
+## 8. What each test experiment now enforces
+
+Same numbers as the lab, taken from each lab script:
+
+| Test task | Reagents | Targets | Tol. | Flow |
+|---|---|---|---:|---|
+| 1 | Water, Sodium | 50 ml, 5 g | ±5% | 10 ml/s, one measured block |
+| 2 | HCl, NaHCO₃ | 15 ml, 12 g | ±10% | 5 ml/s, 3 g/s |
+| 3 | H₂SO₄, CuO | 20 ml, 8 g | ±8% | 5 ml/s, 2 g/s |
+| 4 | Water, Potassium | 50 ml, 3 g | ±5% | 10 ml/s, block + 1 g/s after a 2 s grace |
+| 5 | Aluminium, Iodine, Water drops | 5 g, 15 g, 2 ml | ±10% | 1.25 g/s, 3.75 g/s, 0.7 ml/s |
+| 6 | Water, CaO | 30 ml, 15 g | ±8% | 5 ml/s, 3 g/s |
+| 7 | Heating | 10 s | ±15% | 1 s/s over a lit burner |
+| 8 | Heating | `heatingDuration` | ±15% | 1 s/s over a lit burner |
+
+Order is enforced everywhere it is in the lab (acid before oxide, water before metal, both powders
+before the catalyst drops). Task 7 also fails if the tube is heated before the balloon is fitted.
+Tasks 1 and 4 still require the indicator afterwards, and task 6 still requires the litmus check.
+
+### Two decisions I made
+
+| Question | Choice | Why |
+|---|---|---|
+| What happens when a task is failed? | Show the chemistry reason, **award no points**, move to the next task after 6 s | It mirrors the existing 60-second timeout path, so the student is never stuck. Scoring is skipped by setting `continua = false` *and* `wasScored = true`, the only combination `CountdownTimer` treats as "no score". |
+| Can the student look the answer up mid-test? | No | The Tab history panel prints `(target 20.0)` on every step. `ReactionHistoryRecorder.hideTargets` now omits targets from test attempts, and `ExperimentHistoryUI.blockedScenes` closes the panel in `TestingPhaseLab`. Both are Inspector fields if you disagree. |
+
+Reaction 1 is the one place the test is *stricter* than the lab: `Reaction.cs` tracks its quantities
+inline and does not enforce order, so `ReactionTest` was modelled on `KOHReaction` — the same reaction
+with potassium instead of sodium — which does. Sodium still arrives as one correctly-measured block,
+exactly as in the lab.
+
+---
+
+## 9. Verification
+
+### The outcome matrix — 111/111, running the shipped engine
+
+`FreeHandReactionEngine`'s only Unity dependency is `Time.deltaTime`, so the engine was extracted
+**verbatim** from the source file, given a one-field `Time` shim, and driven with the exact targets,
+tolerances and flow rates the eight test scripts register. This is the shipped judging code, not a
+re-implementation.
+
+```
+T3  H2SO4 + CuO (ReactionTestH2so4CuO)   (tolerance +/-8%)
+  PASS correct amounts -> Success
+  PASS no target/range wording (success)
+  PASS overdose -> FailOverdose
+  PASS underdose -> FailUnderdose
+  PASS reversed order -> FailWrongOrder
+  PASS pause mid-procedure -> still InProgress
+  PASS   then finish -> Success
+  PASS tracker shows the amount used ("H2SO4: 10.0")
+  PASS tracker has no accepted range
+  PASS readings have no (used / target) form
+  PASS target value never printed
+...
+ALL 111 CHECKS PASSED
+```
+
+Every task was checked for: success on correct amounts, overdose, underdose, wrong order (where order
+is enforced), **pausing mid-procedure must not fail you**, and — the point of this task — that the
+tracker still shows the amount used while never disclosing a target or a range.
+
+The no-leak check is both **structural** (no `accept`, `stop between`, `(max`, `(min`, `expected ~`,
+and no `used / target` form) and **numeric**: with a measurement deliberately away from the target and
+from both tolerance edges, every number the engine prints is parsed and compared, and none may equal a
+target or a bound.
+
+Actual exam-mode output, produced by running the code:
+
+```
+[Chemicals Used]                    Experiment Failed - too much H2SO4.
+H2SO4: 12.5 ml                      H2SO4: 21.6 ml used
+CuO: 0.0 g                          CuO: 0.0 g used
+
+Adding H2SO4...                     Excess acid creates corrosive fumes ...
+
+                                    Revisit this experiment in the Lab to see
+                                    the correct quantities.
+```
+
+### Lab mode is provably unchanged
+
+Seven regression checks run the same engine with `hideTargets = false` and assert the old wording is
+still produced exactly:
+
+```
+  PASS lab tracker still shows 'used / target'
+  PASS lab tracker still shows the accepted range
+  PASS lab tracker still shows the stop-between hint
+  PASS lab tooltip still shows the target
+  PASS lab failure headline still shows the max
+  PASS lab failure text still shows the expected value
+  PASS lab failure text still points at the AI assistant
+```
+
+### Three harness bugs caught before they became false bug reports
+
+1. **Reversed order looked broken on six tasks.** It is not: `IsOrderViolated` fires when an
+   *earlier*-ordered reagent arrives *after* a later one, so adding only the second reagent is not yet
+   a violation. The harness was adding one reagent and expecting a verdict; corrected, all six pass.
+2. **The failure line looked like a leak.** On an overdose the engine reports the instant the maximum
+   is crossed, so the measurement shown is approximately the upper bound. That number is the student's
+   own reading, which is exactly what was asked for — the check now compares against measurements.
+3. **`5.0` was "found" inside `15.0`.** The numeric check now parses numbers and compares them
+   numerically instead of by substring.
+
+### The scene assumption was verified, not assumed
+
+Everything here depends on `Randomize` switching each experiment's GameObject on and off, since that is
+what drives `OnEnable`/`OnDisable` and therefore the per-task reset. Each script's host was resolved
+through its prefab instance in the scene YAML:
+
+| Script | Sits on `Substance` under | `Randomize` shows it for |
+|---|---|---|
+| `ReactionTest` | `correct_berzelius-with-substance_NaOH` | task 1 ✓ |
+| `ReactionTestHClNaOH` | `berzelius_hcl_nahco3` | task 2 ✓ |
+| `ReactionTestH2so4CuO` | `correct_berzelius-with-substance` | task 3 ✓ |
+| `KOHReactionTest` | `KOHContainer` | task 4 ✓ |
+| `ReactionAlI3Test` | `small_vase_new` (own root) | task 5 ✓ |
+| `ReactionCaOHTest` | `CaOH_beaker22` | task 6 ✓ |
+| `CaCO3ReactionTest` | `TubeWithSubstance1` (own root) | task 7 ✓ |
+| `FeSO4ReactionTest` | `TubeWithSubstance` (own root) | task 8 ✓ |
+
+All eight match `Randomize`'s show-lists exactly, and every name it passes to `GameObject.Find` exists
+in the scene.
+
+### Compilation
+
+```
+sources: 113   references: 342
+exit=0  errors=0  warnings=69
+```
+
+0 errors, and **0 warnings in any file touched by this task** — the 69 are the same pre-existing
+`CS0649` / `CS0414` / `CS0618` set as before.
+
+### No interference with the lab-only systems
+
+`PostSuccessSequencer` and `ReactionGraphUI` both subscribe to `ReactionHistoryRecorder.Completed`,
+which the test scripts now raise on success. Both check `IsEnabledScene()` **at event time** and are
+gated to `LabScene`, so no molecular video and no graph panel can interrupt a timed test. Verified by
+reading the call sites rather than assuming.
+
+### Not verified — needs a Play-mode pass
+
+I could not run the Unity Editor, so these are reasoned but untested:
+
+- **Whether 60 seconds is still enough per task.** This is the one worth checking first: measuring by
+  hand is slower than tripping a boolean, and the accepted pour windows are 0.5–1.0 s of careful
+  pouring. If tasks start timing out, raise `startingTime` in `CountdownTimer`.
+- Tooltip placement above each receptacle (`tooltipHeightOffset` is an Inspector field on all eight).
+- That the failure-sound fields, which ship unassigned, are silently skipped as intended.
+- The 6-second pause on a failed task before the next one is drawn.

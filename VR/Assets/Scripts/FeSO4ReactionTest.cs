@@ -33,6 +33,26 @@ public class FeSO4ReactionTest : MonoBehaviour
     public float time;
     private readonly List<Material> runtimeSubstanceMaterials = new List<Material>();
 
+    [Header("Exam Mode (same rules as the Lab, quantities hidden)")]
+    [Tooltip("Judged by the same FreeHandReactionEngine as Feso4Reaction, but the student is never told how long to heat for.")]
+    public bool enableExamMode = true;
+    public float tolerancePercent = 15.0f;
+    public float tooltipHeightOffset = 0.22f;
+    public float tooltipFontSize = 0.55f;
+    [Tooltip("Optional - played when the task is failed.")]
+    public AudioSource audioSource_failure;
+    public AudioClip clip_failure;
+
+    [Header("Experiment History")]
+    [Tooltip("Matches the Lab reaction number so test attempts group with lab attempts.")]
+    public int reactionId = 8;
+    public string reactionDisplayName = "2FeSO4 -> Fe2O3 + SO2 + SO3 [Test]";
+
+    private const string TaskPrompt = "Decompose FeSO4 and observe the color change.";
+
+    private ExamReactionRunner exam;
+    private bool reactionCompleted = false;
+
     void Start()
     {
         CacheSubstanceMaterials();
@@ -44,28 +64,142 @@ public class FeSO4ReactionTest : MonoBehaviour
 
         time = 0;
         SetFumeActive(false);
+
+        if (!enableExamMode)
+        {
+            return;
+        }
+
+        exam = new ExamReactionRunner();
+        exam.Begin("ExamTooltip_FeSO4", canvasText, tooltipFontSize,
+            reactionId, reactionDisplayName, countdown, randomizer, tolerancePercent,
+            "[Heating Time Used]");
+        exam.SetFailureAudio(audioSource_failure, clip_failure);
+
+        exam.engine.AddSubstance("Heating", Mathf.Max(0.1f, heatingDuration), "s",
+            overdose: "The tube was left in the flame long past full decomposition - the Fe2O3 bakes onto the glass and the SO2/SO3 fumes build up dangerously.",
+            underdose: "Insufficient heating produces incomplete decomposition - some FeSO4 never breaks down, so the solid stays green instead of turning reddish brown.");
+    }
+
+    void OnEnable()
+    {
+        if (exam != null)
+        {
+            exam.SetTooltipActive(true);
+            exam.ResetForNewTask();
+        }
+        reactionCompleted = false;
+        finishedTask = false;
+        heatingProgress = 0.0f;
+    }
+
+    void OnDisable()
+    {
+        if (exam != null)
+        {
+            exam.SetTooltipActive(false);
+            exam.Abandon();
+        }
+    }
+
+    void OnDestroy()
+    {
+        if (exam != null)
+        {
+            exam.DestroyTooltip();
+        }
     }
 
     void Update()
     {
-        if (!finishedTask)
-        {
-            canvasText.text = "Decompose FeSO4 and observe the color change.";
-        }
+        bool overFlame = IsTubeOverFlame();
 
-        if (!finishedTask && IsTubeOverFlame())
+        if (exam != null)
         {
-            AdvanceHeating();
+            UpdateExamHeating(overFlame);
         }
         else
         {
-            SetFumeActive(false);
+            if (!finishedTask)
+            {
+                canvasText.text = TaskPrompt;
+            }
+
+            if (!finishedTask && overFlame)
+            {
+                AdvanceHeating();
+            }
+            else
+            {
+                SetFumeActive(false);
+            }
         }
 
         if (finishedTask && !randomizer.generateNewReaction && (DateTime.Now - timpInitial).TotalSeconds >= 5)
         {
             randomizer.generateNewReaction = true;
         }
+    }
+
+    /// <summary>
+    /// Free-hand heating: the student decides how long to hold the tube in the flame and is not
+    /// told the right duration. The colour gradient is driven by the measured heating time, so it
+    /// stays visually correct. Same rules as the Lab's Feso4Reaction.
+    /// </summary>
+    void UpdateExamHeating(bool overFlame)
+    {
+        if (exam.HasFailed)
+        {
+            SetFumeActive(false);
+            exam.Tick();
+            exam.UpdateTooltip(TooltipAnchor(), tooltipHeightOffset, "Task finished!");
+            return;
+        }
+
+        exam.Pour("Heating", 1.0f, overFlame);
+        ReactionResult result = exam.Tick();
+        SetFumeActive(overFlame && !exam.IsResolved);
+
+        float duration = Mathf.Max(0.1f, heatingDuration);
+        heatingProgress = Mathf.Clamp01(exam.engine.GetCurrent("Heating") / duration);
+        ApplySubstanceColor(EvaluateGradientColor(heatingProgress));
+
+        if (result == ReactionResult.Success && !reactionCompleted)
+        {
+            reactionCompleted = true;
+            exam.CompleteSuccess();
+            CompleteTask();
+        }
+        else if (!finishedTask && canvasText != null && !exam.IsResolved)
+        {
+            canvasText.text = exam.Status(TaskPrompt);
+        }
+
+        exam.UpdateTooltip(TooltipAnchor(), tooltipHeightOffset, "Task finished!");
+    }
+
+    Transform TooltipAnchor()
+    {
+        return pivotEprubeta != null ? pivotEprubeta.transform : transform;
+    }
+
+    void CompleteTask()
+    {
+        Renderer labelRenderer = label != null ? label.GetComponent<Renderer>() : null;
+        if (labelRenderer != null && Fe2O3_material != null)
+        {
+            labelRenderer.material = Fe2O3_material;
+        }
+
+        timpInitial = DateTime.Now;
+        SetFumeActive(false);
+        canvasText.text = "Task finished!";
+        if (countdown != null)
+        {
+            countdown.continua = false;
+        }
+
+        finishedTask = true;
     }
 
     bool IsTubeOverFlame()
@@ -97,21 +231,8 @@ public class FeSO4ReactionTest : MonoBehaviour
             return;
         }
 
-        Renderer labelRenderer = label != null ? label.GetComponent<Renderer>() : null;
-        if (labelRenderer != null && Fe2O3_material != null)
-        {
-            labelRenderer.material = Fe2O3_material;
-        }
-
-        timpInitial = DateTime.Now;
-        SetFumeActive(false);
-        canvasText.text = "Task finished!";
-        if (countdown != null)
-        {
-            countdown.continua = false;
-        }
-
-        finishedTask = true;
+        reactionCompleted = true;
+        CompleteTask();
     }
 
     Color EvaluateGradientColor(float t)

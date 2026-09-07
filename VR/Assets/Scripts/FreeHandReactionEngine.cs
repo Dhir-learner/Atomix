@@ -53,6 +53,15 @@ public class FreeHandReactionEngine
     public string wrongOrderMessage = "The reagents were added in the wrong order, so the intermediate step never formed.";
     public bool enforceOrder = true;
 
+    /// <summary>
+    /// Exam mode. Every reading still shows the student how much they have actually used, but
+    /// the target quantity and the accepted range are never disclosed - not in the tracker, the
+    /// tooltip, or the failure text. The judging is completely unchanged; only what is said out
+    /// loud differs. Used by the testing scene, where the student is supposed to know the
+    /// quantities rather than be told them.
+    /// </summary>
+    public bool hideTargets = false;
+
     // --- Internal bookkeeping --------------------------------------------------------
     private readonly List<string> registrationOrder = new List<string>();
     private readonly Dictionary<string, string> units = new Dictionary<string, string>();
@@ -410,17 +419,22 @@ public class FreeHandReactionEngine
         for (int i = 0; i < registrationOrder.Count; i++)
         {
             string substance = registrationOrder[i];
-            text += string.Format("{0}: {1:F1} / {2:F1} {3}  (accept {4:F1}-{5:F1})\n",
-                substance, currentQuantities[substance], targetQuantities[substance],
-                UnitFor(substance), MinAllowed(substance), MaxAllowed(substance));
+            text += hideTargets
+                ? string.Format("{0}: {1:F1} {2}\n",
+                    substance, currentQuantities[substance], UnitFor(substance))
+                : string.Format("{0}: {1:F1} / {2:F1} {3}  (accept {4:F1}-{5:F1})\n",
+                    substance, currentQuantities[substance], targetQuantities[substance],
+                    UnitFor(substance), MinAllowed(substance), MaxAllowed(substance));
         }
 
         if (IsAnyPouring)
         {
             foreach (string substance in pouringSubstances)
             {
-                text += string.Format("\nAdding {0}... stop between {1:F1} and {2:F1} {3}.",
-                    substance, MinAllowed(substance), MaxAllowed(substance), UnitFor(substance));
+                text += hideTargets
+                    ? string.Format("\nAdding {0}...", substance)
+                    : string.Format("\nAdding {0}... stop between {1:F1} and {2:F1} {3}.",
+                        substance, MinAllowed(substance), MaxAllowed(substance), UnitFor(substance));
                 break;
             }
         }
@@ -439,8 +453,11 @@ public class FreeHandReactionEngine
         for (int i = 0; i < registrationOrder.Count; i++)
         {
             string substance = registrationOrder[i];
-            text += string.Format("{0}: {1:F1} / {2:F1} {3}\n",
-                substance, currentQuantities[substance], targetQuantities[substance], UnitFor(substance));
+            text += hideTargets
+                ? string.Format("{0}: {1:F1} {2}\n",
+                    substance, currentQuantities[substance], UnitFor(substance))
+                : string.Format("{0}: {1:F1} / {2:F1} {3}\n",
+                    substance, currentQuantities[substance], targetQuantities[substance], UnitFor(substance));
         }
         return text.TrimEnd('\n');
     }
@@ -456,13 +473,19 @@ public class FreeHandReactionEngine
         switch (lastResult)
         {
             case ReactionResult.FailOverdose:
-                return string.Format("FAILED: Too much {0}\n{1:F1} {2} (max {3:F1})",
-                    offendingSubstance, GetCurrent(offendingSubstance),
-                    UnitFor(offendingSubstance), MaxAllowed(offendingSubstance));
+                return hideTargets
+                    ? string.Format("FAILED: Too much {0}\n{1:F1} {2} used",
+                        offendingSubstance, GetCurrent(offendingSubstance), UnitFor(offendingSubstance))
+                    : string.Format("FAILED: Too much {0}\n{1:F1} {2} (max {3:F1})",
+                        offendingSubstance, GetCurrent(offendingSubstance),
+                        UnitFor(offendingSubstance), MaxAllowed(offendingSubstance));
             case ReactionResult.FailUnderdose:
-                return string.Format("FAILED: Not enough {0}\n{1:F1} {2} (min {3:F1})",
-                    offendingSubstance, GetCurrent(offendingSubstance),
-                    UnitFor(offendingSubstance), MinAllowed(offendingSubstance));
+                return hideTargets
+                    ? string.Format("FAILED: Not enough {0}\n{1:F1} {2} used",
+                        offendingSubstance, GetCurrent(offendingSubstance), UnitFor(offendingSubstance))
+                    : string.Format("FAILED: Not enough {0}\n{1:F1} {2} (min {3:F1})",
+                        offendingSubstance, GetCurrent(offendingSubstance),
+                        UnitFor(offendingSubstance), MinAllowed(offendingSubstance));
             case ReactionResult.FailWrongOrder:
                 return string.Format("FAILED: Wrong procedure order\n{0} was added too early", offendingSubstance);
             default:
@@ -482,8 +505,11 @@ public class FreeHandReactionEngine
         for (int i = 0; i < registrationOrder.Count; i++)
         {
             string substance = registrationOrder[i];
-            measurements += string.Format("{0}: {1:F1} {2} (expected ~{3:F1})\n",
-                substance, currentQuantities[substance], UnitFor(substance), targetQuantities[substance]);
+            measurements += hideTargets
+                ? string.Format("{0}: {1:F1} {2} used\n",
+                    substance, currentQuantities[substance], UnitFor(substance))
+                : ComposeMeasurementLine(substance, currentQuantities[substance],
+                    UnitFor(substance), targetQuantities[substance]);
         }
 
         string headline;
@@ -505,8 +531,20 @@ public class FreeHandReactionEngine
                 break;
         }
 
-        return ComposeFailureExplanation(headline, measurements, failureReason);
+        return ComposeFailureExplanation(headline, measurements, failureReason,
+            hideTargets ? ExamClosingLine : AssistantClosingLine);
     }
+
+    /// <summary>Closing line for the lab, where the AI assistant is available to ask.</summary>
+    public const string AssistantClosingLine =
+        "Ask your AI Lab Assistant what went wrong and how to correct it.";
+
+    /// <summary>
+    /// Closing line for the testing scene. The assistant does not run there, and pointing the
+    /// student back at the lab is the correction that does not give the answer away.
+    /// </summary>
+    public const string ExamClosingLine =
+        "Revisit this experiment in the Lab to see the correct quantities.";
 
     /// <summary>
     /// The shared failure-text layout. Reaction 1 tracks its quantities inline rather than through
@@ -515,8 +553,13 @@ public class FreeHandReactionEngine
     /// </summary>
     public static string ComposeFailureExplanation(string headline, string measurements, string reason)
     {
-        return headline + "\n" + measurements + "\n" + reason +
-               "\n\nAsk your AI Lab Assistant what went wrong and how to correct it.";
+        return ComposeFailureExplanation(headline, measurements, reason, AssistantClosingLine);
+    }
+
+    public static string ComposeFailureExplanation(string headline, string measurements, string reason,
+                                                   string closingLine)
+    {
+        return headline + "\n" + measurements + "\n" + reason + "\n\n" + closingLine;
     }
 
     /// <summary>One measurement line in the shared format: "Water: 22.4 ml (expected ~20.0)".</summary>
