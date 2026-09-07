@@ -309,6 +309,29 @@ public class ReactionLearningController : MonoBehaviour
     }
 
     /// <summary>
+    /// True whenever this panel is on screen for any reason - the book's LEARN/PERFORM choice, a
+    /// video, or the post-success playback.
+    ///
+    /// The history and graph panels sit at the same 1.5 m in front of the camera, so they check
+    /// this before opening: two world-space panels at the same depth just stack on top of each
+    /// other and neither is readable.
+    /// </summary>
+    public static bool IsAnyPanelVisible
+    {
+        get
+        {
+            if (instance == null)
+            {
+                return false;
+            }
+
+            return instance.currentState != LearningUiState.Hidden &&
+                   instance.learningCanvas != null &&
+                   instance.learningCanvas.gameObject.activeInHierarchy;
+        }
+    }
+
+    /// <summary>
     /// Plays the molecular visualisation straight after a successful experiment, skipping the
     /// LEARN/PERFORM choice. When the student presses CONTINUE (or Esc),
     /// <paramref name="onContinue"/> runs.

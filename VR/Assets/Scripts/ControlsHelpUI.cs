@@ -41,6 +41,7 @@ CHEMISTRY BOOK
 
 UI
   H            Toggle this help
+  L            Measurement label: full / compact / off
   Tab          Experiment history
   F            Scientific graphs
   M            Minimise the Lab Assistant";

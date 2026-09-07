@@ -118,6 +118,20 @@ public class ExperimentHistoryUI : MonoBehaviour
 
     public void Open()
     {
+        // The book / video panel sits at the same distance in front of the camera. Two
+        // world-space panels at the same depth just stack and neither is readable, so the one
+        // already on screen wins.
+        if (ReactionLearningController.IsAnyPanelVisible)
+        {
+            return;
+        }
+
+        ReactionGraphUI graphUi = GetComponent<ReactionGraphUI>();
+        if (graphUi != null)
+        {
+            graphUi.Close();
+        }
+
         EnsureUiBuilt();
         isOpen = true;
         listDirty = true;

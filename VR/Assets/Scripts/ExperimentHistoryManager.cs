@@ -255,6 +255,13 @@ public class ExperimentHistoryManager : MonoBehaviour
             manager.gameObject.AddComponent<PostSuccessSequencer>();
             graphUi.showAfterSuccess = false;
         }
+
+        // Owns the L key, which cycles the floating measurement label between detailed, compact
+        // and hidden when it gets in the way of the glassware.
+        if (manager.gameObject.GetComponent<LabHudController>() == null)
+        {
+            manager.gameObject.AddComponent<LabHudController>();
+        }
     }
 
     void Awake()

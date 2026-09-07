@@ -462,6 +462,121 @@ public class FreeHandReactionEngine
         return text.TrimEnd('\n');
     }
 
+    /// <summary>
+    /// One rich-text line for the always-on readout at the top of the screen: the reaction, then
+    /// every reagent, green once it is inside the accepted range.
+    ///
+    /// This is what lets the floating label be turned off entirely - the numbers move to the edge
+    /// of the screen instead of disappearing. Honours <see cref="hideTargets"/>, so the testing
+    /// scene never shows an answer here either.
+    /// </summary>
+    public string GetHudText(string reactionName)
+    {
+        System.Text.StringBuilder builder = new System.Text.StringBuilder();
+
+        if (!string.IsNullOrEmpty(reactionName))
+        {
+            builder.Append("<color=#9FB4CC>").Append(reactionName).Append("</color>   ");
+        }
+
+        for (int i = 0; i < registrationOrder.Count; i++)
+        {
+            string substance = registrationOrder[i];
+
+            if (i > 0)
+            {
+                builder.Append("    ");
+            }
+
+            bool inRange = IsWithinTolerance(substance);
+
+            builder.Append("<color=").Append(inRange ? "#86F7A0" : "#7AECFF").Append('>');
+            builder.Append(substance).Append(' ')
+                   .Append(currentQuantities[substance].ToString("F1")).Append(' ')
+                   .Append(UnitFor(substance));
+
+            if (!hideTargets)
+            {
+                builder.Append(" / ").Append(targetQuantities[substance].ToString("F1"));
+            }
+
+            if (inRange)
+            {
+                builder.Append("  OK");
+            }
+
+            builder.Append("</color>");
+        }
+
+        // The settle wait is the one moment the lab looks like it has stopped responding - every
+        // reagent is in, nothing is moving, and the verdict is still a second and a half away.
+        // Saying so here removes the single most confusing pause in the whole experiment.
+        if (HasSucceeded)
+        {
+            builder.Append("    <color=#86F7A0>SUCCESS</color>");
+        }
+        else if (HasFailed)
+        {
+            builder.Append("    <color=#FF9180>FAILED</color>");
+        }
+        else if (reactionState == FreeHandReactionState.Settling)
+        {
+            builder.AppendFormat("    <color=#FFCD5C>settling {0:F1}s / {1:F1}s</color>",
+                settleTimer, settleTimeRequired);
+        }
+
+        return builder.ToString();
+    }
+
+    /// <summary>
+    /// A single line rather than one per reagent, for when the full block would sit in front of
+    /// the thing the student is actually pouring into. Prefers whatever is being poured right
+    /// now, then the first reagent still missing, then the last one added.
+    /// </summary>
+    public string GetCompactTooltipText()
+    {
+        if (registrationOrder.Count == 0)
+        {
+            return string.Empty;
+        }
+
+        string focus = string.Empty;
+
+        // 1. Whatever is actively pouring - that is what the student is watching.
+        for (int i = 0; i < registrationOrder.Count; i++)
+        {
+            if (pouringSubstances.Contains(registrationOrder[i]))
+            {
+                focus = registrationOrder[i];
+                break;
+            }
+        }
+
+        // 2. Otherwise the first reagent that is not yet in range.
+        if (string.IsNullOrEmpty(focus))
+        {
+            for (int i = 0; i < registrationOrder.Count; i++)
+            {
+                if (!IsWithinTolerance(registrationOrder[i]))
+                {
+                    focus = registrationOrder[i];
+                    break;
+                }
+            }
+        }
+
+        // 3. Otherwise everything is in range - show the last one so the reading stays live.
+        if (string.IsNullOrEmpty(focus))
+        {
+            focus = registrationOrder[registrationOrder.Count - 1];
+        }
+
+        return hideTargets
+            ? string.Format("{0}: {1:F1} {2}", focus, currentQuantities[focus], UnitFor(focus))
+            : string.Format("{0}: {1:F1} / {2:F1} {3}",
+                focus, currentQuantities[focus], targetQuantities[focus], UnitFor(focus));
+    }
+
     /// <summary>Short red banner shown on the tooltip after a failure.</summary>
     public string GetFailureHeadline()
     {
@@ -609,6 +724,19 @@ public class FreeHandReactionEngine
 /// line. The label is drawn as bold text on a solid dark backing quad, because thin bright text
 /// on its own is unreadable against the white lab benches.
 /// </summary>
+/// <summary>How much of the measurement label to show. Cycled with the L key at runtime.</summary>
+public enum LabelDisplayMode
+{
+    /// <summary>Every reagent on its own line. The default.</summary>
+    Detailed,
+
+    /// <summary>One line - whatever is being poured right now. Keeps the vessel clear.</summary>
+    Compact,
+
+    /// <summary>Nothing above the bench. The canvas tracker still shows the numbers.</summary>
+    Hidden
+}
+
 public class FreeHandTooltip
 {
     /// <summary>Metres per line is about this times the font size.</summary>
@@ -616,8 +744,35 @@ public class FreeHandTooltip
 
     private const int IgnoreRaycastLayer = 2;
 
+    /// <summary>
+    /// Shared by every reaction, so one keypress changes whichever experiment is running rather
+    /// than only the one that happens to own the label.
+    /// </summary>
+    public static LabelDisplayMode DisplayMode = LabelDisplayMode.Detailed;
+
     /// <summary>Below this camera distance the label stops growing on screen.</summary>
     public float maxApparentSizeDistance = 1.0f;
+
+    // --- Leaning-in behaviour ---------------------------------------------------------
+    // The label sits just above the container, which is exactly where the student looks while
+    // pouring. Standing back that is fine; leaning in, an opaque plate 20 cm above the beaker
+    // covers the beaker. Rather than move the label somewhere it cannot be found, it lifts out
+    // of the way and turns translucent the closer the camera gets.
+
+    /// <summary>Distance at which the label starts getting out of the way.</summary>
+    public float comfortDistance = 0.95f;
+
+    /// <summary>Distance at which it is fully lifted and at its faintest.</summary>
+    public float nearDistance = 0.35f;
+
+    /// <summary>Extra metres the label rises when the camera is right over the vessel.</summary>
+    public float extraLiftWhenClose = 0.12f;
+
+    /// <summary>Opacity multiplier at <see cref="nearDistance"/>. 1 = no fade.</summary>
+    public float minProximityAlpha = 0.35f;
+
+    private Color baseTextColor = Color.white;
+    private float basePanelAlpha = 1.0f;
 
     /// <summary>Dark plate drawn behind the glyphs. RGBA hex, no leading '#'.</summary>
     public string backgroundHex = "0A1020F0";
@@ -712,6 +867,7 @@ public class FreeHandTooltip
 
         panelMaterial = new Material(shader);
         panelMaterial.color = panelColor;
+        basePanelAlpha = panelColor.a;
 
         Renderer panelRenderer = quad.GetComponent<Renderer>();
         panelRenderer.material = panelMaterial;
@@ -778,22 +934,82 @@ public class FreeHandTooltip
             return;
         }
 
-        tooltipObject.transform.position = anchor.position + Vector3.up * heightOffset;
+        if (DisplayMode == LabelDisplayMode.Hidden)
+        {
+            SetVisible(false);
+            return;
+        }
+        SetVisible(true);
 
         Camera camera = Camera.main;
         if (camera == null)
         {
+            tooltipObject.transform.position = anchor.position + Vector3.up * heightOffset;
             return;
         }
+
+        // Measured to the anchor, not to the label: the label's own position depends on this
+        // value, and feeding it back would make the placement chase itself.
+        float distance = Vector3.Distance(anchor.position, camera.transform.position);
+
+        // 0 when standing back, 1 when leaning right over the vessel.
+        float span = Mathf.Max(0.01f, comfortDistance - nearDistance);
+        float closeness = Mathf.Clamp01((comfortDistance - distance) / span);
+
+        tooltipObject.transform.position =
+            anchor.position + Vector3.up * (heightOffset + closeness * extraLiftWhenClose);
 
         tooltipObject.transform.rotation =
             Quaternion.LookRotation(tooltipObject.transform.position - camera.transform.position);
 
         // Hold a roughly constant apparent size once the player is closer than the reference
         // distance, so leaning over the bench does not blow the label up across the screen.
-        float distance = Vector3.Distance(tooltipObject.transform.position, camera.transform.position);
         float scale = Mathf.Clamp(distance / Mathf.Max(0.01f, maxApparentSizeDistance), 0.45f, 1.0f);
         tooltipObject.transform.localScale = Vector3.one * scale;
+
+        // Go translucent up close so the vessel stays visible straight through the label.
+        ApplyAlpha(Mathf.Lerp(1.0f, Mathf.Clamp01(minProximityAlpha), closeness));
+    }
+
+    private void SetVisible(bool visible)
+    {
+        if (tooltipObject != null && tooltipObject.activeSelf != visible)
+        {
+            tooltipObject.SetActive(visible);
+        }
+    }
+
+    // Last proximity alpha UpdatePose worked out. Show() needs it too: it rewrites the text
+    // colour, and without this the label would flash back to full opacity for a frame every time
+    // the reading changed.
+    private float currentAlpha = 1.0f;
+    private float appliedAlpha = -1.0f;
+
+    private void ApplyAlpha(float alpha)
+    {
+        currentAlpha = alpha;
+
+        // Assigning TMP_Text.color marks the mesh dirty and rebuilds its vertex colours, so only
+        // pay for it when the value has actually moved.
+        if (Mathf.Abs(alpha - appliedAlpha) < 0.01f)
+        {
+            return;
+        }
+        appliedAlpha = alpha;
+
+        if (tooltipText != null)
+        {
+            Color color = baseTextColor;
+            color.a = baseTextColor.a * alpha;
+            tooltipText.color = color;
+        }
+
+        if (panelMaterial != null)
+        {
+            Color color = panelMaterial.color;
+            color.a = basePanelAlpha * alpha;
+            panelMaterial.color = color;
+        }
     }
 
     public void Show(Color color, string text)
@@ -803,10 +1019,30 @@ public class FreeHandTooltip
             return;
         }
 
-        tooltipText.color = color;
+        // Remembered unfaded: UpdatePose scales alpha off these every frame, so writing the
+        // faded colour back here would make the label darken a little more each frame.
+        baseTextColor = color;
+
+        // Written at the current proximity alpha, not at full opacity, so a changing reading
+        // does not un-fade the label for a frame.
+        Color faded = color;
+        faded.a = color.a * currentAlpha;
+        tooltipText.color = faded;
+
+        // The reaction scripts call this every frame, and ResizePanel does a ForceMeshUpdate plus
+        // a GetRenderedValues - a full text re-layout. Only pay for it when the string actually
+        // changed, which for a "20.4 / 20.0 ml" readout is a few times a second at most.
+        if (text == lastRenderedText)
+        {
+            return;
+        }
+
+        lastRenderedText = text;
         tooltipText.text = text;
         ResizePanel();
     }
+
+    private string lastRenderedText;
 
     /// <summary>Fits the backing quad to whatever the text currently measures.</summary>
     private void ResizePanel()
@@ -841,6 +1077,13 @@ public class FreeHandTooltip
             return;
         }
 
+        if (DisplayMode == LabelDisplayMode.Hidden)
+        {
+            return;
+        }
+
+        // Success and failure are the payoff of the whole experiment - they are shown in full
+        // whatever the mode. Only the live running measurements get compacted.
         if (engine.HasSucceeded)
         {
             Show(SuccessColor, string.IsNullOrEmpty(successText) ? "Reaction Success!" : successText);
@@ -851,7 +1094,9 @@ public class FreeHandTooltip
         }
         else
         {
-            Show(ProgressColor, engine.GetTooltipText());
+            Show(ProgressColor, DisplayMode == LabelDisplayMode.Compact
+                ? engine.GetCompactTooltipText()
+                : engine.GetTooltipText());
         }
     }
 }

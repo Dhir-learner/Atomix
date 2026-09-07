@@ -237,6 +237,20 @@ public class ReactionGraphUI : MonoBehaviour
     /// <summary>Opens the panel on the given reaction.</summary>
     public void Show(int reactionId)
     {
+        // The book / video panel sits at the same distance in front of the camera, so opening
+        // over it would just stack two unreadable panels. The sequencer hides the video before
+        // it asks for the graphs, so the normal success flow is unaffected by this.
+        if (ReactionLearningController.IsAnyPanelVisible)
+        {
+            return;
+        }
+
+        ExperimentHistoryUI historyUi = GetComponent<ExperimentHistoryUI>();
+        if (historyUi != null)
+        {
+            historyUi.Close();
+        }
+
         EnsureUiBuilt();
 
         ReactionGraphData data = ReactionGraphCatalog.Get(reactionId);
