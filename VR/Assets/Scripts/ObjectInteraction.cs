@@ -28,6 +28,9 @@ public class ObjectInteraction : MonoBehaviour
     [Tooltip("Keep released lab objects fixed in place instead of letting physics drop them")]
     public bool keepReleasedObjectsStatic = false;
 
+    [Tooltip("How far inside the lab boundary a held object is kept (metres)")]
+    public float heldObjectBoundaryMargin = 0.2f;
+
     [Header("Visual Feedback")]
     [Tooltip("Color to highlight interactable objects")]
     public Color highlightColor = Color.yellow;
@@ -312,13 +315,31 @@ public class ObjectInteraction : MonoBehaviour
             heldObjectRigidbody.isKinematic = true;
         }
 
-        targetPosition = transform.position + (transform.forward * holdDistance);
+        targetPosition = ConfinedHoldPosition();
         targetRotation = currentlyHeldObject.transform.rotation;
         heldInitialRotation = currentlyHeldObject.transform.rotation;
 
         RemoveHighlight();
         SetCrosshairGrabbableHover(false);
         Debug.Log($"Grabbed: {currentlyHeldObject.name}");
+    }
+
+    /// <summary>
+    /// Where a held object should float: in front of the camera, but never outside the
+    /// lab. Held glassware follows the camera by transform assignment, so without this
+    /// clamp it passes straight through a wall when the player faces one from close up.
+    /// </summary>
+    Vector3 ConfinedHoldPosition()
+    {
+        Vector3 position = transform.position + (transform.forward * holdDistance);
+
+        LabBoundary boundary = LabBoundary.Active;
+        if (boundary != null)
+        {
+            position = boundary.ClampHeldObjectPosition(position, heldObjectBoundaryMargin);
+        }
+
+        return position;
     }
 
     void MoveHeldObject()
@@ -328,7 +349,7 @@ public class ObjectInteraction : MonoBehaviour
             return;
         }
 
-        targetPosition = transform.position + (transform.forward * holdDistance);
+        targetPosition = ConfinedHoldPosition();
 
         currentlyHeldObject.transform.position = Vector3.Lerp(
             currentlyHeldObject.transform.position,
@@ -430,7 +451,7 @@ public class ObjectInteraction : MonoBehaviour
             return;
         }
 
-        targetPosition = transform.position + (transform.forward * holdDistance);
+        targetPosition = ConfinedHoldPosition();
         targetRotation = heldInitialRotation;
 
         currentlyHeldObject.transform.position = targetPosition;

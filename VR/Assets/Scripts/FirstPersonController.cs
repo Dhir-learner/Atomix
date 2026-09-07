@@ -218,7 +218,11 @@ public class FirstPersonController : MonoBehaviour
 
             Vector3 flyMotion = (motion + (Vector3.up * verticalAxis * verticalMoveSpeed)) * Time.deltaTime;
             flyMotion.y = enableVerticalFlyMovement ? flyMotion.y : 0f;
-            transform.position += flyMotion;
+
+            // A CharacterController only sweeps and resolves collisions inside Move().
+            // Assigning transform.position directly teleported the player through walls,
+            // benches and the outside of the building.
+            characterController.Move(flyMotion);
 
             if (!enableVerticalFlyMovement)
             {

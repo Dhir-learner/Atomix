@@ -12,6 +12,7 @@ public class DesktopBootstrap : MonoBehaviour
     private static DesktopBootstrap instance;
     private const BindingFlags FieldFlags = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
     private const float MinimumDesktopEyeHeight = 1.6f;
+    private const string MainMenuSceneName = "MainMenuScene";
 
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
     private static void Initialize()
@@ -58,16 +59,50 @@ public class DesktopBootstrap : MonoBehaviour
             return;
         }
 
-        if (scene.name == "MainMenuScene")
+        if (scene.name == MainMenuSceneName)
         {
-            FirstPersonController.SetCursorLock(false);
+            SetupMainMenu();
             return;
         }
 
+        FirstPersonController.SetCursorLock(true);
         SetupDesktopPlayer();
         SetupInteractables(scene);
         SetupHelpUi(scene);
         SetupCrosshairUi(scene);
+        SetupUiInput(false);
+        SetupLabBoundary(scene);
+    }
+
+    /// <summary>
+    /// The main menu is authored for VR ray pointers: its EventSystem carries an XR UI
+    /// input module that does not exist in a desktop build, so no click ever reaches the
+    /// menu. Give the scene a real mouse cursor and a working input module instead.
+    /// </summary>
+    void SetupMainMenu()
+    {
+        FirstPersonController.SetCursorLock(false);
+        SetupUiInput(true);
+    }
+
+    void SetupUiInput(bool menuMode)
+    {
+        DesktopUIInput.Ensure(menuMode);
+    }
+
+    void SetupLabBoundary(Scene scene)
+    {
+        LabBoundary[] existing = FindObjectsByType<LabBoundary>(FindObjectsInactive.Include, FindObjectsSortMode.None);
+        foreach (LabBoundary boundary in existing)
+        {
+            if (boundary != null && boundary.gameObject.scene == scene)
+            {
+                return;
+            }
+        }
+
+        GameObject boundaryObject = new GameObject("LabBoundary");
+        boundaryObject.AddComponent<LabBoundary>();
     }
 
     void SetupDesktopPlayer()
