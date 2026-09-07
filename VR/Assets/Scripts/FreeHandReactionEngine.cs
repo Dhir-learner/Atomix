@@ -505,8 +505,40 @@ public class FreeHandReactionEngine
                 break;
         }
 
-        return headline + "\n" + measurements + "\n" + failureReason +
+        return ComposeFailureExplanation(headline, measurements, failureReason);
+    }
+
+    /// <summary>
+    /// The shared failure-text layout. Reaction 1 tracks its quantities inline rather than through
+    /// this engine, so it calls this directly - that way all eight experiments show the student
+    /// exactly the same shape of message instead of two near-miss variants.
+    /// </summary>
+    public static string ComposeFailureExplanation(string headline, string measurements, string reason)
+    {
+        return headline + "\n" + measurements + "\n" + reason +
                "\n\nAsk your AI Lab Assistant what went wrong and how to correct it.";
+    }
+
+    /// <summary>One measurement line in the shared format: "Water: 22.4 ml (expected ~20.0)".</summary>
+    public static string ComposeMeasurementLine(string substance, float current, string unit, float target)
+    {
+        return string.Format("{0}: {1:F1} {2} (expected ~{3:F1})\n", substance, current, unit, target);
+    }
+
+    /// <summary>The shared failure headline, so the wording matches across all eight reactions.</summary>
+    public static string ComposeFailureHeadline(ReactionResult result, string substance)
+    {
+        switch (result)
+        {
+            case ReactionResult.FailOverdose:
+                return "Experiment Failed - too much " + substance + ".";
+            case ReactionResult.FailUnderdose:
+                return "Experiment Failed - not enough " + substance + ".";
+            case ReactionResult.FailWrongOrder:
+                return "Experiment Failed - " + substance + " was added out of sequence.";
+            default:
+                return "Experiment Failed.";
+        }
     }
 
     public void Reset()

@@ -47,6 +47,13 @@ public class ReactionLearningController : MonoBehaviour
 
     private bool waitingForPrepare = false;
 
+    // --- Post-success playback (Task 5) -------------------------------------------------
+    // When an experiment succeeds the same video panel is reused, but there is no book, no
+    // FlipPages and nothing to "perform" - the student has just performed it. In this mode the
+    // PERFORM button becomes CONTINUE and hands control back to whoever asked for the video.
+    private bool postSuccessMode = false;
+    private System.Action postSuccessContinue = null;
+
     // Singleton instance to prevent state bugs with multiple instances
     private static ReactionLearningController instance;
 
@@ -92,6 +99,43 @@ public class ReactionLearningController : MonoBehaviour
 
         instance = controllerObject.AddComponent<ReactionLearningController>();
         instance.Initialize(sourceFlipPages);
+
+        return instance;
+    }
+
+    /// <summary>
+    /// Finds or builds the controller without a <see cref="FlipPages"/>, for the post-success
+    /// playback path where the book is not involved. Reuses the book's instance when one already
+    /// exists, so there is only ever one video player and one canvas.
+    /// </summary>
+    public static ReactionLearningController GetOrCreateStandalone()
+    {
+        if (instance != null)
+        {
+            return instance;
+        }
+
+        ReactionLearningController[] controllers =
+            FindObjectsByType<ReactionLearningController>(
+                FindObjectsInactive.Include,
+                FindObjectsSortMode.None
+            );
+
+        if (controllers != null && controllers.Length > 0)
+        {
+            instance = controllers[0];
+            return instance;
+        }
+
+        GameObject controllerObject =
+            new GameObject("ReactionLearningController");
+
+        SceneManager.MoveGameObjectToScene(
+            controllerObject,
+            SceneManager.GetActiveScene()
+        );
+
+        instance = controllerObject.AddComponent<ReactionLearningController>();
 
         return instance;
     }
@@ -189,13 +233,23 @@ public class ReactionLearningController : MonoBehaviour
 
     bool EnsureReady()
     {
-        if (flipPages == null)
+        // The book flow needs FlipPages so PERFORM can start the experiment. The post-success
+        // flow has nothing to perform, so it must not be blocked by a missing reference.
+        if (flipPages == null && !postSuccessMode)
         {
             Debug.LogWarning(
                 "ReactionLearningController: FlipPages reference missing."
             );
 
             return false;
+        }
+
+        if (videoCatalog == null)
+        {
+            videoCatalog =
+                Resources.Load<ReactionLearningVideoCatalog>(
+                    CatalogResourcePath
+                );
         }
 
         if (rootPanel == null || learningCanvas == null)
@@ -227,6 +281,10 @@ public class ReactionLearningController : MonoBehaviour
             return false;
         }
 
+        // Opening the book always leaves post-success playback behind.
+        postSuccessMode = false;
+        postSuccessContinue = null;
+
         pendingReactionId = reactionId;
 
         StopVideoPlayback(true);
@@ -236,8 +294,130 @@ public class ReactionLearningController : MonoBehaviour
         return true;
     }
 
+    // =========================================================
+    // POST-SUCCESS PLAYBACK (Task 5)
+    // =========================================================
+
+    /// <summary>True while the panel is showing a video because an experiment just succeeded.</summary>
+    public bool IsShowingPostSuccess
+    {
+        get
+        {
+            return postSuccessMode &&
+                   currentState != LearningUiState.Hidden;
+        }
+    }
+
+    /// <summary>
+    /// Plays the molecular visualisation straight after a successful experiment, skipping the
+    /// LEARN/PERFORM choice. When the student presses CONTINUE (or Esc),
+    /// <paramref name="onContinue"/> runs.
+    /// </summary>
+    /// <returns>
+    /// True if the panel was shown - either with the video or with the "coming soon" placeholder
+    /// for a reaction that has no clip. False only if the UI could not be built at all, in which
+    /// case the caller should carry on without it.
+    /// </returns>
+    public bool TryShowAfterSuccess(int reactionId, System.Action onContinue)
+    {
+        if (reactionId < 1 || reactionId > 8)
+        {
+            return false;
+        }
+
+        postSuccessMode = true;
+        postSuccessContinue = onContinue;
+
+        if (!EnsureReady())
+        {
+            // Do not strand the caller waiting for a CONTINUE that can never come.
+            postSuccessMode = false;
+            postSuccessContinue = null;
+            return false;
+        }
+
+        pendingReactionId = reactionId;
+
+        StopVideoPlayback(true);
+
+        ReactionLearningVideoCatalog.Entry entry;
+        if (!TryGetPendingEntry(out entry))
+        {
+            postSuccessMode = false;
+            postSuccessContinue = null;
+            return false;
+        }
+
+        if (entry.videoClip == null)
+        {
+            // 5B: no clip for this reaction - show the placeholder rather than a broken player.
+            ShowUnavailableUi(entry);
+        }
+        else
+        {
+            ShowVideoUi(entry);
+        }
+
+        return true;
+    }
+
+    /// <summary>Closes the post-success panel and runs the continuation exactly once.</summary>
+    void FinishPostSuccess()
+    {
+        System.Action continuation = postSuccessContinue;
+
+        postSuccessMode = false;
+        postSuccessContinue = null;
+        pendingReactionId = -1;
+
+        StopVideoPlayback(true);
+
+        SetUiActive(false);
+
+        currentState =
+            LearningUiState.Hidden;
+
+        if (continuation != null)
+        {
+            continuation();
+        }
+    }
+
+    /// <summary>
+    /// Applies the post-success button labels. Called from every Show* path so the book flow's
+    /// labels are always restored when the panel is reused for the book.
+    /// </summary>
+    void ApplyButtonLabels()
+    {
+        SetButtonLabel(performButton, postSuccessMode ? "CONTINUE" : "PERFORM");
+        SetButtonLabel(videoPerformButton, postSuccessMode ? "CONTINUE" : "PERFORM");
+        SetButtonLabel(backButton, "BACK");
+        SetButtonLabel(videoBackButton, "BACK");
+    }
+
+    static void SetButtonLabel(Button button, string label)
+    {
+        if (button == null)
+        {
+            return;
+        }
+
+        TMP_Text text = button.GetComponentInChildren<TMP_Text>();
+        if (text != null)
+        {
+            text.text = label;
+        }
+    }
+
     public void HandleBookClosed()
     {
+        // A post-success video is not part of the book, so closing the book must not kill it -
+        // that would drop the CONTINUE callback and the graphs would never appear.
+        if (postSuccessMode)
+        {
+            return;
+        }
+
         StopVideoPlayback(true);
 
         pendingReactionId = -1;
@@ -809,6 +989,8 @@ public class ReactionLearningController : MonoBehaviour
 
         videoBackButton.gameObject.SetActive(false);
 
+        ApplyButtonLabels();
+
         SetCursorForUi();
     }
 
@@ -856,14 +1038,20 @@ public class ReactionLearningController : MonoBehaviour
         titleText.text =
             GetReactionTitle(entry);
 
-        bodyText.text =
-            "Molecular explanation video is currently unavailable.";
+        // 5B: a reaction with no clip must never look broken. In the book flow this reads as
+        // "not available yet, you can still perform it"; after a success it reads as a promise.
+        bodyText.text = postSuccessMode
+            ? "Molecular visualization coming soon.\n\n" +
+              "This reaction does not have its molecular animation yet, but your result was " +
+              "correct and has been recorded. Continue to see the scientific graphs."
+            : "Molecular explanation video is currently unavailable.";
 
         learnButton.gameObject.SetActive(false);
 
         performButton.gameObject.SetActive(true);
 
-        backButton.gameObject.SetActive(true);
+        // Post-success has a single exit (CONTINUE); BACK would be a second name for it.
+        backButton.gameObject.SetActive(!postSuccessMode);
 
         playPauseButton.gameObject.SetActive(false);
 
@@ -872,6 +1060,8 @@ public class ReactionLearningController : MonoBehaviour
         videoPerformButton.gameObject.SetActive(false);
 
         videoBackButton.gameObject.SetActive(false);
+
+        ApplyButtonLabels();
 
         SetCursorForUi();
     }
@@ -909,7 +1099,10 @@ public class ReactionLearningController : MonoBehaviour
 
         videoPerformButton.gameObject.SetActive(true);
 
-        videoBackButton.gameObject.SetActive(true);
+        // Post-success shows PLAY/PAUSE, REPLAY and CONTINUE - BACK has nowhere to go.
+        videoBackButton.gameObject.SetActive(!postSuccessMode);
+
+        ApplyButtonLabels();
 
         PlayVideo(entry.videoClip);
 
@@ -1058,8 +1251,9 @@ public class ReactionLearningController : MonoBehaviour
             return;
         }
 
-        bodyText.text =
-            "Video finished. Replay it, perform the reaction, or go back.";
+        bodyText.text = postSuccessMode
+            ? "Video finished. Replay it, or continue to the scientific graphs."
+            : "Video finished. Replay it, perform the reaction, or go back.";
 
         SetPlayPauseLabel("PLAY");
     }
@@ -1077,8 +1271,9 @@ public class ReactionLearningController : MonoBehaviour
         if (currentState ==
             LearningUiState.Video)
         {
-            bodyText.text =
-                "Unable to play this video. You can still perform the reaction or go back.";
+            bodyText.text = postSuccessMode
+                ? "Unable to play this video, but your result was recorded. Continue to see the scientific graphs."
+                : "Unable to play this video. You can still perform the reaction or go back.";
 
             SetPlayPauseLabel("PLAY");
         }
@@ -1113,6 +1308,14 @@ public class ReactionLearningController : MonoBehaviour
 
     void OnPerformClicked()
     {
+        // In post-success mode this same button reads CONTINUE - there is nothing to perform.
+        if (postSuccessMode)
+        {
+            FinishPostSuccess();
+
+            return;
+        }
+
         if (pendingReactionId < 1 ||
             pendingReactionId > 8)
         {
@@ -1162,6 +1365,14 @@ public class ReactionLearningController : MonoBehaviour
 
     void ReturnToChoiceFromVideo()
     {
+        // There is no LEARN/PERFORM choice to go back to after a successful experiment.
+        if (postSuccessMode)
+        {
+            FinishPostSuccess();
+
+            return;
+        }
+
         if (!TryGetPendingEntry(out _))
         {
             BackToReactionSelection();
@@ -1176,6 +1387,13 @@ public class ReactionLearningController : MonoBehaviour
 
     void BackToReactionSelection()
     {
+        if (postSuccessMode)
+        {
+            FinishPostSuccess();
+
+            return;
+        }
+
         pendingReactionId = -1;
 
         StopVideoPlayback(true);

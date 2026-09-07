@@ -21,6 +21,11 @@ public class Reaction : MonoBehaviour
     public AudioClip clip_guidance2;
     public AudioClip clip_guidance3;
 
+    [Header("Failure Feedback (optional - matches reactions 2-8)")]
+    [Tooltip("Left unassigned this is silently skipped, so no scene edit is required.")]
+    public AudioSource audioSource_failure;
+    public AudioClip clip_failure;
+
     [Header("Intelligent Proportions (Zero-Collision Math)")]
     public bool enableIntelligentMode = true;
     public float targetWaterMl = 50.0f;
@@ -164,13 +169,15 @@ public class Reaction : MonoBehaviour
                 reactionFailed = true;
                 showPopup = true;
                 timpInitial = DateTime.Now;
+                string overdoseReason =
+                    "Excess water alters the concentration and disrupts the controlled reaction.";
                 if (canvasText != null)
                 {
-                    canvasText.text = $"Experiment Failed! You poured too much water.\nAdded: {currentWaterMl:F1} ml (Expected ~{targetWaterMl} ml)\n\nExcessive water alters concentration and disrupts the controlled reaction! Ask your AI Assistant why excessive quantities cause failures.";
+                    canvasText.text = BuildFailureText(
+                        ReactionResult.FailOverdose, "Water", overdoseReason);
                 }
-                if (audioSource != null && clip != null) audioSource.PlayOneShot(clip);
-                CompleteAttempt(ExperimentOutcome.FailOverdose,
-                    "Excess water alters the concentration and disrupts the controlled reaction.");
+                PlayFailureSound();
+                CompleteAttempt(ExperimentOutcome.FailOverdose, overdoseReason);
                 return;
             }
 
@@ -186,13 +193,15 @@ public class Reaction : MonoBehaviour
                         reactionFailed = true;
                         showPopup = true;
                         timpInitial = DateTime.Now;
+                        string underdoseReason =
+                            "Insufficient solvent prevents proper ion dissociation.";
                         if (canvasText != null)
                         {
-                            canvasText.text = $"Experiment Failed! Incorrect proportions.\nWater added: {currentWaterMl:F1} ml (Expected ~{targetWaterMl} ml)\n\nInsufficient solvent prevents proper ion dissociation! Ask your AI Assistant why correct stoichiometric ratios are critical.";
+                            canvasText.text = BuildFailureText(
+                                ReactionResult.FailUnderdose, "Water", underdoseReason);
                         }
-                        if (audioSource != null && clip != null) audioSource.PlayOneShot(clip);
-                        CompleteAttempt(ExperimentOutcome.FailUnderdose,
-                            "Insufficient solvent prevents proper ion dissociation.");
+                        PlayFailureSound();
+                        CompleteAttempt(ExperimentOutcome.FailUnderdose, underdoseReason);
                         return;
                     }
                 }
@@ -329,6 +338,41 @@ public class Reaction : MonoBehaviour
         {
             showPopup = false;
             popupWindow.SetActive(false);
+        }
+    }
+
+    /// <summary>
+    /// Builds the failure message in the shared layout used by reactions 2-8, so this experiment
+    /// does not read differently just because it tracks its quantities inline.
+    /// </summary>
+    string BuildFailureText(ReactionResult result, string offendingSubstance, string reason)
+    {
+        string measurements =
+            FreeHandReactionEngine.ComposeMeasurementLine("Water", currentWaterMl, "ml", targetWaterMl) +
+            FreeHandReactionEngine.ComposeMeasurementLine("Sodium", currentSodiumG, "g", targetSodiumG);
+
+        return FreeHandReactionEngine.ComposeFailureExplanation(
+            FreeHandReactionEngine.ComposeFailureHeadline(result, offendingSubstance),
+            measurements,
+            reason);
+    }
+
+    /// <summary>
+    /// Plays the dedicated failure clip when one is assigned - the same optional pair reactions
+    /// 2-8 have. Falls back to the original behaviour (the reaction clip) so that leaving the new
+    /// fields empty sounds exactly as it did before, rather than going silent.
+    /// </summary>
+    void PlayFailureSound()
+    {
+        if (audioSource_failure != null && clip_failure != null)
+        {
+            audioSource_failure.PlayOneShot(clip_failure);
+            return;
+        }
+
+        if (audioSource != null && clip != null)
+        {
+            audioSource.PlayOneShot(clip);
         }
     }
 

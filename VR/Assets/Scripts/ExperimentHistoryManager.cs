@@ -242,9 +242,18 @@ public class ExperimentHistoryManager : MonoBehaviour
 
         // The graph panel rides on the same DontDestroyOnLoad object, so it survives the scene
         // change to the assistant and back without needing any scene edits either.
-        if (manager.gameObject.GetComponent<ReactionGraphUI>() == null)
+        ReactionGraphUI graphUi = manager.gameObject.GetComponent<ReactionGraphUI>();
+        if (graphUi == null)
         {
-            manager.gameObject.AddComponent<ReactionGraphUI>();
+            graphUi = manager.gameObject.AddComponent<ReactionGraphUI>();
+        }
+
+        // The sequencer chains success -> video -> graphs, so the graph panel must not also pop
+        // up on its own timer and race the video. Its F-key toggle is unaffected.
+        if (manager.gameObject.GetComponent<PostSuccessSequencer>() == null)
+        {
+            manager.gameObject.AddComponent<PostSuccessSequencer>();
+            graphUi.showAfterSuccess = false;
         }
     }
 
