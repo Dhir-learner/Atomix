@@ -29,6 +29,21 @@ public class InLabAssistantController : MonoBehaviour
     [Tooltip("Collapse / expand the side panel.")]
     public KeyCode minimizeKey = KeyCode.M;
 
+    // Enter rather than T: T is already ObjectInteraction.resetHeldPoseKey, and Enter is the
+    // conventional open-the-chat key in any case.
+    [Tooltip("Type a question instead of speaking it. Works with no microphone.")]
+    public KeyCode typeKey = KeyCode.Return;
+
+    [Tooltip("One-key shortcut for the question students ask most: why did this go wrong?")]
+    public KeyCode whyKey = KeyCode.Y;
+
+    [Header("Offline")]
+    [Tooltip("Answer from this lab's own chemistry data when Convai cannot be reached.")]
+    public bool allowOfflineAnswers = true;
+
+    [Tooltip("Speak offline answers using the Windows speech synthesiser.")]
+    public bool speakOfflineAnswers = true;
+
     [Header("Panel")]
     public float panelWidth = 380.0f;
     public int maxChatLines = 30;
@@ -45,6 +60,12 @@ public class InLabAssistantController : MonoBehaviour
     private ConvaiAssistantBackend convai;
     private LabAssistantCharacter character;
     private string pendingQuestion = string.Empty;
+
+    // --- Offline fallback ---------------------------------------------------------------
+    // Convai stays the primary path. These carry the same four features - why it failed, what is
+    // happening, the graphs, the molecular animation - when it cannot be reached.
+    private bool cloudFailedOnce = false;
+    private bool typing = false;
 
     // --- UI ---------------------------------------------------------------------------
     private Canvas canvas;
@@ -108,7 +129,7 @@ public class InLabAssistantController : MonoBehaviour
             return false;
         }
 
-        if (!isActiveScene || convai == null || !convai.IsReady)
+        if (!isActiveScene)
         {
             return false;
         }
@@ -119,17 +140,61 @@ public class InLabAssistantController : MonoBehaviour
             SetMinimized(false);
         }
 
-        convai.SendTextQuestion(
-            string.IsNullOrEmpty(context) ? TakeFreshContext() : context,
-            question);
+        if (CloudReady)
+        {
+            convai.SendTextQuestion(
+                string.IsNullOrEmpty(context) ? TakeFreshContext() : context,
+                question);
+
+            return true;
+        }
+
+        return AnswerOffline(question);
+    }
+
+    /// <summary>
+    /// Answers from <see cref="ChemistryKnowledgeBase"/> and speaks it with the Windows synthesiser.
+    /// The reply goes through the same chat log and the same history logging as a cloud reply, so
+    /// the transcript a student exports does not care which path answered.
+    /// </summary>
+    private bool AnswerOffline(string question)
+    {
+        if (!OfflineReady)
+        {
+            return false;
+        }
+
+        HandleUserAsked(question);
+
+        string reply = ChemistryKnowledgeBase.Answer(question);
+        HandleAssistantReply(reply);
+
+        if (speakOfflineAnswers && OfflineVoice.IsSupported)
+        {
+            OfflineVoice.Instance.Speak(reply);
+        }
 
         return true;
     }
 
-    /// <summary>True when a question sent through <see cref="AskAssistant"/> would actually go out.</summary>
+    /// <summary>
+    /// True when a question would actually be answered - by Convai, or by the offline knowledge
+    /// base. Callers use this to grey out their "ask the assistant" buttons, and before the
+    /// offline path existed those buttons went dead the moment the network did.
+    /// </summary>
     public bool CanAsk
     {
-        get { return isActiveScene && convai != null && convai.IsReady; }
+        get { return isActiveScene && (CloudReady || OfflineReady); }
+    }
+
+    private bool CloudReady
+    {
+        get { return convai != null && convai.IsReady && !cloudFailedOnce; }
+    }
+
+    private bool OfflineReady
+    {
+        get { return allowOfflineAnswers && activeProvider != LabAssistantProvider.None; }
     }
 
     void OnEnable()
@@ -203,9 +268,26 @@ public class InLabAssistantController : MonoBehaviour
             return;
         }
 
+        if (typing)
+        {
+            HandleTypingInput();
+            RefreshStatusUi();
+            return;
+        }
+
         if (Input.GetKeyDown(minimizeKey))
         {
             SetMinimized(!minimized);
+        }
+
+        if (Input.GetKeyDown(typeKey))
+        {
+            BeginTyping();
+        }
+
+        if (Input.GetKeyDown(whyKey))
+        {
+            AskWhyItWentWrong();
         }
 
         HandlePushToTalkInput();
@@ -242,11 +324,34 @@ public class InLabAssistantController : MonoBehaviour
         {
             AppendSystemLine("Convai has no credentials yet.");
             AppendSystemLine("Add your API key and character ID to Resources/LabAssistantSettings.");
+            AnnounceReady(false);
             return;
         }
 
         EnsureCharacter();
-        AppendSystemLine("Lab assistant ready. Hold [" + pushToTalkKey + "] to ask a question.");
+        AnnounceReady(true);
+    }
+
+    /// <summary>KeyCode.Return prints as "Return"; every player calls that key Enter.</summary>
+    private static string KeyLabel(KeyCode key)
+    {
+        if (key == KeyCode.Return || key == KeyCode.KeypadEnter)
+        {
+            return "Enter";
+        }
+        return key.ToString();
+    }
+
+    private void AnnounceReady(bool cloudAvailable)
+    {
+        if (!cloudAvailable && !allowOfflineAnswers)
+        {
+            AppendSystemLine("The assistant cannot answer until Convai is configured.");
+            return;
+        }
+
+        AppendSystemLine(ChemistryKnowledgeBase.Greeting(cloudAvailable));
+        AppendSystemLine("[" + KeyLabel(whyKey) + "] asks why your last experiment went wrong.");
     }
 
     /// <summary>
@@ -340,6 +445,127 @@ public class InLabAssistantController : MonoBehaviour
     private void HandleFailure(string message)
     {
         AppendSystemLine(message);
+
+        if (!allowOfflineAnswers)
+        {
+            return;
+        }
+
+        // The cloud has now failed once for real. Rather than making the student watch it fail
+        // again on every question, switch to the offline brain and answer what they just asked.
+        if (!cloudFailedOnce)
+        {
+            cloudFailedOnce = true;
+            AppendSystemLine("Switching to offline mode - I will answer from this lab's own " +
+                             "chemistry data instead.");
+        }
+
+        if (!string.IsNullOrEmpty(pendingQuestion))
+        {
+            string question = pendingQuestion;
+            pendingQuestion = string.Empty;
+
+            string reply = ChemistryKnowledgeBase.Answer(question);
+            HandleAssistantReply(reply);
+
+            if (speakOfflineAnswers && OfflineVoice.IsSupported)
+            {
+                OfflineVoice.Instance.Speak(reply);
+            }
+        }
+    }
+
+    // =========================================================
+    // TYPED QUESTIONS
+    // =========================================================
+
+    /// <summary>
+    /// Opens the typed-question field. This is the only path to the assistant that needs neither a
+    /// microphone nor a working network, which is why it exists: a demo machine with no mic used
+    /// to have no way to reach the assistant at all.
+    /// </summary>
+    private void BeginTyping()
+    {
+        if (!CanAsk)
+        {
+            AppendSystemLine("The assistant has nothing to answer with right now.");
+            return;
+        }
+
+        // Typing freezes the object-interaction input, which includes the tilt that controls a
+        // pour. Opening the field mid-pour would leave the beaker tipped and pouring while the
+        // student types, and they would come back to an overdose they did not cause.
+        ReactionHistoryRecorder active = ReactionHistoryRecorder.Active;
+        if (active != null && active.Engine != null && active.Engine.IsAnyPouring)
+        {
+            AppendSystemLine("Finish pouring first - then press [" + KeyLabel(typeKey) + "] and ask.");
+            return;
+        }
+
+        if (minimized)
+        {
+            SetMinimized(false);
+        }
+
+        typing = true;
+        LabTextInput.Begin(this);
+    }
+
+    private void EndTyping()
+    {
+        typing = false;
+        LabTextInput.End(this);
+    }
+
+    private void HandleTypingInput()
+    {
+        LabTextInput.Result result = LabTextInput.Consume(this);
+
+        if (result == LabTextInput.Result.Cancelled)
+        {
+            EndTyping();
+            return;
+        }
+
+        if (result != LabTextInput.Result.Submitted)
+        {
+            return;
+        }
+
+        string question = LabTextInput.Buffer.Trim();
+        EndTyping();
+
+        if (question.Length == 0)
+        {
+            return;
+        }
+
+        if (!AskAssistant(question, null))
+        {
+            AppendSystemLine("Could not send that question.");
+        }
+    }
+
+    /// <summary>
+    /// The one-key shortcut. "Why did my experiment go wrong?" is the question the whole free-hand
+    /// design is built to provoke, and making the student type it every time was friction for no
+    /// reason.
+    /// </summary>
+    private void AskWhyItWentWrong()
+    {
+        if (!CanAsk)
+        {
+            return;
+        }
+
+        string reaction = ExperimentContextProvider.CurrentReactionName;
+
+        string question = string.IsNullOrEmpty(reaction)
+            ? "Why did my experiment go wrong, and what should I have done differently?"
+            : "Why did my " + reaction + " experiment go wrong, and what should I have done " +
+              "differently?";
+
+        AskAssistant(question, null);
     }
 
     // =========================================================
@@ -641,28 +867,41 @@ public class InLabAssistantController : MonoBehaviour
             return;
         }
 
+        string source;
         string connection;
+
         if (activeProvider == LabAssistantProvider.None)
         {
+            source = "Assistant";
             connection = "disabled";
+        }
+        else if (CloudReady)
+        {
+            source = "Convai";
+            connection = convai.StatusDetail;
+        }
+        else if (OfflineReady)
+        {
+            source = "Offline";
+            connection = cloudFailedOnce
+                ? "answering locally (cloud unreachable)"
+                : "answering locally";
         }
         else if (convai == null)
         {
+            source = "Convai";
             connection = "starting";
-        }
-        else if (!convai.IsReady)
-        {
-            connection = "not configured";
         }
         else
         {
-            connection = convai.StatusDetail;
+            source = "Convai";
+            connection = "not configured";
         }
 
         string experiment = ExperimentContextProvider.CurrentReactionName;
         statusText.text = string.IsNullOrEmpty(experiment)
-            ? "Convai: " + connection
-            : "Convai: " + connection + "\nExperiment: " + experiment;
+            ? source + ": " + connection
+            : source + ": " + connection + "\nExperiment: " + experiment;
 
         if (micDot != null)
         {
@@ -671,10 +910,21 @@ public class InLabAssistantController : MonoBehaviour
 
         if (footerText != null)
         {
-            bool ready = convai != null && convai.IsReady;
-            footerText.text = ready
-                ? "Hold [" + pushToTalkKey + "] to talk    [" + minimizeKey + "] minimise"
-                : "Assistant not available    [" + minimizeKey + "] minimise";
+            if (typing)
+            {
+                footerText.text = "<color=#7ADFFF>Ask: </color>" + LabTextInput.Display +
+                                  "\n[Enter] send    [Esc] cancel";
+            }
+            else if (CanAsk)
+            {
+                footerText.text =
+                    "Hold [" + pushToTalkKey + "] talk    [" + KeyLabel(typeKey) + "] type    [" +
+                    KeyLabel(whyKey) + "] why did it fail    [" + minimizeKey + "] minimise";
+            }
+            else
+            {
+                footerText.text = "Assistant not available    [" + minimizeKey + "] minimise";
+            }
         }
     }
 }

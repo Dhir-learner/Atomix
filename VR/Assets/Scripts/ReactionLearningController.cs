@@ -38,6 +38,18 @@ public class ReactionLearningController : MonoBehaviour
 
     private TMP_Text playPauseLabel;
 
+    // --- Live molecular animation -------------------------------------------------------
+    // Reactions 1 and 8 never had an MP4 (videoClip: {fileID: 0} in the catalog asset), so the
+    // LEARN screen used to dead-end on "Molecular explanation video is unavailable." Every
+    // reaction now has an in-engine ball-and-stick animation instead, and the six that do have
+    // an MP4 can switch to it as a second view.
+    private MolecularAnimationRenderer molecular;
+    private Button molecularButton;
+    private TMP_Text molecularButtonLabel;
+    private Button askAiButton;
+    private bool molecularMode = false;
+    private float askCooldownUntil = 0.0f;
+
     private VideoPlayer videoPlayer;
     private AudioSource videoAudioSource;
     private RenderTexture renderTexture;
@@ -175,6 +187,12 @@ public class ReactionLearningController : MonoBehaviour
 
     void Update()
     {
+        // A question is being typed into the assistant panel; every letter belongs to it.
+        if (LabTextInput.IsCapturing)
+        {
+            return;
+        }
+
         if (currentState == LearningUiState.Hidden)
         {
             return;
@@ -371,7 +389,7 @@ public class ReactionLearningController : MonoBehaviour
             return false;
         }
 
-        if (entry.videoClip == null)
+        if (entry.videoClip == null && !MolecularSceneCatalog.Has(entry.reactionId))
         {
             // 5B: no clip for this reaction - show the placeholder rather than a broken player.
             ShowUnavailableUi(entry);
@@ -684,13 +702,18 @@ public class ReactionLearningController : MonoBehaviour
         // Video buttons
         // -----------------------------------------------------
 
+        // Six buttons share one row rather than wrapping to a second: the panel is 720 tall and
+        // a second row at y = -340 would hang off the bottom edge.
+        const float ButtonRowY = -270f;
+        Vector2 videoButtonSize = new Vector2(155f, 60f);
+
         playPauseButton =
             CreateButton(
                 "PlayPauseButton",
                 rootPanel.transform,
                 "PAUSE",
-                new Vector2(-330f, -270f),
-                new Vector2(180f, 60f)
+                new Vector2(-407.5f, ButtonRowY),
+                videoButtonSize
             );
 
         replayButton =
@@ -698,8 +721,26 @@ public class ReactionLearningController : MonoBehaviour
                 "ReplayButton",
                 rootPanel.transform,
                 "REPLAY",
-                new Vector2(-110f, -270f),
-                new Vector2(180f, 60f)
+                new Vector2(-244.5f, ButtonRowY),
+                videoButtonSize
+            );
+
+        molecularButton =
+            CreateButton(
+                "MolecularViewButton",
+                rootPanel.transform,
+                "3D VIEW",
+                new Vector2(-81.5f, ButtonRowY),
+                videoButtonSize
+            );
+
+        askAiButton =
+            CreateButton(
+                "AskAiButton",
+                rootPanel.transform,
+                "ASK AI",
+                new Vector2(81.5f, ButtonRowY),
+                videoButtonSize
             );
 
         videoPerformButton =
@@ -707,8 +748,8 @@ public class ReactionLearningController : MonoBehaviour
                 "VideoPerformButton",
                 rootPanel.transform,
                 "PERFORM",
-                new Vector2(130f, -270f),
-                new Vector2(220f, 60f)
+                new Vector2(244.5f, ButtonRowY),
+                videoButtonSize
             );
 
         videoBackButton =
@@ -716,12 +757,15 @@ public class ReactionLearningController : MonoBehaviour
                 "VideoBackButton",
                 rootPanel.transform,
                 "BACK",
-                new Vector2(350f, -270f),
-                new Vector2(180f, 60f)
+                new Vector2(407.5f, ButtonRowY),
+                videoButtonSize
             );
 
         playPauseLabel =
             playPauseButton.GetComponentInChildren<TMP_Text>();
+
+        molecularButtonLabel =
+            molecularButton.GetComponentInChildren<TMP_Text>();
 
         // -----------------------------------------------------
         // Events
@@ -749,6 +793,14 @@ public class ReactionLearningController : MonoBehaviour
             ReturnToChoiceFromVideo
         );
 
+        molecularButton.onClick.AddListener(
+            ToggleMolecularView
+        );
+
+        askAiButton.onClick.AddListener(
+            AskAboutWhatIsOnScreen
+        );
+
         // Keep buttons above the video/background.
         learnButton.transform.SetAsLastSibling();
         performButton.transform.SetAsLastSibling();
@@ -756,6 +808,8 @@ public class ReactionLearningController : MonoBehaviour
 
         playPauseButton.transform.SetAsLastSibling();
         replayButton.transform.SetAsLastSibling();
+        molecularButton.transform.SetAsLastSibling();
+        askAiButton.transform.SetAsLastSibling();
         videoPerformButton.transform.SetAsLastSibling();
         videoBackButton.transform.SetAsLastSibling();
 
@@ -1008,6 +1062,10 @@ public class ReactionLearningController : MonoBehaviour
 
         replayButton.gameObject.SetActive(false);
 
+        molecularButton.gameObject.SetActive(false);
+
+        askAiButton.gameObject.SetActive(false);
+
         videoPerformButton.gameObject.SetActive(false);
 
         videoBackButton.gameObject.SetActive(false);
@@ -1033,7 +1091,7 @@ public class ReactionLearningController : MonoBehaviour
             return;
         }
 
-        if (entry.videoClip == null)
+        if (entry.videoClip == null && !MolecularSceneCatalog.Has(entry.reactionId))
         {
             ShowUnavailableUi(entry);
 
@@ -1080,6 +1138,10 @@ public class ReactionLearningController : MonoBehaviour
 
         replayButton.gameObject.SetActive(false);
 
+        molecularButton.gameObject.SetActive(false);
+
+        askAiButton.gameObject.SetActive(false);
+
         videoPerformButton.gameObject.SetActive(false);
 
         videoBackButton.gameObject.SetActive(false);
@@ -1120,6 +1182,13 @@ public class ReactionLearningController : MonoBehaviour
 
         replayButton.gameObject.SetActive(true);
 
+        // The 3D view is offered only when this reaction has an animation authored for it, and
+        // ASK AI only makes sense while an assistant - cloud or offline - can actually answer.
+        molecularButton.gameObject.SetActive(
+            MolecularSceneCatalog.Has(pendingReactionId));
+
+        askAiButton.gameObject.SetActive(true);
+
         videoPerformButton.gameObject.SetActive(true);
 
         // Post-success shows PLAY/PAUSE, REPLAY and CONTINUE - BACK has nowhere to go.
@@ -1152,6 +1221,13 @@ public class ReactionLearningController : MonoBehaviour
 
         if (clip == null)
         {
+            // No MP4 for this reaction - reactions 1 and 8 have never had one. Rather than
+            // dead-ending, render the molecular animation into the same display.
+            if (TryStartMolecularAnimation())
+            {
+                return;
+            }
+
             Debug.LogWarning(
                 "ReactionLearningController: Null VideoClip."
             );
@@ -1161,6 +1237,9 @@ public class ReactionLearningController : MonoBehaviour
 
             return;
         }
+
+        StopMolecularAnimation();
+        RefreshMolecularButtonLabel();
 
         videoPlayer.Stop();
 
@@ -1212,6 +1291,22 @@ public class ReactionLearningController : MonoBehaviour
 
     void TogglePlayPause()
     {
+        if (molecularMode)
+        {
+            if (molecular.IsPlaying)
+            {
+                molecular.Pause();
+                SetPlayPauseLabel("PLAY");
+            }
+            else
+            {
+                molecular.Play();
+                SetPlayPauseLabel("PAUSE");
+            }
+
+            return;
+        }
+
         if (currentState != LearningUiState.Video ||
             videoPlayer == null ||
             videoPlayer.clip == null ||
@@ -1236,6 +1331,13 @@ public class ReactionLearningController : MonoBehaviour
 
     void OnReplayClicked()
     {
+        if (molecularMode)
+        {
+            molecular.Restart();
+            SetPlayPauseLabel("PAUSE");
+            return;
+        }
+
         if (currentState != LearningUiState.Video ||
             videoPlayer == null ||
             videoPlayer.clip == null)
@@ -1305,6 +1407,8 @@ public class ReactionLearningController : MonoBehaviour
     void StopVideoPlayback(bool clearDisplay)
     {
         waitingForPrepare = false;
+
+        StopMolecularAnimation();
 
         if (videoPlayer != null)
         {
@@ -1511,6 +1615,190 @@ public class ReactionLearningController : MonoBehaviour
         }
 
         return $"Reaction {entry.reactionId}";
+    }
+
+    // =========================================================
+    // LIVE MOLECULAR ANIMATION
+    // =========================================================
+
+    /// <summary>
+    /// Switches the display over to the in-engine ball-and-stick animation. Returns false when
+    /// this reaction has no animation authored, so the caller can keep its old behaviour.
+    /// </summary>
+    bool TryStartMolecularAnimation()
+    {
+        if (!MolecularSceneCatalog.Has(pendingReactionId))
+        {
+            return false;
+        }
+
+        if (molecular == null)
+        {
+            molecular = gameObject.AddComponent<MolecularAnimationRenderer>();
+        }
+
+        if (!molecular.Prepare(pendingReactionId))
+        {
+            return false;
+        }
+
+        // The MP4 and the animation share one RawImage, so only one of them may be feeding it.
+        if (videoPlayer != null)
+        {
+            videoPlayer.Stop();
+        }
+
+        if (videoAudioSource != null)
+        {
+            videoAudioSource.Stop();
+        }
+
+        waitingForPrepare = false;
+        molecularMode = true;
+
+        molecular.StageChanged -= HandleMolecularStageChanged;
+        molecular.StageChanged += HandleMolecularStageChanged;
+
+        videoDisplay.texture = molecular.OutputTexture;
+        videoDisplay.enabled = true;
+
+        molecular.Restart();
+
+        SetPlayPauseLabel("PAUSE");
+        RefreshMolecularButtonLabel();
+
+        return true;
+    }
+
+    void StopMolecularAnimation()
+    {
+        if (molecular == null)
+        {
+            molecularMode = false;
+            return;
+        }
+
+        molecular.StageChanged -= HandleMolecularStageChanged;
+        molecular.Stop();
+        molecularMode = false;
+    }
+
+    /// <summary>The 3D VIEW / VIDEO button: swaps between the recorded clip and the animation.</summary>
+    void ToggleMolecularView()
+    {
+        if (currentState != LearningUiState.Video)
+        {
+            return;
+        }
+
+        ReactionLearningVideoCatalog.Entry entry;
+        bool hasEntry = TryGetPendingEntry(out entry);
+
+        if (molecularMode)
+        {
+            // Only worth going back if there is actually a clip to go back to.
+            if (hasEntry && entry.videoClip != null)
+            {
+                PlayVideo(entry.videoClip);
+                RefreshMolecularButtonLabel();
+            }
+
+            return;
+        }
+
+        TryStartMolecularAnimation();
+    }
+
+    void RefreshMolecularButtonLabel()
+    {
+        if (molecularButtonLabel == null)
+        {
+            return;
+        }
+
+        ReactionLearningVideoCatalog.Entry entry;
+        bool hasClip = TryGetPendingEntry(out entry) && entry.videoClip != null;
+
+        // With no clip there is nothing to toggle back to, so the button just names the view.
+        molecularButtonLabel.text = molecularMode
+            ? (hasClip ? "VIDEO" : "3D VIEW")
+            : "3D VIEW";
+    }
+
+    void HandleMolecularStageChanged(int stageIndex, string caption, string detail)
+    {
+        if (currentState != LearningUiState.Video || !molecularMode)
+        {
+            return;
+        }
+
+        bodyText.text = string.IsNullOrEmpty(detail)
+            ? caption
+            : caption + "  -  " + detail;
+    }
+
+    // =========================================================
+    // ASK THE ASSISTANT ABOUT WHAT IS ON SCREEN
+    // =========================================================
+
+    /// <summary>
+    /// The ASK AI button. This is the missing half of the "watch, then ask" loop: the student can
+    /// already ask about a failed experiment and about the graphs, but had no way to ask about the
+    /// molecular step they were looking at.
+    /// </summary>
+    void AskAboutWhatIsOnScreen()
+    {
+        // A crosshair click can register twice; without this the assistant gets asked twice.
+        if (Time.unscaledTime < askCooldownUntil)
+        {
+            return;
+        }
+        askCooldownUntil = Time.unscaledTime + 2.0f;
+
+        InLabAssistantController assistant = InLabAssistantController.Instance;
+        if (assistant == null || !assistant.CanAsk)
+        {
+            bodyText.text =
+                "The lab assistant is not available right now. Check Resources/LabAssistantSettings.";
+            return;
+        }
+
+        string question;
+        string context;
+
+        if (molecularMode && molecular != null && molecular.Scene != null)
+        {
+            MolecularScene scene = molecular.Scene;
+            int step = Mathf.Clamp(molecular.CurrentStageIndex, 0, scene.stages.Count - 1);
+
+            question = "In the molecular animation for " + scene.title +
+                       ", step " + (step + 1) + " is \"" + scene.stages[step].caption +
+                       "\". Can you explain what is happening to the atoms and electrons there?";
+
+            context = ExperimentContextProvider.ContextHeader + "\n" +
+                      "The student is watching the molecular animation for " + scene.equation +
+                      ". Step " + (step + 1) + " of " + scene.stages.Count + ": " +
+                      scene.stages[step].caption + " - " + scene.stages[step].detail;
+        }
+        else
+        {
+            ReactionLearningVideoCatalog.Entry entry;
+            string name = TryGetPendingEntry(out entry)
+                ? GetReactionTitle(entry)
+                : "this reaction";
+
+            question = "I just watched the molecular video for " + name +
+                       ". Can you explain what happens to the bonds and electrons?";
+
+            context = ExperimentContextProvider.ContextHeader + "\n" +
+                      "The student has just watched the molecular explanation video for " + name + ".";
+        }
+
+        bool sent = assistant.AskAssistant(question, context);
+
+        bodyText.text = sent
+            ? "Asked the lab assistant - the answer appears in the assistant panel."
+            : "The lab assistant could not take that question right now.";
     }
 
     // =========================================================

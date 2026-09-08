@@ -42,11 +42,30 @@ public class DesktopBootstrap : MonoBehaviour
 
     void Update()
     {
+        // A question is being typed into the assistant panel; every letter belongs to it.
+        if (LabTextInput.IsCapturing)
+        {
+            return;
+        }
+
         if (Input.GetKeyDown(KeyCode.B))
         {
             ToggleBook();
         }
     }
+
+    [Header("Floating object cleanup")]
+    [Tooltip("Lower glassware that is authored hanging in mid-air onto the bench below it, once " +
+             "per scene load. Turn off to keep the authored positions exactly as they are.")]
+    public bool settleFloatingObjectsOnLoad = true;
+
+    [Tooltip("Furthest an object will be lowered on load. Anything higher than this above a " +
+             "surface is treated as deliberate - on a shelf, say - and left alone.")]
+    public float maxSettleDropOnLoad = 0.75f;
+
+    [Tooltip("An object must be floating by at least this much before it is touched. Kept well " +
+             "above zero so correctly placed items - a tube sitting in its clamp - are not nudged.")]
+    public float minFloatGapToSettle = 0.06f;
 
     void OnSceneLoaded(Scene scene, LoadSceneMode mode)
     {
@@ -102,6 +121,26 @@ public class DesktopBootstrap : MonoBehaviour
         {
             SetupInteractables(scene);
         }
+
+        // Now that everything is grabbable and Randomize has laid the bench out, put down
+        // anything left hanging in mid-air. This has to come last: an object is only settled if
+        // it has an ObjectGrabbable, and the passes above are what add them.
+        if (scene.isLoaded && settleFloatingObjectsOnLoad)
+        {
+            DesktopObjectSettler.SettleScene(maxSettleDropOnLoad, minFloatGapToSettle);
+
+            // Most glassware is still hidden at this point - both labs reveal equipment one task
+            // at a time - so the watcher keeps settling each piece as it appears.
+            DesktopSettleWatcher watcher = GetComponent<DesktopSettleWatcher>();
+            if (watcher == null)
+            {
+                watcher = gameObject.AddComponent<DesktopSettleWatcher>();
+            }
+
+            watcher.maxDrop = maxSettleDropOnLoad;
+            watcher.minGapToSettle = minFloatGapToSettle;
+            watcher.Reset();
+        }
     }
 
     /// <summary>
@@ -141,12 +180,24 @@ public class DesktopBootstrap : MonoBehaviour
         if (mainCamera == null)
         {
             Camera[] cameras = FindObjectsByType<Camera>(FindObjectsInactive.Include, FindObjectsSortMode.None);
-            if (cameras.Length == 0)
+
+            // A camera with a targetTexture renders off-screen and is never the player's view -
+            // the molecular animation stage owns one. Attaching FirstPersonController to it would
+            // put the student inside the RenderTexture instead of the laboratory.
+            mainCamera = null;
+            for (int i = 0; i < cameras.Length; i++)
+            {
+                if (cameras[i].targetTexture == null)
+                {
+                    mainCamera = cameras[i];
+                    break;
+                }
+            }
+
+            if (mainCamera == null)
             {
                 return;
             }
-
-            mainCamera = cameras[0];
         }
 
         DisableXRBehaviours(mainCamera.gameObject);

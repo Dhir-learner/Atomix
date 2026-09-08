@@ -51,6 +51,12 @@ public class ExperimentHistoryUI : MonoBehaviour
 
     void Update()
     {
+        // A question is being typed into the assistant panel; every letter belongs to it.
+        if (LabTextInput.IsCapturing)
+        {
+            return;
+        }
+
         if (IsBlockedScene())
         {
             if (isOpen)

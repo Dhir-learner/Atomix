@@ -64,6 +64,12 @@ public class TestResultsUI : MonoBehaviour
 
     void Update()
     {
+        // A question is being typed into the assistant panel; every letter belongs to it.
+        if (LabTextInput.IsCapturing)
+        {
+            return;
+        }
+
         if (!IsEnabledScene())
         {
             if (isOpen)
@@ -190,16 +196,41 @@ public class TestResultsUI : MonoBehaviour
             string.Empty, 18.0f, TextAlignmentOptions.Center, LabPanelBuilder.MutedTextColour);
 
         float buttonY = -CanvasHeight * 0.5f + 62.0f;
-        LabPanelBuilder.CreateButton("Export", panel, "Export lab report",
-            new Vector2(-230.0f, buttonY), new Vector2(280.0f, 52.0f), 20.0f,
+
+        // "Download" first and widest, because it is the one thing a student is most likely to
+        // want from this screen and the old "Export lab report" wrote the whole history into a
+        // hidden AppData folder rather than this run into somewhere findable.
+        LabPanelBuilder.CreateButton("DownloadReport", panel, "Download this test report",
+            new Vector2(-420.0f, buttonY), new Vector2(320.0f, 52.0f), 19.0f,
+            () =>
+            {
+                if (statusText != null)
+                {
+                    statusText.text = ExamReportExporter.ExportRun();
+                }
+            });
+
+        LabPanelBuilder.CreateButton("OpenFolder", panel, "Open folder",
+            new Vector2(-150.0f, buttonY), new Vector2(200.0f, 52.0f), 19.0f,
+            () =>
+            {
+                bool opened = ExamReportExporter.OpenReportFolder();
+                if (statusText != null && !opened)
+                {
+                    statusText.text = "Could not open the reports folder.";
+                }
+            });
+
+        LabPanelBuilder.CreateButton("ExportAll", panel, "Full history",
+            new Vector2(50.0f, buttonY), new Vector2(190.0f, 52.0f), 19.0f,
             () => { if (statusText != null) { statusText.text = LabReportExporter.ExportAll(); } });
 
         LabPanelBuilder.CreateButton("Retry", panel, "Run the test again",
-            new Vector2(70.0f, buttonY), new Vector2(280.0f, 52.0f), 20.0f,
+            new Vector2(255.0f, buttonY), new Vector2(230.0f, 52.0f), 19.0f,
             () => SceneManager.LoadScene("TestingPhaseLab"));
 
         LabPanelBuilder.CreateButton("Menu", panel, "Main menu",
-            new Vector2(340.0f, buttonY), new Vector2(220.0f, 52.0f), 20.0f,
+            new Vector2(455.0f, buttonY), new Vector2(180.0f, 52.0f), 19.0f,
             () =>
             {
                 FirstPersonController.SetCursorLock(false);
@@ -220,46 +251,66 @@ public class TestResultsUI : MonoBehaviour
 
         LabPanelBuilder.ClearChildren(rowRoot);
 
-        List<ExperimentAttempt> runAttempts = CollectRunAttempts();
-        LabPerformanceSummary summary = LabPerformanceSummary.FromHistory(runAttempts);
+        // Read from ExamSession rather than the experiment history. The history only ever saw
+        // practical reactions - theory questions recorded nothing at all - so a theory-only run
+        // used to reach this screen and report that nothing had happened.
+        IReadOnlyList<ExamTaskRecord> runTasks = ExamSession.Tasks;
+        AtomixCoinBank bank = AtomixCoinBank.Instance;
 
         float rowWidth = CanvasWidth - 140.0f;
         float y = 240.0f;
 
+        int passed = ExamSession.Passed;
+        int total = runTasks.Count;
+        string grade = ExamSession.Grade;
+
         // --- headline -------------------------------------------------------------
         string gradeColour = ColorUtility.ToHtmlStringRGB(
-            summary.successes >= summary.failures ? AtomixSettings.SuccessColour : AtomixSettings.FailureColour);
+            passed >= ExamSession.Failed ? AtomixSettings.SuccessColour : AtomixSettings.FailureColour);
 
-        int score = countdown != null ? countdown.Score : 0;
-
-        LabPanelBuilder.CreateText("Headline", rowRoot, new Vector2(0.0f, y + 46.0f),
+        LabPanelBuilder.CreateText("Headline", rowRoot, new Vector2(0.0f, y + 66.0f),
             new Vector2(rowWidth, 48.0f),
-            "Score <b>" + score + "</b>     Passed <b>" + summary.successes + "</b> of <b>" +
-            (summary.successes + summary.failures) + "</b>     Grade <color=#" + gradeColour +
-            "><b>" + summary.Grade + "</b></color>",
+            "<color=#FFD647>*</color> <b>" + ExamSession.RunCoins + "</b> coins     Passed <b>" +
+            passed + "</b> of <b>" + total + "</b>     Grade <color=#" + gradeColour +
+            "><b>" + grade + "</b></color>",
             28.0f, TextAlignmentOptions.Center, Color.white);
+
+        // --- rank line ------------------------------------------------------------
+        string rankLine = bank.RankName + "   -   " + bank.LifetimeEarned + " coins earned all-time";
+        if (bank.CoinsToNextRank > 0)
+        {
+            rankLine += "   -   " + bank.CoinsToNextRank + " more to reach " + bank.NextRankName;
+        }
+        if (ExamSession.LongestStreak >= 2)
+        {
+            rankLine += "   -   best streak this run x" + ExamSession.LongestStreak;
+        }
+
+        LabPanelBuilder.CreateText("Rank", rowRoot, new Vector2(0.0f, y + 30.0f),
+            new Vector2(rowWidth, 30.0f), rankLine, 18.0f, TextAlignmentOptions.Center,
+            LabPanelBuilder.MutedTextColour);
 
         y -= 6.0f;
 
-        if (runAttempts.Count == 0)
+        if (total == 0)
         {
             LabPanelBuilder.CreateText("Empty", rowRoot, new Vector2(0.0f, y - 40.0f),
                 new Vector2(rowWidth, 120.0f),
-                "No graded experiments were recorded in this run.\n\n" +
-                "Tasks that timed out before anything was poured are not scored.",
+                "No tasks were completed in this run.",
                 20.0f, TextAlignmentOptions.Center, LabPanelBuilder.MutedTextColour);
             return;
         }
 
-        // --- one row per attempt ---------------------------------------------------
-        float rowHeight = 46.0f;
-        for (int i = 0; i < runAttempts.Count && i < 10; i++)
+        // --- one row per task ------------------------------------------------------
+        float rowHeight = 42.0f;
+        int shown = Mathf.Min(total, 10);
+
+        for (int i = 0; i < shown; i++)
         {
-            ExperimentAttempt attempt = runAttempts[i];
+            ExamTaskRecord task = runTasks[i];
             float rowY = y - i * (rowHeight + 6.0f);
 
-            bool passed = attempt.outcome == ExperimentOutcome.Success;
-            Color tint = passed ? AtomixSettings.SuccessColour : AtomixSettings.FailureColour;
+            Color tint = task.Passed ? AtomixSettings.SuccessColour : AtomixSettings.FailureColour;
 
             LabPanelBuilder.CreatePlate("Row" + i, rowRoot, new Vector2(0.0f, rowY),
                 new Vector2(rowWidth, rowHeight), LabPanelBuilder.RowColour);
@@ -267,37 +318,116 @@ public class TestResultsUI : MonoBehaviour
             LabPanelBuilder.CreatePlate("Tick" + i, rowRoot,
                 new Vector2(-rowWidth * 0.5f + 16.0f, rowY), new Vector2(8.0f, rowHeight), tint);
 
+            LabPanelBuilder.CreateText("Kind" + i, rowRoot,
+                new Vector2(-rowWidth * 0.5f + 90.0f, rowY), new Vector2(110.0f, rowHeight),
+                task.kind == ExamTaskKind.Theory ? "Theory" : "Practical", 16.0f,
+                TextAlignmentOptions.Left, LabPanelBuilder.MutedTextColour);
+
             LabPanelBuilder.CreateText("Name" + i, rowRoot,
-                new Vector2(-rowWidth * 0.5f + 340.0f, rowY), new Vector2(620.0f, rowHeight),
-                CleanName(attempt.reactionName), 19.0f, TextAlignmentOptions.Left,
+                new Vector2(-rowWidth * 0.5f + 400.0f, rowY), new Vector2(490.0f, rowHeight),
+                CleanName(task.title), 18.0f, TextAlignmentOptions.Left,
                 AtomixSettings.BodyTextColour);
 
             LabPanelBuilder.CreateText("Outcome" + i, rowRoot,
-                new Vector2(rowWidth * 0.5f - 300.0f, rowY), new Vector2(420.0f, rowHeight),
-                LabReportExporter.Describe(attempt.outcome), 18.0f, TextAlignmentOptions.Left, tint);
+                new Vector2(rowWidth * 0.5f - 250.0f, rowY), new Vector2(300.0f, rowHeight),
+                task.OutcomeLabel, 17.0f, TextAlignmentOptions.Left, tint);
+
+            LabPanelBuilder.CreateText("Coins" + i, rowRoot,
+                new Vector2(rowWidth * 0.5f - 110.0f, rowY), new Vector2(90.0f, rowHeight),
+                task.coinsEarned > 0 ? "+" + task.coinsEarned : "-", 17.0f,
+                TextAlignmentOptions.Right,
+                task.coinsEarned > 0 ? tint : LabPanelBuilder.MutedTextColour);
 
             LabPanelBuilder.CreateText("Time" + i, rowRoot,
-                new Vector2(rowWidth * 0.5f - 60.0f, rowY), new Vector2(100.0f, rowHeight),
-                attempt.durationSeconds.ToString("0") + "s", 18.0f,
+                new Vector2(rowWidth * 0.5f - 30.0f, rowY), new Vector2(80.0f, rowHeight),
+                task.secondsTaken.ToString("0") + "s", 17.0f,
                 TextAlignmentOptions.Right, LabPanelBuilder.MutedTextColour);
         }
 
         // --- what to work on -------------------------------------------------------
-        string advice = BuildAdvice(summary);
+        string advice = BuildExamAdvice(runTasks);
         if (!string.IsNullOrEmpty(advice))
         {
-            float adviceY = y - Mathf.Min(runAttempts.Count, 10) * (rowHeight + 6.0f) - 40.0f;
+            float adviceY = y - shown * (rowHeight + 6.0f) - 34.0f;
             LabPanelBuilder.CreateText("Advice", rowRoot, new Vector2(0.0f, adviceY),
-                new Vector2(rowWidth, 70.0f), advice, 19.0f, TextAlignmentOptions.Center,
+                new Vector2(rowWidth, 70.0f), advice, 18.0f, TextAlignmentOptions.Center,
                 LabPanelBuilder.MutedTextColour);
         }
 
         if (statusText != null)
         {
-            statusText.text = "Every attempt above is already saved to your experiment history.";
+            statusText.text = ExamSession.WasUnaided
+                ? "Finished unaided - no coins were spent on help."
+                : ExamSession.RunSpent + " coins were spent on help during this run.";
         }
 
-        AwardAchievements(summary);
+        AwardAchievements(LabPerformanceSummary.FromHistory(CollectRunAttempts()));
+    }
+
+    /// <summary>
+    /// Advice drawn from the exam record, which - unlike the history-based version - can see the
+    /// theory questions and the tasks that timed out.
+    /// </summary>
+    private static string BuildExamAdvice(IReadOnlyList<ExamTaskRecord> tasks)
+    {
+        int timedOut = 0;
+        int theoryWrong = 0;
+        int overdose = 0;
+        int underdose = 0;
+        int wrongOrder = 0;
+
+        for (int i = 0; i < tasks.Count; i++)
+        {
+            ExamTaskRecord t = tasks[i];
+            if (t.Passed)
+            {
+                continue;
+            }
+
+            if (t.outcome == ExamTaskOutcome.TimedOut) { timedOut++; }
+
+            if (t.kind == ExamTaskKind.Theory)
+            {
+                theoryWrong++;
+                continue;
+            }
+
+            string detail = (t.detail ?? string.Empty).ToLowerInvariant();
+            if (detail.Contains("too much")) { overdose++; }
+            else if (detail.Contains("not enough")) { underdose++; }
+            else if (detail.Contains("order")) { wrongOrder++; }
+        }
+
+        if (timedOut == 0 && theoryWrong == 0 && overdose == 0 && underdose == 0 && wrongOrder == 0)
+        {
+            return tasks.Count > 0
+                ? "Nothing to correct - every task in this run was answered correctly."
+                : string.Empty;
+        }
+
+        if (overdose >= underdose && overdose >= wrongOrder && overdose > 0)
+        {
+            return "Most common mistake: pouring past the mark. Watch the running total and stop early -\n" +
+                   "the reading keeps climbing for a moment after you stop tipping.";
+        }
+        if (underdose >= wrongOrder && underdose > 0)
+        {
+            return "Most common mistake: stopping short. Give each reagent a moment to settle before\n" +
+                   "you decide you are done.";
+        }
+        if (wrongOrder > 0)
+        {
+            return "Most common mistake: procedure order. Acid before oxide, water before metal,\n" +
+                   "and both solids before any catalyst.";
+        }
+        if (timedOut > 0 && timedOut >= theoryWrong)
+        {
+            return timedOut + (timedOut == 1 ? " task ran out of time." : " tasks ran out of time.") +
+                   "\nPress [F3] during a task to buy 30 more seconds with your coins.";
+        }
+
+        return theoryWrong + (theoryWrong == 1 ? " theory question was" : " theory questions were") +
+               " answered incorrectly.\nAsk the lab assistant to explain the chemistry behind them.";
     }
 
     /// <summary>Attempts recorded since this run of the testing scene began.</summary>

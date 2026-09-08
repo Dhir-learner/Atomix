@@ -50,6 +50,15 @@ public class ObjectInteraction : MonoBehaviour
     private ObjectGrabbable currentlyHeldGrabbable;
     private ObjectGrabbable highlightedGrabbable;
     private DesktopInteractable highlightedInteractable;
+    [Header("Release")]
+    [Tooltip("Lower a released object onto the surface beneath it instead of freezing it in " +
+             "mid-air. Turn off to restore the old behaviour.")]
+    public bool settleReleasedObjects = true;
+
+    [Tooltip("Furthest a released object will be lowered, in metres. An object let go over a " +
+             "large gap is left where it is rather than dropped a long way.")]
+    public float maxSettleDrop = DesktopObjectSettler.DefaultMaxDrop;
+
     private Rigidbody heldObjectRigidbody;
     private bool heldOriginalUseGravity;
     private bool heldOriginalIsKinematic;
@@ -62,6 +71,12 @@ public class ObjectInteraction : MonoBehaviour
 
     void Update()
     {
+        // A question is being typed into the assistant panel; every letter belongs to it.
+        if (LabTextInput.IsCapturing)
+        {
+            return;
+        }
+
         if (currentlyHeldObject == null)
         {
             if (CanProcessWorldInteraction())
@@ -438,6 +453,15 @@ public class ObjectInteraction : MonoBehaviour
             {
                 heldObjectRigidbody.useGravity = heldOriginalUseGravity;
                 heldObjectRigidbody.isKinematic = heldOriginalIsKinematic;
+
+                // Put it down on whatever is under it BEFORE freezing it. Without this the
+                // object is frozen exactly where the student let go - which is how glassware
+                // ends up hanging in mid-air for the rest of the session.
+                if (settleReleasedObjects)
+                {
+                    DesktopObjectSettler.Settle(currentlyHeldObject.transform, maxSettleDrop);
+                }
+
                 currentlyHeldGrabbable.StabilizeForDesktopResting();
             }
             else

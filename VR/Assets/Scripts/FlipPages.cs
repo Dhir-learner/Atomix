@@ -47,6 +47,12 @@ public class FlipPages : MonoBehaviour
 
     private void Update()
     {
+        // A question is being typed into the assistant panel; every letter belongs to it.
+        if (LabTextInput.IsCapturing)
+        {
+            return;
+        }
+
         if (bookCanvas == null || !bookCanvas.activeInHierarchy)
         {
             return;

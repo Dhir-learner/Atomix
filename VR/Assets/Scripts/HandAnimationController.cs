@@ -22,6 +22,12 @@ public class HandAnimationController : MonoBehaviour
 
     void Update()
     {
+        // A question is being typed into the assistant panel; every letter belongs to it.
+        if (LabTextInput.IsCapturing)
+        {
+            return;
+        }
+
         if (animator == null) return;
 
         // Trigger value from left mouse button (0 or 1)

@@ -105,16 +105,19 @@ public class TheoreticalTasksManager : MonoBehaviour
     {
         if(!finished)
         {
+            string chosen = buton1 != null ? buton1.text : string.Empty;
             if (randomize.currentReactionInTestPhase == 9 || randomize.currentReactionInTestPhase == 12 || randomize.currentReactionInTestPhase == 15 || randomize.currentReactionInTestPhase == 18)
             {
                 feedback.text = "Correct!";
                 feedback.color = Color.green;
+                RecordAnswer(true, chosen);
             }
             else
             {
                 feedback.text = "Incorrect!";
                 feedback.color = Color.red;
                 countdown.wasScored = true;
+                RecordAnswer(false, chosen);
             }
             countdown.continua = false;
             timpInitial = DateTime.Now;
@@ -126,16 +129,19 @@ public class TheoreticalTasksManager : MonoBehaviour
     {
         if(!finished)
         {
+            string chosen = buton2 != null ? buton2.text : string.Empty;
             if (randomize.currentReactionInTestPhase == 10 || randomize.currentReactionInTestPhase == 13 || randomize.currentReactionInTestPhase == 16)
             {
                 feedback.text = "Correct!";
                 feedback.color = Color.green;
+                RecordAnswer(true, chosen);
             }
             else
             {
                 feedback.text = "Incorrect!";
                 feedback.color = Color.red;
                 countdown.wasScored = true;
+                RecordAnswer(false, chosen);
             }
             countdown.continua = false;
             finished = true;
@@ -147,21 +153,45 @@ public class TheoreticalTasksManager : MonoBehaviour
     {
         if (!finished)
         {
+            string chosen = buton3 != null ? buton3.text : string.Empty;
             if (randomize.currentReactionInTestPhase == 11 || randomize.currentReactionInTestPhase == 14 || randomize.currentReactionInTestPhase == 17)
             {
                 feedback.text = "Correct!";
                 feedback.color = Color.green;
+                RecordAnswer(true, chosen);
             }
             else
             {
                 feedback.text = "Incorrect!";
                 feedback.color = Color.red;
                 countdown.wasScored = true;
+                RecordAnswer(false, chosen);
             }
             countdown.continua = false;
             finished = true;
             timpInitial = DateTime.Now;
         }
+    }
+
+    /// <summary>
+    /// Files the answer with <see cref="ExamSession"/>.
+    ///
+    /// Before this existed, a theory task recorded absolutely nothing - it set
+    /// countdown.wasScored and moved on. So the end-of-test report card, which reads the recorded
+    /// history, showed "No graded experiments were recorded in this run" after ten answered
+    /// questions, and a theory-only test produced an entirely empty report.
+    /// </summary>
+    void RecordAnswer(bool correct, string chosenAnswer)
+    {
+        ExamSession.RecordTask(
+            ExamTaskKind.Theory,
+            randomize.currentReactionInTestPhase,
+            "Theory question " + randomize.currentReactionInTestPhase,
+            canvasText != null ? canvasText.text : string.Empty,
+            "Answered: " + chosenAnswer,
+            correct ? ExamTaskOutcome.Correct : ExamTaskOutcome.Wrong,
+            countdown != null ? countdown.TimeRemaining : 0.0f,
+            countdown != null ? countdown.SecondsOnTask : 0.0f);
     }
 
     void Finish()

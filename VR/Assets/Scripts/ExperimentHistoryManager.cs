@@ -287,6 +287,19 @@ public class ExperimentHistoryManager : MonoBehaviour
             manager.gameObject.AddComponent<TestResultsUI>();
         }
 
+        // Opens and closes a testing run, and files any task the student never finished. Added
+        // before the coin HUD so a run is always open by the time the HUD reads from it.
+        if (manager.gameObject.GetComponent<ExamSessionTracker>() == null)
+        {
+            manager.gameObject.AddComponent<ExamSessionTracker>();
+        }
+
+        // The coin strip and the help shop in the testing scene.
+        if (manager.gameObject.GetComponent<ExamCoinHud>() == null)
+        {
+            manager.gameObject.AddComponent<ExamCoinHud>();
+        }
+
         // F5 resets the bench and re-selects the current experiment, so a failed reaction is no
         // longer a dead end that needs the game restarting.
         if (manager.gameObject.GetComponent<LabRetryController>() == null)

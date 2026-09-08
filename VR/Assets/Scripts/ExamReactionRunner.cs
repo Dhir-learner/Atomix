@@ -152,6 +152,12 @@ public class ExamReactionRunner
                 countdown.continua = false;
                 countdown.wasScored = true;
             }
+
+            ExamSession.RecordTask(
+                ExamTaskKind.Practical, reactionId, reactionName, string.Empty,
+                engine.GetFailureHeadline(), ExamTaskOutcome.Wrong,
+                countdown != null ? countdown.TimeRemaining : 0.0f,
+                countdown != null ? countdown.SecondsOnTask : 0.0f);
         }
 
         // Never leave the student stuck on a failed task - move on like the timeout does.
@@ -173,6 +179,16 @@ public class ExamReactionRunner
         {
             recorder.Complete(ReactionResult.Success);
         }
+
+        // The clock is stopped by the caller's own success block, so read it before it is reset
+        // for the next task. SecondsLeftAtStop is only set once CountdownTimer notices the stop,
+        // which may be the next frame - TimeRemaining is the reading that is correct right now.
+        float remaining = countdown != null ? countdown.TimeRemaining : 0.0f;
+        float taken = countdown != null ? countdown.SecondsOnTask : 0.0f;
+
+        ExamSession.RecordTask(
+            ExamTaskKind.Practical, reactionId, reactionName, string.Empty,
+            "Correct quantities and order", ExamTaskOutcome.Correct, remaining, taken);
     }
 
     /// <summary>

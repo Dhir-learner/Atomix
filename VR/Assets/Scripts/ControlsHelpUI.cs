@@ -28,6 +28,11 @@ INTERACTION
   T            Reset held object pose
   V            Hold push-to-talk (Lab Assistant)
 
+AI LAB ASSISTANT
+  Enter        Type a question (works with no microphone)
+  Y            Ask why the last experiment went wrong
+  M            Minimise the assistant panel
+
 HELD OBJECT ROTATION
   Q / E        Rotate left or right
   Z / X        Tilt forward or back
@@ -47,7 +52,16 @@ UI
   Tab          Experiment history
   F            Scientific graphs
   P            Periodic table
-  M            Minimise the Lab Assistant";
+
+TESTING SCENE
+  F2           Buy a hint (40 coins)
+  F3           Buy 30 more seconds (60 coins)
+  F4           Skip the current task (100 coins)
+
+MOLECULAR VIEW
+  3D VIEW      Live ball-and-stick animation of the reaction
+  ASK AI       Ask about the step currently on screen
+  Space        Play / pause";
 
     private GameObject helpPanel;
     private Text helpTextComponent;
@@ -60,6 +74,12 @@ UI
 
     void Update()
     {
+        // A question is being typed into the assistant panel; every letter belongs to it.
+        if (LabTextInput.IsCapturing)
+        {
+            return;
+        }
+
         if (Input.GetKeyDown(toggleKey))
         {
             ToggleHelp();

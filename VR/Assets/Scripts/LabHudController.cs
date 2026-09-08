@@ -54,7 +54,10 @@ public class LabHudController : MonoBehaviour
 
     void Update()
     {
-        if (Input.GetKeyDown(cycleLabelKey) && IsEnabledScene())
+        // Only the key read is gated: the toast and the measurement strip are display work, and
+        // freezing them while the student types a question would look like the game had hung.
+        if (!LabTextInput.IsCapturing &&
+            Input.GetKeyDown(cycleLabelKey) && IsEnabledScene())
         {
             CycleLabelMode();
         }

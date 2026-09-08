@@ -78,6 +78,12 @@ public class PauseMenuUI : MonoBehaviour
 
     void Update()
     {
+        // A question is being typed into the assistant panel; every letter belongs to it.
+        if (LabTextInput.IsCapturing)
+        {
+            return;
+        }
+
         if (IsBlockedScene())
         {
             if (isOpen)
@@ -423,7 +429,31 @@ public class PauseMenuUI : MonoBehaviour
             achievements.EarnedCount + " of " + catalogue.Count + " unlocked", 28.0f,
             TextAlignmentOptions.Center, Color.white);
 
-        float y = BodyTop - 68.0f;
+        // The coin wallet lives in the testing scene, but its totals are lifetime, so this is the
+        // one place outside a test where a student can see where their rank stands.
+        AtomixCoinBank bank = AtomixCoinBank.Instance;
+
+        string walletLine =
+            "<color=#FFD647>*</color> <b>" + bank.Balance + "</b> coins to spend   -   " +
+            bank.LifetimeEarned + " earned all-time   -   rank <b>" + bank.RankName + "</b>";
+
+        if (bank.CoinsToNextRank > 0)
+        {
+            walletLine += "   -   " + bank.CoinsToNextRank + " more to reach " + bank.NextRankName;
+        }
+
+        LabPanelBuilder.CreateText("Wallet", bodyRoot, new Vector2(0.0f, BodyTop - 56.0f),
+            new Vector2(listWidth, 32.0f), walletLine, 22.0f,
+            TextAlignmentOptions.Center, LabPanelBuilder.MutedTextColour);
+
+        LabPanelBuilder.CreateText("WalletStats", bodyRoot, new Vector2(0.0f, BodyTop - 86.0f),
+            new Vector2(listWidth, 32.0f),
+            bank.RunsCompleted + " tests completed   -   best run " + bank.BestRun +
+            " coins   -   best streak x" + bank.BestStreak + "   -   " +
+            bank.DistinctReactionsCleared + " of 8 experiments cleared in a test",
+            20.0f, TextAlignmentOptions.Center, LabPanelBuilder.MutedTextColour);
+
+        float y = BodyTop - 126.0f;
         const float rowHeight = 40.0f;
 
         for (int i = 0; i < catalogue.Count; i++)

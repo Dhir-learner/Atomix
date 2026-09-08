@@ -1438,3 +1438,142 @@ observed. If the experiment comes back unselected, `reselectAttempts` is an Insp
 
 `F5` is free across the project's bindings; it is a public `KeyCode` field if it clashes with
 anything on your machine.
+
+---
+
+# Task 8 — Live Molecular Animation + Offline AI Assistant
+
+**Date:** 2026-09-08
+**Status:** ✅ Built — 0 compile errors, 0 new warnings, **167/167 checks pass** running the real code
+**Full report:** [`TASK8_MOLECULAR_ANIMATION_AND_OFFLINE_AI.md`](TASK8_MOLECULAR_ANIMATION_AND_OFFLINE_AI.md)
+
+## 19. Executive Summary
+
+Mapped the project description's ten features against the code. Seven were done. Three were not,
+and two of those were load-bearing:
+
+| Gap | What was actually wrong |
+|---|---|
+| **Reactions 1 and 8 had no molecular visualisation** | `videoClip: {fileID: 0}` in `ReactionLearningVideoCatalog.asset`. Succeeding at sodium-and-water — the reaction the book opens on — produced the string "Molecular explanation video is unavailable." |
+| **The whole AI pillar was one HTTP request from gone** | Four of the ten features route through `POST api.convai.com/character/getResponse`. No internet, no mic, an expired quota or a college firewall took out features 4, 5, 7 and 9 together. |
+| **No way to ask about the molecular animation** | Feature 7 of the brief had no implementation anywhere. |
+
+Six new files, 2790 lines. Everything additive, built from code at runtime — **no scene, prefab,
+reaction script or ProjectSettings asset was touched**, same as Tasks 1–7.
+
+| # | Feature | How you reach it |
+|---|---|---|
+| 1 | **Live molecular animation for all 8 reactions** — ball-and-stick, rendered in-engine into the existing video panel. Red = bond breaking, green = bond forming, yellow = electron. | Automatic for R1/R8; `3D VIEW` button elsewhere |
+| 2 | **Ask about the step on screen** | `ASK AI` button on the video panel |
+| 3 | **Offline AI brain** — answers "why did it fail", the graphs and the animation from the game's own live data when Convai is unreachable | automatic fallback |
+| 4 | **Offline voice** — replies spoken via the Windows synthesiser | automatic |
+| 5 | **Typed questions** — no microphone needed | `Enter` |
+| 6 | **One-key "why did it go wrong?"** | `Y` |
+| 7 | **Fixed a real input bug** — `T` was double-bound | — |
+
+### The bug worth calling out
+
+`T` was **double-bound**: it is `ObjectInteraction.resetHeldPoseKey`, so binding "type a question"
+to it would have snapped whatever you were holding back to its default pose every time you asked
+something. Same class of bug Task 7 found with `V`. The binding is now **Enter**.
+
+### Design notes worth recording
+
+**Why the molecular view is rendered live instead of two more MP4s.** An MP4 is a fixed asset that
+has to be produced, imported and kept in sync with the chemistry. A live stage can be checked by
+tests — and is: 167 assertions cover atom conservation, bond lengths, camera framing, NaN, and
+whether each reaction's electron transfer matches its actual redox status. R2, R3 and R6 show *no*
+electron transfer, because they are not redox reactions, and R2's caption says so explicitly.
+
+**Why the stage sits 8000 units below the lab.** Its camera has a 60-unit far plane, so the
+laboratory is simply not in the frustum. That is what avoids adding a culling layer, which would
+have meant editing `TagManager.asset` — a project-wide change for one feature.
+
+**Why typing needed a global gate.** The cursor is locked for the crosshair, so a uGUI InputField
+cannot be focused, so keystrokes come from `Input.inputString`. But the lab binds nearly every
+letter — typing "why did the sodium fail" would walk the player across the room and open three
+panels. `LabTextInput.IsCapturing` is one flag that fifteen scripts check. Two deliberate
+exceptions: `LabHudController` gates only its key read (its toast and measurement strip are display
+work and freezing them would look like a hang), and **typing is refused mid-pour**, because gating
+object interaction also freezes the tilt that controls pouring.
+
+**Why the offline brain is a lookup, not a model.** It reads the live `FreeHandReactionEngine`
+measurements, Task 4's thermodynamics and Task 2's history. Within these eight reactions that makes
+it *more* accurate than a cloud model, not less — it can say "you poured 27.4 ml where the equation
+needs 20.0, a 37% overdose" because it is reading the actual number.
+
+**Why offline voice shells out to PowerShell.** Unity compiles against `netstandard2.1`, which does
+not contain `System.Speech`, so the type cannot be referenced at compile time on any backend. The
+reply text is piped through **stdin**, not embedded in `-Command`: an assistant reply contains
+quotes, semicolons and newlines, and interpolating that would be both fragile and a
+command-injection hole.
+
+## 20. New controls
+
+| Key | Does |
+|---|---|
+| **Enter** | Type a question to the lab assistant (Enter sends, Esc cancels) |
+| **Y** | Ask why the last experiment went wrong |
+| **3D VIEW** | Switch to the live molecular animation |
+| **ASK AI** | Ask about the molecular step currently on screen |
+
+---
+
+# Task 9 — Coin Economy, Exam Records and a Downloadable Test Report
+
+**Date:** 2026-09-08
+**Status:** ✅ Built — 0 compile errors, 0 new warnings, **226/226 checks pass** running the real code
+**Full report:** [`TASK9_COIN_ECONOMY_AND_EXAM_REPORT.md`](TASK9_COIN_ECONOMY_AND_EXAM_REPORT.md)
+
+## 21. Executive Summary
+
+| Gap | What was actually wrong |
+|---|---|
+| **The coin score reset every run** | `CountdownTimer` held it in a plain `int score` that `Start()` set to 0. The testing scene reloads on every "Run the test again", so nothing ever carried. |
+| **Half the coin tiers were unreachable** | `if (currentTime >= 30) … else if (currentTime >= 30)` — the second test duplicates the first, so the 50-point tier was dead code and anything over 30 s left scored the maximum. |
+| **The report card could not see theory questions** | `TheoreticalTasksManager` recorded nothing. A theory-only run — a real setting — ended with "No graded experiments were recorded in this run" after ten answered questions. |
+| **Tasks that timed out vanished** | Nothing filed them, so the report card could say "passed 4 of 4" on a run of six tasks. |
+| **No exam report, and the existing export was unfindable** | `LabReportExporter` writes the whole history to `AppData\LocalLow\…`. |
+
+Four new files, 1708 lines. All additive, built from code at runtime — **no scene, prefab or
+ProjectSettings asset touched**, same as Tasks 1–8.
+
+| # | Feature | How you reach it |
+|---|---|---|
+| 1 | **Coins persist** — lifetime totals, best run, best streak, first clears | automatic |
+| 2 | **Ranks** — Apprentice → Lab Technician → Chemist → Senior Chemist → Lab Master | report card, pause menu |
+| 3 | **Spend coins during a test** — hint 40, +30 s 60, skip 100 | `F2` / `F3` / `F4` |
+| 4 | **Bonuses** — first clear +25, streak x3 +30, streak x5 +60, unaided perfect run +50 | automatic |
+| 5 | **Every task recorded** — practical, theory, skipped and timed-out | automatic |
+| 6 | **Downloadable exam report** — styled HTML + CSV, written to your Desktop | report card |
+| 7 | **Open folder** button | report card |
+
+### Design notes worth recording
+
+**Why the paid hint gives the procedure and not the quantity.** The testing scene exists to measure
+whether the student knows the right amounts — `engine.hideTargets` is on for exactly that reason.
+A hint that named a quantity would be selling the answer, so `ChemistryKnowledgeBase.ProcedureHint`
+returns what to do and in what order and leaves the judgement alone. There is a test asserting no
+hint contains "ml", "gram" or a bare " g ".
+
+**Why the award maths was split into a pure function.** `ExamSession.ComputeAward` has no
+PlayerPrefs in it so the tiers and bonus thresholds can be exercised directly. That is not
+incidental: the original tier table shipped with an unreachable branch precisely because nothing
+could ever run it. The suite now pins every tier boundary on both sides, asserts all seven tiers
+are reachable, and asserts the curve is monotonic.
+
+**Why the report goes to the Desktop.** "Download" has to produce a file the student can find.
+Desktop first, then Documents, then persistentDataPath — and each candidate is probed for
+*writability*, not just existence, because a lab machine can have a redirected or read-only
+Desktop and the alternative is failing at the last step with an error nobody can act on.
+
+**Why the HTML is escaped.** Failure reasons and answer text contain `<`, `>` and `&` in chemical
+notation, and one unescaped `<` silently swallows the rest of a table cell.
+
+## 22. New controls
+
+| Key | Does |
+|---|---|
+| **F2** | Buy a hint — 40 coins (practical experiments only) |
+| **F3** | Buy 30 more seconds — 60 coins |
+| **F4** | Skip the current task — 100 coins |
