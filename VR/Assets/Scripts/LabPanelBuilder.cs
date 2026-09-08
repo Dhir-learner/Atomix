@@ -401,6 +401,21 @@ public static class LabPanelBuilder
         {
             pause.Close();
         }
+
+        // The two testing-scene panels belong here too. Both suspend the player while they are
+        // up, and two overlapping suspends can hand the controller back in the wrong order and
+        // leave the student unable to move.
+        ExamSetupUI setup = host.GetComponent<ExamSetupUI>();
+        if (setup != null && !ReferenceEquals(setup, opening))
+        {
+            setup.Close();
+        }
+
+        TestResultsUI results = host.GetComponent<TestResultsUI>();
+        if (results != null && !ReferenceEquals(results, opening))
+        {
+            results.Close();
+        }
     }
 
     /// <summary>

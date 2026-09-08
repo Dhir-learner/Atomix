@@ -83,37 +83,81 @@ Students can learn before performing through the molecular-level learning system
 
 Atomix includes a **Learn / Perform** workflow.
 
-Before performing an experiment, the student can access a molecular explanation of the reaction. The project contains a catalog-driven video system using `ReactionLearningController` and `ReactionLearningVideoCatalog`.
+Before performing an experiment — and again automatically after a successful one — the student can watch a molecular explanation of the reaction.
 
-The existing project analysis confirms **6 assigned reaction videos**, with the original implementation leaving 2 reaction videos unassigned.
+Two views are available for every reaction:
+
+- **Recorded video.** Six pre-rendered MP4s, driven by `ReactionLearningController` and `ReactionLearningVideoCatalog`.
+- **Live 3D view (`3D VIEW` button).** A real-time ball-and-stick animation rendered in-engine by `MolecularAnimationRenderer`, authored for **all 8 reactions** in `MolecularSceneCatalog`.
+
+Reactions 1 (Na + H₂O) and 8 (FeSO₄) originally had **no video at all** — their catalog entries were `videoClip: {fileID: 0}`, so the Learn screen dead-ended. The live 3D view closes that gap and gives the other six a second, interactive view.
+
+The animation makes the three things the project set out to show explicit:
+
+| What you see | Meaning |
+|---|---|
+| A bond thinning out and turning **red** | Bond breaking |
+| A bond thickening in **green** | Bond forming |
+| A travelling **yellow** dot | Electron transfer |
+
+Atoms carry their element symbols in CPK colours, stages are captioned, heating stages shake the
+molecule and warm the background, and a step counter and progress bar track where you are.
+
+The chemistry is honest about itself: reactions 1, 4, 5 and 8 show electron transfer because they
+are redox; **2, 3 and 6 show none**, because they are not — and reaction 2's caption says so
+outright.
+
+**`ASK AI`** on the video panel asks the assistant about the exact step on screen.
 
 ### 🤖 6. In-Lab AI Chemistry Assistant
 
 The AI assistant is now integrated directly into the laboratory instead of being limited to a separate tutor scene.
 
-The current implementation uses the **Convai REST API** and provides:
+The assistant answers through **two paths**, so it is never entirely unavailable:
 
-- Push-to-talk voice interaction
-- Spoken AI responses
+| Path | When it answers | Provides |
+|---|---|---|
+| **Convai REST API** | Primary, when credentials and internet are available | Open-ended chemistry conversation, spoken replies |
+| **`ChemistryKnowledgeBase`** | Fallback, automatically | Grounded answers about these 8 reactions, spoken via the Windows synthesiser |
+
+Before the offline path existed, four of the project's headline features — *why did it go wrong*,
+*what is happening chemically*, *explain this graph*, *explain this animation* — all ran through one
+HTTP request and failed together with no internet, no microphone, an expired free-tier quota, or a
+firewall. The offline brain is a grounded lookup rather than a language model, which makes it **more**
+accurate about this bench: it reads the live `FreeHandReactionEngine` measurements and can say
+*"you poured 27.4 ml where the equation needs 20.0, a 37% overdose"*.
+
+It provides:
+
+- Push-to-talk voice interaction, **and typed questions for machines with no microphone**
+- Spoken responses (Convai's own voice, or Windows speech offline)
 - Text responses in a right-edge assistant panel
-- Current experiment context
-- Exact measured quantities and target values
+- Current experiment context, exact measured quantities and target values
 - Chemistry-specific failure explanations
-- Graph-specific explanations
-- Experiment-attempt context
+- Graph-specific and molecular-animation-specific explanations
+- Experiment-attempt history
 
 #### Controls
 
 | Key | Action |
 |---|---|
 | **V** (hold) | Talk to the AI assistant |
+| **Enter** | Type a question — no microphone needed |
+| **Y** | Ask why the last experiment went wrong |
 | **M** | Minimise / expand the assistant panel |
+
+Typing takes over the keyboard while it is open (`LabTextInput`), because the lab binds nearly every
+letter — otherwise typing *"why did the sodium fail"* would walk the player across the room and open
+three panels. It is refused mid-pour, since freezing interaction would leave the beaker tipped.
 
 The assistant runs in both `LabScene` and `LabAssistantScene`.
 
 In `LabScene`, the assistant is intentionally **voice + panel only** so it does not obstruct the main laboratory. In `LabAssistantScene`, the system can additionally display the assistant character.
 
-> **Important:** Convai credentials are intentionally not committed. `Assets/Resources/LabAssistantSettings.asset` ships without the API key and character ID.
+> **⚠️ Security note:** `Assets/Resources/LabAssistantSettings.asset` **currently has a real Convai
+> API key committed to it**, and it is present in the git history. Rotate the key before sharing this
+> repository, and keep future keys out of version control. Without credentials the assistant still
+> works offline.
 
 ### 🧠 7. Context-Aware AI Assistance
 
@@ -262,15 +306,46 @@ The desktop system is injected at runtime by `DesktopBootstrap.cs`, which adapts
 | **Left Click** | Grab / release / interact |
 | **R** | Release held object |
 | **Q / E** | Rotate held object |
-| **Z / X / C / V** | Rotate held object on other axes |
+| **Z / X** | Tilt held object forward / back |
+| **C** | Roll held object (**Shift + C** reverses) |
 | **T** | Reset held-object pose |
 | **B** | Toggle reaction book |
 | **Arrow Keys** | Flip book pages |
 | **1 – 8** | Quick-select reaction |
-| **V** | Push-to-talk in the assistant |
+| **F5** | Reset the bench and retry the experiment |
+| **Escape** | Toggle cursor lock / close learning UI |
+
+#### AI Lab Assistant
+
+| Key / Input | Action |
+|---|---|
+| **V** | Hold to talk (push-to-talk) |
+| **Enter** | Type a question — works with no microphone |
+| **Y** | Ask why the last experiment went wrong |
+| **M** | Minimise the assistant panel |
+
+#### Panels
+
+| Key / Input | Action |
+|---|---|
 | **Tab** | Experiment history |
 | **F** | Scientific graphs |
-| **Escape** | Toggle cursor lock / close learning UI |
+| **P** | Interactive periodic table |
+| **L** | Measurement label: full / compact / off |
+| **H** | Controls help overlay |
+| **F1** | Pause menu — settings, achievements, controls |
+
+#### Testing scene only
+
+| Key / Input | Action |
+|---|---|
+| **F2** | Buy a hint — 40 coins |
+| **F3** | Buy 30 more seconds — 60 coins |
+| **F4** | Skip the current task — 100 coins |
+
+> **Note on `V` and `T`.** Both were originally double-bound — `V` drove push-to-talk *and* the
+> roll axis, and `T` was proposed for typed questions while already being the reset-pose key.
+> Roll is now `C`, and typed questions are on `Enter`.
 
 ### 🥽 14. VR / XR Support
 
@@ -398,6 +473,21 @@ ControlReactions
 | `ReactionGraphCatalog.cs` | Catalog of graph data for all reactions |
 | `ReactionGraphRenderer.cs` | Graph rendering |
 | `ReactionGraphUI.cs` | Graph interface and AI explanation actions |
+| `MolecularSceneCatalog.cs` | The 8 molecular animations, authored in code |
+| `MolecularAnimationRenderer.cs` | Live ball-and-stick stage rendered to a RenderTexture |
+| `ChemistryKnowledgeBase.cs` | Offline AI brain — answers from the game's own data |
+| `OfflineVoice.cs` | Windows speech synthesis for offline replies |
+| `LabTextInput.cs` | Typed-question capture and the global keyboard gate |
+| `ExamSession.cs` | One testing run's record — practical, theory, skipped, timed-out |
+| `AtomixCoinBank.cs` | Persistent coin wallet, ranks and prices |
+| `ExamCoinHud.cs` | Coin strip and the F2/F3/F4 help shop |
+| `ExamSetupUI.cs` | Start-of-test screen: how many tasks this run should have |
+| `ExamReportExporter.cs` | Downloadable HTML + CSV test report |
+| `TestResultsUI.cs` | End-of-test report card |
+| `AchievementSystem.cs` | 13 milestones derived from history |
+| `PeriodicTableUI.cs` | Interactive 118-element periodic table |
+| `PauseMenuUI.cs` | Pause menu — settings, achievements, controls |
+| `DesktopObjectSettler.cs` | Lowers glassware left hanging in mid-air |
 
 ---
 
@@ -466,7 +556,54 @@ The existing testing system supports:
 - Theory-only mode
 - Combined practice + theory mode
 
-The project analysis records **8 practical tasks + 10 theoretical questions = 18 total task types**.
+The project records **8 practical tasks + 10 theoretical questions = 18 total task types**.
+
+### ⚙️ Choosing the test length
+
+When the testing scene opens, a setup screen asks **how many tasks this run should have** — 3, 5, 8,
+10, or all of them. The countdown is held until you choose, so the first task starts on a full clock.
+
+The run length used to be fixed: `Randomize` stopped at a hard-coded `reactionsDone.Count >= 10`,
+so a quick three-question check meant sitting through ten. The offered counts are clamped to what
+the current task mix actually contains — theory-only tops out at 10, practical-only at 8, both at 18.
+
+### 🪙 Coin economy
+
+The score strip in the testing scene is a persistent wallet, not a per-run counter.
+
+| | |
+|---|---|
+| **Earning** | 5–100 coins per task, by how much time was left |
+| **Bonuses** | First-ever clear +25 · 3-streak +30 · 5-streak +60 · perfect unaided run +50 |
+| **Spending** | Hint 40 (`F2`) · +30 seconds 60 (`F3`) · Skip task 100 (`F4`) |
+| **Ranks** | Apprentice → Lab Technician → Chemist → Senior Chemist → Lab Master |
+
+Lifetime totals, best run, best streak and which experiments have ever been cleared all persist
+between sessions, and are shown on the report card and in the pause menu's Achievements tab.
+
+The paid hint gives the **procedure, not the quantity** — knowing the right amount is exactly what
+the testing scene measures, so selling it would be selling the answer.
+
+### 📄 Downloadable test report
+
+Every task in a run — practical, theoretical, skipped and timed-out — is recorded by `ExamSession`.
+At the end of a run the report card offers **Download this test report**, which writes two files:
+
+| File | For |
+|---|---|
+| `Atomix_Test_Report_<date>_<time>.html` | Handing in. Self-contained and styled; print to PDF from any browser |
+| `Atomix_Test_Report_<date>_<time>.csv` | A marker who wants the numbers in a spreadsheet |
+
+**Where they are saved:** your **Desktop**. If the Desktop is unavailable or not writable, it falls
+back to **Documents**, then to Unity's `Application.persistentDataPath`. The report card names the
+folder it used, and the **Open folder** button next to it opens that folder directly.
+
+The report contains the grade, passed/total, coins earned, time taken, every task in order with the
+question asked and what went wrong, which answers used bought help, a "what to work on" section, and
+lifetime progress.
+
+The report card also offers **Retake the test**, which reloads the testing scene and asks for the
+task count again — you may well want a different length second time round.
 
 ---
 
@@ -577,18 +714,28 @@ For VR:
 
 ## ⚠️ Current Status and Known Limitations
 
-Atomix is a **functional academic prototype**. The completed Tasks 1–4 substantially extend the original system, but some areas still require final Play-mode validation.
+Atomix is a **functional academic prototype**. Tasks 1–9 substantially extend the original system.
+The code compiles clean against the real Unity 6000.3.7f1 assemblies (0 errors, no new warnings) and
+**226 automated checks** run the real code, but some areas still want a Play-mode pass.
 
 ### Known limitations
 
-- A complete end-to-end Play-mode regression pass for Tasks 1–4 is still recommended.
-- Convai requires valid credentials for live AI interaction.
-- Experiment-history persistence is implemented, but full runtime round-trip testing is still recommended.
-- Re-selecting an experiment resets the free-hand measurement state, but some previous visual substance state may remain in the scene.
-- The current molecular-video system does not yet fully pass the specific video just watched into the AI context for follow-up questions.
-- The checked-in `Assembly-CSharp.csproj` is stale and still references removed Inworld files; Unity can regenerate it when the project is opened.
-- `LabAssistantScene` may contain inert legacy Inworld objects with missing-script warnings after the provider migration; they do not represent the active assistant implementation.
-- The graph system has been rendered and validated offline, but Unity import, panel sizing, and final Play-mode interaction should still be checked.
+- A complete end-to-end Play-mode regression pass is still recommended. The molecular animation's
+  *geometry* is tested; its *framing on screen* is not.
+- Convai requires valid credentials and internet for cloud AI. Without them the assistant falls back
+  to the offline knowledge base, which answers only about these eight reactions.
+- Offline voice uses the Windows speech synthesiser and is **Windows-only**; elsewhere the assistant
+  replies in text and Convai's own voice is unaffected.
+- Re-selecting an experiment resets the free-hand measurement state, but some previous visual
+  substance state may remain in the scene.
+- `LabAssistantScene` may contain inert legacy Inworld objects with missing-script warnings after the
+  provider migration; they do not represent the active assistant implementation.
+- Coin totals are stored per-machine in PlayerPrefs — there is no account or leaderboard.
+- Some glassware is authored above the bench. `DesktopBootstrap.settleFloatingObjectsOnLoad` lowers
+  anything left hanging onto the surface below it; if a floating item has no collider beneath it,
+  the raycast finds nothing and it stays where it is.
+- **The Convai API key is committed to `Assets/Resources/LabAssistantSettings.asset`** and is in the
+  git history. Rotate it before sharing this repository publicly.
 
 ---
 
@@ -610,7 +757,15 @@ Atomix is a **functional academic prototype**. The completed Tasks 1–4 substan
 | AI voice + panel responses | ✅ |
 | Scientific energy / enthalpy / entropy graphs | ✅ |
 | AI graph explanations | ✅ |
-| Follow-up AI questions tied specifically to the last molecular video | ⚠️ Partial |
+| Live 3D molecular animation for all 8 reactions | ✅ |
+| Follow-up AI questions about the molecular step on screen | ✅ |
+| Offline AI answers with no internet or microphone | ✅ |
+| Typed questions to the assistant | ✅ |
+| Offline voice replies (Windows) | ✅ |
+| Persistent coin economy, ranks and in-test help shop | ✅ |
+| Theory questions recorded in the results | ✅ |
+| Downloadable HTML + CSV test report | ✅ |
+| Interactive periodic table, achievements, pause menu | ✅ |
 | Full final Play-mode regression | ⏳ Recommended |
 
 ---

@@ -300,6 +300,12 @@ public class ExperimentHistoryManager : MonoBehaviour
             manager.gameObject.AddComponent<ExamCoinHud>();
         }
 
+        // Asks how many tasks the run should be, and holds the clock until the student answers.
+        if (manager.gameObject.GetComponent<ExamSetupUI>() == null)
+        {
+            manager.gameObject.AddComponent<ExamSetupUI>();
+        }
+
         // F5 resets the bench and re-selects the current experiment, so a failed reaction is no
         // longer a dead end that needs the game restarting.
         if (manager.gameObject.GetComponent<LabRetryController>() == null)

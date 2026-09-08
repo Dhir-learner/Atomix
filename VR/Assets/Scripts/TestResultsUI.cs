@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using TMPro;
 using UnityEngine;
 using UnityEngine.SceneManagement;
+using UnityEngine.UI;
 
 /// <summary>
 /// The report card shown when a testing run finishes.
@@ -39,8 +40,10 @@ public class TestResultsUI : MonoBehaviour
     private DateTime runStartedUtc = DateTime.MinValue;
     private bool playerWasEnabled;
 
-    private const float CanvasWidth = 1240.0f;
-    private const float CanvasHeight = 840.0f;
+    // Reference resolution for the overlay canvas. The layout below is expressed in these
+    // units and the CanvasScaler maps them onto whatever the window actually is.
+    private const float CanvasWidth = 1840.0f;
+    private const float CanvasHeight = 1000.0f;
 
     void OnEnable()
     {
@@ -142,7 +145,6 @@ public class TestResultsUI : MonoBehaviour
         EnsureUiBuilt();
         isOpen = true;
         resultsCanvas.gameObject.SetActive(true);
-        LabPanelBuilder.FaceCamera(resultsCanvas, distanceFromCamera);
         Rebuild();
 
         // A report card is read, not aimed at - give the student their cursor back, and stop
@@ -179,21 +181,27 @@ public class TestResultsUI : MonoBehaviour
             return;
         }
 
-        panel = LabPanelBuilder.CreatePanelCanvas(transform, "TestResultsCanvas",
-            new Vector2(CanvasWidth, CanvasHeight),
-            new Vector2(CanvasWidth - 40.0f, CanvasHeight - 40.0f),
-            560, out resultsCanvas);
+        // Screen Space Overlay, not a world-space plate.
+        //
+        // The first version used LabPanelBuilder.CreatePanelCanvas, which hangs the panel in the
+        // world 1.6 m in front of the camera. At that distance the whole report card occupied
+        // about a fifth of the screen and none of it was legible - the same "postage stamp in the
+        // middle of the lab" problem the pause menu already solved by going full-screen. Overlay
+        // also rasterises the text at screen pixels instead of scaling it down by 0.001 and back.
+        CanvasScaler scaler;
+        panel = LabPanelBuilder.CreateFullScreenCanvas(transform, "TestResultsCanvas",
+            new Vector2(CanvasWidth, CanvasHeight), 560, 40.0f, out resultsCanvas, out scaler);
 
         LabPanelBuilder.CreateText("Title", panel, new Vector2(0.0f, CanvasHeight * 0.5f - 60.0f),
-            new Vector2(900.0f, 50.0f), "Testing Phase — Results", 36.0f,
+            new Vector2(1200.0f, 60.0f), "Testing Phase — Results", 44.0f,
             TextAlignmentOptions.Center, Color.white);
 
         rowRoot = LabPanelBuilder.CreatePlate("Rows", panel, new Vector2(0.0f, 20.0f),
-            new Vector2(CanvasWidth - 140.0f, 520.0f), new Color(0.0f, 0.0f, 0.0f, 0.0f));
+            new Vector2(CanvasWidth - 140.0f, 620.0f), new Color(0.0f, 0.0f, 0.0f, 0.0f));
 
         statusText = LabPanelBuilder.CreateText("Status", panel,
             new Vector2(0.0f, -CanvasHeight * 0.5f + 118.0f), new Vector2(CanvasWidth - 160.0f, 56.0f),
-            string.Empty, 18.0f, TextAlignmentOptions.Center, LabPanelBuilder.MutedTextColour);
+            string.Empty, 21.0f, TextAlignmentOptions.Center, LabPanelBuilder.MutedTextColour);
 
         float buttonY = -CanvasHeight * 0.5f + 62.0f;
 
@@ -201,7 +209,7 @@ public class TestResultsUI : MonoBehaviour
         // want from this screen and the old "Export lab report" wrote the whole history into a
         // hidden AppData folder rather than this run into somewhere findable.
         LabPanelBuilder.CreateButton("DownloadReport", panel, "Download this test report",
-            new Vector2(-420.0f, buttonY), new Vector2(320.0f, 52.0f), 19.0f,
+            new Vector2(-470.0f, buttonY), new Vector2(340.0f, 62.0f), 22.0f,
             () =>
             {
                 if (statusText != null)
@@ -211,7 +219,7 @@ public class TestResultsUI : MonoBehaviour
             });
 
         LabPanelBuilder.CreateButton("OpenFolder", panel, "Open folder",
-            new Vector2(-150.0f, buttonY), new Vector2(200.0f, 52.0f), 19.0f,
+            new Vector2(-170.0f, buttonY), new Vector2(220.0f, 62.0f), 22.0f,
             () =>
             {
                 bool opened = ExamReportExporter.OpenReportFolder();
@@ -222,15 +230,21 @@ public class TestResultsUI : MonoBehaviour
             });
 
         LabPanelBuilder.CreateButton("ExportAll", panel, "Full history",
-            new Vector2(50.0f, buttonY), new Vector2(190.0f, 52.0f), 19.0f,
+            new Vector2(60.0f, buttonY), new Vector2(200.0f, 62.0f), 22.0f,
             () => { if (statusText != null) { statusText.text = LabReportExporter.ExportAll(); } });
 
-        LabPanelBuilder.CreateButton("Retry", panel, "Run the test again",
-            new Vector2(255.0f, buttonY), new Vector2(230.0f, 52.0f), 19.0f,
-            () => SceneManager.LoadScene("TestingPhaseLab"));
+        // Retake clears the chosen task count so the setup screen asks again - the student may
+        // well want a different length the second time round.
+        LabPanelBuilder.CreateButton("Retry", panel, "Retake the test",
+            new Vector2(305.0f, buttonY), new Vector2(250.0f, 62.0f), 22.0f,
+            () =>
+            {
+                StaticData.taskCountValue = 0;
+                SceneManager.LoadScene("TestingPhaseLab");
+            });
 
         LabPanelBuilder.CreateButton("Menu", panel, "Main menu",
-            new Vector2(455.0f, buttonY), new Vector2(180.0f, 52.0f), 19.0f,
+            new Vector2(545.0f, buttonY), new Vector2(190.0f, 62.0f), 22.0f,
             () =>
             {
                 FirstPersonController.SetCursorLock(false);
@@ -273,7 +287,7 @@ public class TestResultsUI : MonoBehaviour
             "<color=#FFD647>*</color> <b>" + ExamSession.RunCoins + "</b> coins     Passed <b>" +
             passed + "</b> of <b>" + total + "</b>     Grade <color=#" + gradeColour +
             "><b>" + grade + "</b></color>",
-            28.0f, TextAlignmentOptions.Center, Color.white);
+            36.0f, TextAlignmentOptions.Center, Color.white);
 
         // --- rank line ------------------------------------------------------------
         string rankLine = bank.RankName + "   -   " + bank.LifetimeEarned + " coins earned all-time";
@@ -287,7 +301,7 @@ public class TestResultsUI : MonoBehaviour
         }
 
         LabPanelBuilder.CreateText("Rank", rowRoot, new Vector2(0.0f, y + 30.0f),
-            new Vector2(rowWidth, 30.0f), rankLine, 18.0f, TextAlignmentOptions.Center,
+            new Vector2(rowWidth, 34.0f), rankLine, 23.0f, TextAlignmentOptions.Center,
             LabPanelBuilder.MutedTextColour);
 
         y -= 6.0f;
@@ -297,12 +311,12 @@ public class TestResultsUI : MonoBehaviour
             LabPanelBuilder.CreateText("Empty", rowRoot, new Vector2(0.0f, y - 40.0f),
                 new Vector2(rowWidth, 120.0f),
                 "No tasks were completed in this run.",
-                20.0f, TextAlignmentOptions.Center, LabPanelBuilder.MutedTextColour);
+                26.0f, TextAlignmentOptions.Center, LabPanelBuilder.MutedTextColour);
             return;
         }
 
         // --- one row per task ------------------------------------------------------
-        float rowHeight = 42.0f;
+        float rowHeight = 50.0f;
         int shown = Mathf.Min(total, 10);
 
         for (int i = 0; i < shown; i++)
@@ -319,28 +333,28 @@ public class TestResultsUI : MonoBehaviour
                 new Vector2(-rowWidth * 0.5f + 16.0f, rowY), new Vector2(8.0f, rowHeight), tint);
 
             LabPanelBuilder.CreateText("Kind" + i, rowRoot,
-                new Vector2(-rowWidth * 0.5f + 90.0f, rowY), new Vector2(110.0f, rowHeight),
-                task.kind == ExamTaskKind.Theory ? "Theory" : "Practical", 16.0f,
+                new Vector2(-rowWidth * 0.5f + 110.0f, rowY), new Vector2(150.0f, rowHeight),
+                task.kind == ExamTaskKind.Theory ? "Theory" : "Practical", 20.0f,
                 TextAlignmentOptions.Left, LabPanelBuilder.MutedTextColour);
 
             LabPanelBuilder.CreateText("Name" + i, rowRoot,
-                new Vector2(-rowWidth * 0.5f + 400.0f, rowY), new Vector2(490.0f, rowHeight),
-                CleanName(task.title), 18.0f, TextAlignmentOptions.Left,
+                new Vector2(-rowWidth * 0.5f + 560.0f, rowY), new Vector2(700.0f, rowHeight),
+                CleanName(task.title), 22.0f, TextAlignmentOptions.Left,
                 AtomixSettings.BodyTextColour);
 
             LabPanelBuilder.CreateText("Outcome" + i, rowRoot,
-                new Vector2(rowWidth * 0.5f - 250.0f, rowY), new Vector2(300.0f, rowHeight),
-                task.OutcomeLabel, 17.0f, TextAlignmentOptions.Left, tint);
+                new Vector2(rowWidth * 0.5f - 320.0f, rowY), new Vector2(380.0f, rowHeight),
+                task.OutcomeLabel, 21.0f, TextAlignmentOptions.Left, tint);
 
             LabPanelBuilder.CreateText("Coins" + i, rowRoot,
-                new Vector2(rowWidth * 0.5f - 110.0f, rowY), new Vector2(90.0f, rowHeight),
-                task.coinsEarned > 0 ? "+" + task.coinsEarned : "-", 17.0f,
+                new Vector2(rowWidth * 0.5f - 130.0f, rowY), new Vector2(110.0f, rowHeight),
+                task.coinsEarned > 0 ? "+" + task.coinsEarned : "-", 21.0f,
                 TextAlignmentOptions.Right,
                 task.coinsEarned > 0 ? tint : LabPanelBuilder.MutedTextColour);
 
             LabPanelBuilder.CreateText("Time" + i, rowRoot,
-                new Vector2(rowWidth * 0.5f - 30.0f, rowY), new Vector2(80.0f, rowHeight),
-                task.secondsTaken.ToString("0") + "s", 17.0f,
+                new Vector2(rowWidth * 0.5f - 35.0f, rowY), new Vector2(90.0f, rowHeight),
+                task.secondsTaken.ToString("0") + "s", 21.0f,
                 TextAlignmentOptions.Right, LabPanelBuilder.MutedTextColour);
         }
 
@@ -350,7 +364,7 @@ public class TestResultsUI : MonoBehaviour
         {
             float adviceY = y - shown * (rowHeight + 6.0f) - 34.0f;
             LabPanelBuilder.CreateText("Advice", rowRoot, new Vector2(0.0f, adviceY),
-                new Vector2(rowWidth, 70.0f), advice, 18.0f, TextAlignmentOptions.Center,
+                new Vector2(rowWidth, 76.0f), advice, 22.0f, TextAlignmentOptions.Center,
                 LabPanelBuilder.MutedTextColour);
         }
 

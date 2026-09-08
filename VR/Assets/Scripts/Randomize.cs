@@ -183,7 +183,12 @@ public class Randomize : MonoBehaviour
                     totalReactionsNumber = 18;
                 }
                 reactionsDone.Add(currentReactionInTestPhase);
-                if (reactionsDone.Count >= totalReactionsNumber || reactionsDone.Count >= 10) // || reactionsDone.Count >= 10)
+
+                // The 10 here used to be hard-coded, so every run was the same length whatever the
+                // student wanted. It now comes from the setup screen, still clamped to how many
+                // tasks the chosen mode actually has.
+                int requested = Mathf.Clamp(StaticData.TaskCount, 1, totalReactionsNumber);
+                if (reactionsDone.Count >= totalReactionsNumber || reactionsDone.Count >= requested)
                 {
                     stopTesting = true;
                 }
