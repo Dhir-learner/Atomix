@@ -152,6 +152,37 @@ public class DesktopBootstrap : MonoBehaviour
     {
         FirstPersonController.SetCursorLock(false);
         SetupUiInput(true);
+
+        // The menu has no FirstPersonController, so nothing else would ever grade its camera.
+        AttachPostFx(true);
+    }
+
+    /// <summary>
+    /// Puts the post-processing stack on the player's camera. Any camera rendering to a texture
+    /// is skipped - the molecular animation stage owns one, and grading a small off-screen
+    /// target would cost a full post stack for nothing anyone can see.
+    /// </summary>
+    void AttachPostFx(bool isMenuScene)
+    {
+        Camera camera = Camera.main;
+        if (camera == null || camera.targetTexture != null)
+        {
+            Camera[] cameras = FindObjectsByType<Camera>(FindObjectsInactive.Exclude, FindObjectsSortMode.None);
+            camera = null;
+            for (int i = 0; i < cameras.Length; i++)
+            {
+                if (cameras[i].targetTexture == null)
+                {
+                    camera = cameras[i];
+                    break;
+                }
+            }
+        }
+
+        if (camera != null)
+        {
+            AtomixPostFx.Attach(camera, isMenuScene);
+        }
     }
 
     void SetupUiInput(bool menuMode)
@@ -214,6 +245,14 @@ public class DesktopBootstrap : MonoBehaviour
             mainCamera.gameObject.AddComponent<ObjectInteraction>();
         }
 
+        // Added after the controller on purpose: CameraJuice resolves it in OnEnable.
+        if (mainCamera.GetComponent<CameraJuice>() == null)
+        {
+            mainCamera.gameObject.AddComponent<CameraJuice>();
+        }
+
+        AtomixPostFx.Attach(mainCamera, false);
+
         GameObject xrRig = GameObject.Find("XR Rig");
         if (xrRig != null)
         {
@@ -265,11 +304,31 @@ public class DesktopBootstrap : MonoBehaviour
             RegisterGameObjectFields(behaviour, candidateObjects, scene);
         }
 
+        // Actuators are claimed FIRST, before anything is made grabbable.
+        //
+        // This ordering is load-bearing. EnsureGrabbable skips anything that already carries a
+        // DesktopInteractable, but the invoke actions used to be attached *after* this loop - so
+        // on the first pass the tap handle, the burner support and the container lids all picked
+        // up an ObjectGrabbable, and DesktopSettleWatcher then treated them as loose glassware
+        // and lowered them onto the nearest surface.
+        //
+        // For the tap that was not merely untidy, it turned the water on: RotateButton toggles
+        // the flow whenever its handle *stops moving*, and being settled is movement that stops.
+        // The result was running water from the moment any lab scene loaded.
+        AttachActuators(scene);
+
         foreach (GameObject candidate in candidateObjects)
         {
             EnsureGrabbable(candidate);
         }
+    }
 
+    /// <summary>
+    /// Marks every click-to-operate control in the scene. Separated from
+    /// <see cref="SetupInteractables"/> so it can run before anything is made grabbable.
+    /// </summary>
+    void AttachActuators(Scene scene)
+    {
         foreach (LightFire lightFire in FindObjectsByType<LightFire>(FindObjectsInactive.Include, FindObjectsSortMode.None))
         {
             if (lightFire.gameObject.scene == scene)

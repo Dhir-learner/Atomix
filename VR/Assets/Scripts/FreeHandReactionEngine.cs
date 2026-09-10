@@ -412,54 +412,94 @@ public class FreeHandReactionEngine
         return string.Empty;
     }
 
+    /// <summary>
+    /// Scratch buffer shared by all three readouts below.
+    ///
+    /// Each of them is rebuilt every frame, by every reaction script that is live, for as long as
+    /// an experiment is on the bench. Built with <c>+=</c> and <c>string.Format</c> - as they
+    /// were - a three-reagent experiment produced roughly a dozen short-lived strings per readout
+    /// per frame, which at 60 fps is a steady several hundred kilobytes a minute of pure garbage
+    /// feeding straight into the collector.
+    ///
+    /// Safe as a single shared instance: every caller is a MonoBehaviour <c>Update</c> on the
+    /// main thread, and each finishes with the buffer before the next one starts.
+    /// </summary>
+    private static readonly System.Text.StringBuilder scratch = new System.Text.StringBuilder(256);
+
+    /// <summary>Appends "name: current [/ target] unit" - the shape common to every readout.</summary>
+    private void AppendReading(System.Text.StringBuilder builder, string substance, bool withTarget)
+    {
+        builder.Append(substance).Append(": ")
+               .Append(currentQuantities[substance].ToString("F1"));
+
+        if (withTarget)
+        {
+            builder.Append(" / ").Append(targetQuantities[substance].ToString("F1"));
+        }
+
+        builder.Append(' ').Append(UnitFor(substance));
+    }
+
     /// <summary>Multi-line body used for the on-screen canvas text.</summary>
     public string GetTrackerText()
     {
-        string text = trackerTitle + "\n";
+        scratch.Length = 0;
+        scratch.Append(trackerTitle).Append('\n');
+
         for (int i = 0; i < registrationOrder.Count; i++)
         {
             string substance = registrationOrder[i];
-            text += hideTargets
-                ? string.Format("{0}: {1:F1} {2}\n",
-                    substance, currentQuantities[substance], UnitFor(substance))
-                : string.Format("{0}: {1:F1} / {2:F1} {3}  (accept {4:F1}-{5:F1})\n",
-                    substance, currentQuantities[substance], targetQuantities[substance],
-                    UnitFor(substance), MinAllowed(substance), MaxAllowed(substance));
+            AppendReading(scratch, substance, !hideTargets);
+
+            if (!hideTargets)
+            {
+                scratch.Append("  (accept ").Append(MinAllowed(substance).ToString("F1"))
+                       .Append('-').Append(MaxAllowed(substance).ToString("F1")).Append(')');
+            }
+
+            scratch.Append('\n');
         }
 
         if (IsAnyPouring)
         {
             foreach (string substance in pouringSubstances)
             {
-                text += hideTargets
-                    ? string.Format("\nAdding {0}...", substance)
-                    : string.Format("\nAdding {0}... stop between {1:F1} and {2:F1} {3}.",
-                        substance, MinAllowed(substance), MaxAllowed(substance), UnitFor(substance));
+                scratch.Append("\nAdding ").Append(substance).Append("...");
+                if (!hideTargets)
+                {
+                    scratch.Append(" stop between ").Append(MinAllowed(substance).ToString("F1"))
+                           .Append(" and ").Append(MaxAllowed(substance).ToString("F1"))
+                           .Append(' ').Append(UnitFor(substance)).Append('.');
+                }
                 break;
             }
         }
         else if (reactionState == FreeHandReactionState.Settling)
         {
-            text += string.Format("\nLet the mixture settle... {0:F1}s / {1:F1}s", settleTimer, settleTimeRequired);
+            scratch.Append("\nLet the mixture settle... ")
+                   .Append(settleTimer.ToString("F1")).Append("s / ")
+                   .Append(settleTimeRequired.ToString("F1")).Append('s');
         }
 
-        return text;
+        return scratch.ToString();
     }
 
     /// <summary>Compact body for the floating world-space tooltip.</summary>
     public string GetTooltipText()
     {
-        string text = string.Empty;
+        scratch.Length = 0;
+
         for (int i = 0; i < registrationOrder.Count; i++)
         {
-            string substance = registrationOrder[i];
-            text += hideTargets
-                ? string.Format("{0}: {1:F1} {2}\n",
-                    substance, currentQuantities[substance], UnitFor(substance))
-                : string.Format("{0}: {1:F1} / {2:F1} {3}\n",
-                    substance, currentQuantities[substance], targetQuantities[substance], UnitFor(substance));
+            if (i > 0)
+            {
+                scratch.Append('\n');
+            }
+
+            AppendReading(scratch, registrationOrder[i], !hideTargets);
         }
-        return text.TrimEnd('\n');
+
+        return scratch.ToString();
     }
 
     /// <summary>
@@ -472,7 +512,8 @@ public class FreeHandReactionEngine
     /// </summary>
     public string GetHudText(string reactionName)
     {
-        System.Text.StringBuilder builder = new System.Text.StringBuilder();
+        System.Text.StringBuilder builder = scratch;
+        builder.Length = 0;
 
         if (!string.IsNullOrEmpty(reactionName))
         {

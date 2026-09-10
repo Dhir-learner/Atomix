@@ -49,6 +49,7 @@ UI
   F1           Pause, settings and achievements
   H            Toggle this help
   L            Measurement label: full / compact / off
+  O            Bring the video panel back in front of you
   Tab          Experiment history
   F            Scientific graphs
   P            Periodic table

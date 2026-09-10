@@ -7,9 +7,9 @@ public class ExitMenu : MonoBehaviour
 
     public void ReturnMainMenuScene()
     {
+        AtomixAudio.UiClick();
         FirstPersonController.SetCursorLock(false);
-        SceneManager.LoadScene("MainMenuScene");
-        Debug.Log("Opening MainMenuScene");
+        SceneTransition.Load("MainMenuScene");
     }
 
     public void closeTheBook()

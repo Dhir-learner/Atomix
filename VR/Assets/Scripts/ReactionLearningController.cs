@@ -208,6 +208,13 @@ public class ReactionLearningController : MonoBehaviour
         {
             TogglePlayPause();
         }
+
+        // The panel stays where it was opened while the player walks and looks around; this
+        // brings it back in front of them.
+        if (Input.GetKeyDown(RecentreKey))
+        {
+            PositionUiInFrontOfCamera();
+        }
     }
 
     void OnDestroy()
@@ -1838,21 +1845,75 @@ public class ReactionLearningController : MonoBehaviour
         // DO NOT unlock the OS cursor. Keep it locked so crosshair interaction works.
     }
     
+    /// <summary>Key that brings the panel back in front of the player.</summary>
+    const KeyCode RecentreKey = KeyCode.O;
+
+    const float PanelDistance = 1.5f;
+    const float MinPanelDistance = 0.6f;
+    const float PanelClearance = 0.05f;
+
+    /// <summary>
+    /// Puts the panel upright, at eye level, in the direction the player is facing.
+    ///
+    /// It used to be placed along <c>camera.forward</c> with the camera's full rotation. Looking
+    /// down at the bench when a video started - which is exactly where the student is looking,
+    /// because the video starts when an experiment succeeds - put the panel 1.5 m along that
+    /// downward line, which is inside the table, and tilted it face-up to match. Nothing moved it
+    /// again afterwards, so it stayed there.
+    ///
+    /// Only the horizontal part of the view direction is used now, so how far up or down the
+    /// player happens to be looking no longer matters. Walls and the bench are then checked for,
+    /// so the panel is never placed inside either.
+    /// </summary>
     void PositionUiInFrontOfCamera()
     {
         if (learningCanvas == null) return;
-        
+
         Camera cam = Camera.main;
-        if (cam != null)
+        if (cam == null) return;
+
+        Transform camTransform = cam.transform;
+
+        RectTransform canvasRect = learningCanvas.GetComponent<RectTransform>();
+        canvasRect.sizeDelta = new Vector2(1000f, 720f);
+        canvasRect.localScale = Vector3.one * 0.001f;
+
+        // Facing direction on the floor plane. Looking straight down leaves nothing to project,
+        // so fall back to the top edge of the view, which is still the way the player faces.
+        Vector3 facing = Vector3.ProjectOnPlane(camTransform.forward, Vector3.up);
+        if (facing.sqrMagnitude < 0.0001f)
         {
-            Transform camTransform = cam.transform;
-            learningCanvas.transform.position = camTransform.position + camTransform.forward * 1.5f;
-            learningCanvas.transform.rotation = camTransform.rotation;
-            
-            RectTransform canvasRect = learningCanvas.GetComponent<RectTransform>();
-            canvasRect.sizeDelta = new Vector2(1000f, 720f);
-            canvasRect.localScale = Vector3.one * 0.001f;
+            facing = Vector3.ProjectOnPlane(camTransform.up, Vector3.up);
         }
+        if (facing.sqrMagnitude < 0.0001f)
+        {
+            facing = Vector3.forward;
+        }
+        facing.Normalize();
+
+        // Stop short of a wall rather than putting the panel through it.
+        float distance = PanelDistance;
+        RaycastHit hit;
+        if (Physics.Raycast(camTransform.position, facing, out hit, PanelDistance + PanelClearance,
+                            ~0, QueryTriggerInteraction.Ignore))
+        {
+            distance = Mathf.Max(MinPanelDistance, hit.distance - PanelClearance);
+        }
+
+        Vector3 centre = camTransform.position + facing * distance;
+
+        // Keep the bottom edge above the bench. At normal eye height it already is; this is for
+        // a player who has flown down low with Ctrl before the video opened.
+        float halfHeight = canvasRect.sizeDelta.y * canvasRect.localScale.y * 0.5f;
+        if (Physics.Raycast(centre + Vector3.up * halfHeight, Vector3.down, out hit,
+                            (halfHeight * 2.0f) + PanelClearance, ~0, QueryTriggerInteraction.Ignore) &&
+            hit.normal.y > 0.65f)
+        {
+            centre.y = Mathf.Max(centre.y, hit.point.y + halfHeight + PanelClearance);
+        }
+
+        learningCanvas.transform.position = centre;
+        learningCanvas.transform.rotation = Quaternion.LookRotation(facing, Vector3.up);
     }
 }
 

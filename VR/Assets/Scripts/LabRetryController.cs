@@ -113,6 +113,8 @@ public class LabRetryController : MonoBehaviour
             return;
         }
 
+        AtomixAudio.ResetBench();
+
         ReactionHistoryRecorder recorder = CurrentRecorder();
         pendingReactionId = recorder != null ? recorder.ReactionId : -1;
         pendingReactionName = recorder != null ? recorder.ReactionName : string.Empty;
@@ -131,7 +133,7 @@ public class LabRetryController : MonoBehaviour
             manager.SaveToJson();
         }
 
-        SceneManager.LoadScene(SceneManager.GetActiveScene().name);
+        SceneTransition.Reload();
     }
 
     private void HandleSceneLoaded(Scene scene, LoadSceneMode mode)

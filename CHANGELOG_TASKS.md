@@ -1577,3 +1577,196 @@ notation, and one unescaped `<` silently swallows the rest of a table cell.
 | **F2** | Buy a hint — 40 coins (practical experiments only) |
 | **F3** | Buy 30 more seconds — 60 coins |
 | **F4** | Skip the current task — 100 coins |
+
+---
+
+# Task 10 — Game Feel, Audio Feedback and Presentation
+
+**Date:** 2026-09-09
+**Status:** ✅ Built — 0 errors, 68 warnings (identical to baseline; no new warnings)
+
+Full report: `TASK10_GAME_FEEL_AUDIO_AND_PRESENTATION.md`
+
+## 23. Executive summary
+
+The audit verified Tasks 1–9 against the implementation and found the chemistry in good shape. The
+gap was the presentation layer, which had never been built: the simulation knew things the game was
+not communicating. Picking up a beaker was silent, a locked piece of equipment gave no feedback at
+all, a scene change froze the window, and succeeding at an experiment changed one word in a HUD
+strip from blue to green.
+
+Three systems the project already paid for were unused: `com.unity.postprocessing` was a dependency
+with no volume in any scene; there was no reflection probe, so a windowless laboratory's glassware
+mirrored a procedural blue sky; and there were no camera effects at all.
+
+Ten new scripts, no new binary assets, **no `.unity` or `.prefab` file touched**.
+
+| Area | Added |
+|---|---|
+| Audio | 12 synthesised interaction cues, laboratory room tone, menu pad, pour loops, three volume buses |
+| Camera | Walk bob, sprint field-of-view kick, screen shake, verdict hit-stop — all scaling to zero |
+| Visuals | Post-processing (bloom, ACES grade, vignette, AO), SMAA/FXAA, a room reflection probe, emission-based object highlighting |
+| Flow | Async scene loading behind a fade with tip cards, first-run onboarding, a live objective line |
+| Settings | Music/SFX/ambience buses, camera shake, head bob, graphics quality, visual effects, fullscreen, frame cap — laid out in two columns |
+| Feedback | Verdict sting + shake + edge flash, audible coin awards, and a reason given when equipment is locked |
+
+## 24. Defects fixed
+
+1. `RemoveHighlight` could stamp a stale colour onto a material a reaction script had swapped
+   mid-experiment.
+2. The highlight overwrote albedo outright, flattening every material to the same yellow.
+3. `MainMenu.Start()` dereferenced `settingsPanel` unguarded — one lost reference killed every
+   menu button, because the throw skipped `InitializeToggles`.
+4. Held-object and UI smoothing were frame-rate dependent (`Lerp(a, b, dt * k)`).
+5. Locked equipment gave no feedback of any kind, which is indistinguishable from a missed click.
+6. Synchronous scene loads froze the window long enough for Windows to offer to close it.
+7. *(prevented)* A runtime-added `PostProcessLayer` null-references every rendered frame unless it
+   is handed its resources asset explicitly.
+8. *(prevented)* Both audio beds had a 4 ms hole at the loop point — the anti-click guard fade was
+   undoing the seamless-loop construction. Caught by measurement, not review.
+9. *(prevented)* Head bob applied in `LateUpdate` would have fought `LabBoundary`'s position clamp.
+
+## 25. Deliberately not changed
+
+- **`productName` / `companyName`.** The window title says "UnityLab". Renaming discards every
+  player's PlayerPrefs and `persistentDataPath` on Windows; it needs a migration, not an edit.
+- **Ambient lighting mode.** Strong evidence of a latent bug (interior trilight colours authored
+  but unused because the mode is Skybox), but changing it alters room brightness and wants an
+  eyes-on pass.
+
+## 26. Verification
+
+Compiled against the real Unity 6000.3.7f1 assemblies after every change: **0 errors, 68 warnings,
+zero new**. Every remaining warning is pre-existing `CS0649`/`CS0414` on scene-assigned fields in
+the original reaction scripts; none is in a file this task created or touched.
+
+The audio synthesis was additionally extracted verbatim and exercised outside Unity: **20/20 checks
+pass**, covering cue level, silent endpoints, and loop-seam continuity measured against the mean
+sample step inside each clip.
+
+A Play-mode pass was not possible — the Unity Editor holds the project lock.
+
+
+## 27. Round 2 — playtest fixes
+
+Four issues reported from a play session. All four were mine.
+
+| Report | Cause | Fix |
+|---|---|---|
+| Objects inside the table, and sometimes falling below it | The settler cast downward from `bounds.center`. On an object slightly sunk into the bench that ray starts *below* the bench top, misses it, and hits the **floor** - so releasing a slightly-embedded beaker teleported it to the floor. A negative gap was rejected outright, so an embedded object could never be rescued. Separately, held objects were positioned with no collision sweep at all, so walking into the bench pushed them through it | Cast from `bounds.max.y` and take the **highest** surface, not the nearest; a negative gap now lifts the object out, capped, and only off static geometry. Held objects now sphere-cast and stop short of anything solid |
+| Walking motion caused nausea | Head bob, plus a sprint field-of-view kick doing the same thing behind a different switch | Bob ships **off**, ceiling halved, roll cut by two-thirds; the sprint kick moved behind the same control, relabelled **Walking motion** |
+| "Colour contrast was perfect before, now it is looking dull" | ACES tonemapping an already-authored image, a shadow lift that removes contrast by definition, and a bloom thresholded at 1.10 that hazed a white-walled room instead of catching the flame | Colour grading and vignette **off entirely** - the pass no longer touches a colour value. Bloom raised to 1.35 and cut to 0.75. Only antialiasing and ambient occlusion remain |
+| Water tap sound on every scene load | **(a)** My room tone was low-passed white noise, which is acoustically what running water is. **(b)** A real pre-existing bug: `DesktopBootstrap` made objects grabbable *before* claiming actuators, so the tap handle became grabbable, the settler moved it, and `RotateButton` toggles the water whenever its handle stops moving | Room tone rebuilt as pure mains hum and fan beat, nothing above 200 Hz, measured 840,000x less spectrally flat - and it now ships **off**, with a settings version bump so existing installs receive the new default. Actuators are now claimed before anything is made grabbable; the settler skips controls; `RotateButton` ignores movement for two seconds after load |
+
+Compile unchanged: 0 errors, 68 warnings, zero new. Audio suite now 22 checks, all passing.
+
+
+## 28. Round 3 — the Bunsen burner
+
+| Report | Cause | Fix |
+|---|---|---|
+| Burner alight before the player lights it | `LightFire` has the same movement-toggle bug fixed in `RotateButton` in Round 2 and missed here - it lights the flame whenever `burnerSupport` stops moving, and the desktop rig moves objects during startup. The flame is also authored active with `playOnAwake`, and `LightFire.Start()` never runs while ControlReactions has the burner disabled | The logic now lives once in a new `MovementLatch` with a two-second settle-in window, shared by all **four** scripts that had it duplicated - `RotateButton`, `LightFire`, and the sodium and potassium lids, the last two carrying the same latent misfire. The flame is put out in `Awake`, and `LabEffectsInitializer` now sweeps it |
+| Burner still standing inside the table | **My Round 2 fix caused this.** `LightFire.burnerSupport` is the burner's own GameObject, so the "never settle a control" rule excluded it - and because `EnsureGrabbable` skips actuators, it had no `ObjectGrabbable` either, dropping it out of the settle scan entirely | The rule is now directional: controls are never *lowered* (a guess, and the movement can actuate them) but are always *lifted* out of solid geometry (never correct, control or not). The settle scan now collects `DesktopInteractable` alongside `ObjectGrabbable` |
+
+Compile unchanged: 0 errors, 68 warnings, zero new. Audio suite 22/22.
+
+### Round 3 follow-up
+
+`LightFire.burnerSupport` resolves to a **child inside the burner prefab**, not the burner root
+(GameObject 802329528 is a stripped entry of prefab instance 802329525 in `LabScene.unity`). The
+burner root has neither an `ObjectGrabbable` nor a `DesktopInteractable`, so it was never in the
+settle scan - which is exactly why every other object settled correctly and the burner did not.
+
+The burner is now scanned as a whole object via `burnerSupport.transform.root`, guarded by
+`AddIfNotNested` (no double-settling a parent and its own child), a 1.5 m footprint ceiling, and a
+lift-only rule for anything *containing* a control (`isControl` now looks at children as well as
+parents). Bounds now ignore inactive geometry, so the hidden flame no longer inflates the burner's
+measured height, and the movement latch re-arms in `OnEnable` so equipment revealed later cannot
+actuate itself when placed.
+
+## 29. Round 4 — the learning video panel went through the table
+
+`ReactionLearningController.PositionUiInFrontOfCamera` placed the panel 1.5 m along
+`camera.forward` with the camera's full rotation. The video opens when an experiment succeeds, which
+is exactly when the student is looking down at the bench - so the panel was put inside the table,
+tilted face-up, and nothing ever moved it again.
+
+- The panel now uses only the horizontal part of the view direction, so it opens upright at eye
+  level whatever the pitch. Looking straight down falls back to the top edge of the view.
+- A forward raycast stops it short of a wall; a downward one keeps its bottom edge above the bench
+  for a player who has flown down low with Ctrl.
+- **O** brings the panel back in front of the player at any time while it is open. `O` was
+  checked to be unbound everywhere else in the project.
+
+Only this method, one `Update` branch and one line of `ControlsHelpUI` changed. Line endings
+preserved (CRLF). Compile unchanged: 0 errors, 68 warnings.
+
+## 30. Round 5 — elastic held objects, and the assistant inside a table
+
+**Held objects moved elastically.** `ObjectInteraction.MoveHeldObject` lerped the object in world
+space towards a point in front of the camera. That point moves with the camera, so whenever the
+player started moving, stopped or turned, the object fell behind and sprang back. It also ran in
+`Update` in an undefined order relative to `FirstPersonController`, so it was often chasing the
+camera's previous-frame pose.
+
+The object is now carried rigidly by the camera and only its camera-relative offset is smoothed:
+walking and turning have no lag, while the pickup glide and the pull-in short of the bench still
+ease. Positioning moved to `LateUpdate`, and `[DefaultExecutionOrder(100)]` puts it after both the
+controller's movement and `LabBoundary`'s clamp. Rotation behaviour is unchanged.
+
+**The assistant stood inside a table when entering from the main menu.** `InLabAssistantController`
+spawns the character on `activeSceneChanged`, which fires *before* `sceneLoaded` - so on that route
+the spot was chosen before `DesktopBootstrap` had reset the camera's XR offset and rotation, and
+before the room's floor collider existed. Played directly, `Start` ran after the rig was built,
+which is why only the menu route went wrong. The placement also never checked the spot was free,
+and measured the floor at a different point from where the model was then stood.
+
+`LabAssistantCharacter` now hides the model until the rig and boundary are ready, then picks the
+first of 25 candidate spots (authored spot first) where a body-sized capsule touches nothing, the
+spot is inside the room, and the player can see the assistant's head. If none qualifies it falls
+back to the original spot. The floor is measured directly beneath the player.
+
+Compile unchanged: 0 errors, 68 warnings. `LabAssistantCharacter.cs` keeps its CRLF endings.
+
+## 31. Round 6 — two regressions from Round 5
+
+**Balloon and tube moving at different speeds.** Round 5 moved held-object positioning into a
+`LateUpdate` at execution order +100. `CaCO3Reaction` (and `CaCO3ReactionTest`) snap the balloon onto
+the tube's socket in their own `LateUpdate` at the default order 0 - so every frame the balloon
+snapped to where the tube *had been*, and then the tube moved. Positioning is back in `Update`, now
+at -50, with `FirstPersonController` pinned to -100. The frame runs: `CameraJuice` restores the
+camera (-200), the player moves (-100), the held object is placed (-50), then every follower at the
+default order sees its current pose. The rigid camera-relative carry from Round 5 is unchanged, so
+the elastic motion stays fixed.
+
+**Assistant standing in mid-air.** Round 5 measured the floor with a ray straight down from the
+player's eyes, on the assumption that nothing lies between a player's head and the floor. In this rig
+that is false: the disabled XR rig's hand controllers stay parked beneath the camera at spawn (the
+desktop controller moves the camera, not the rig), and the camera is lifted 0.35 m on start. The ray
+found those first. *(Correction, Round 7: the hand models carry no colliders - their only
+added component is `HandAnimationController` - so they were not what the ray hit. The fix
+below does not depend on the cause.)* The floor is now probed *at each candidate spot*, starting 25 cm above the
+player's feet (the bottom of their CharacterController) - below every table top, and far below the
+parked hands - so a table on the spot is passed under and then rejected by the clearance capsule.
+
+Compile unchanged: 0 errors, 68 warnings.
+
+## 32. Round 7 — the player started low and rose on the first step
+
+The start height was a fixed guess: the XR rig's authored height (y = 1.91 in all three labs) plus
+`desktopStartHeightOffset` (0.35). The collision capsule's bottom is always `eyeHeight` (1.75) below
+the eyes, and nothing checked where the floor actually was - so the capsule began partly inside the
+floor. A `CharacterController` does not push itself out while standing still, only when given real
+movement, so the player started a little low and rose suddenly on the first step.
+
+`FirstPersonController` now rests the capsule on the floor before any movement: it probes straight
+down from the eyes for the nearest upward-facing surface that is not the player, and lifts the
+player so the capsule bottom sits at `floor + skinWidth` - the height walking would have produced.
+The lab has no floor collider of its own (the floor is `LabBoundary`'s slab, built during scene
+setup), so it retries each frame for up to 1.5 s. It only ever lifts, by at most 1 m, and calls
+`Physics.SyncTransforms()` because auto-sync is off in this project.
+
+Checked along the way: nothing under the XR rig has a collider, so nothing else can be inside the
+capsule at spawn.
+
+Compile unchanged: 0 errors, 68 warnings.

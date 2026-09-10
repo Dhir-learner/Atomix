@@ -73,6 +73,13 @@ public class LabBoundary : MonoBehaviour
     /// <summary>Playable interior of the lab in world space.</summary>
     public Bounds Interior => interior;
 
+    /// <summary>
+    /// Whether <see cref="Interior"/> holds a real measurement yet. Until the room shell has
+    /// been found it is a default Bounds at the origin, which is not something another system
+    /// should build anything from.
+    /// </summary>
+    public bool HasInterior => interiorResolved;
+
     /// <summary>True when the room shell could not be measured and the fallback box is in use.</summary>
     public bool UsedFallback => usedFallback;
 
