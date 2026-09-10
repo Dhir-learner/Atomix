@@ -1,3 +1,5 @@
+using System.Collections;
+using System.Collections.Generic;
 using UnityEngine;
 
 /// <summary>
@@ -26,6 +28,8 @@ public class LabAssistantCharacter : MonoBehaviour
     public float sideOffset = 0.9f;
     [Tooltip("Metres above the floor the model's feet sit.")]
     public float floorOffset = 0.0f;
+    [Tooltip("Radius kept clear of furniture around the assistant when choosing where it stands.")]
+    public float clearanceRadius = 0.3f;
 
     [Header("Size")]
     [Tooltip("The model is auto-scaled to this height in metres, whatever its native size is.")]
@@ -51,6 +55,7 @@ public class LabAssistantCharacter : MonoBehaviour
     private float bobPhase;
     private bool usingOriginalAvatar;
     private Transform voiceAnchor;
+    private readonly List<Renderer> hiddenRenderers = new List<Renderer>();
 
     /// <summary>True when the student's own avatar was found rather than the fallback robot.</summary>
     public bool IsOriginalAvatar { get { return usingOriginalAvatar; } }
@@ -105,6 +110,14 @@ public class LabAssistantCharacter : MonoBehaviour
         FitToTargetHeight();
         PlaceInFrontOfPlayer();
 
+        // The spot is chosen again once the player's rig and the room boundary exist, and the
+        // model stays hidden until then. Coming from the main menu, the character is spawned on
+        // activeSceneChanged - which fires before sceneLoaded, so before DesktopBootstrap has
+        // reset the camera's XR offset and rotation, and before the room's floor collider has
+        // been built. Placing against that camera is what put the assistant inside a table.
+        SetModelVisible(false);
+        StartCoroutine(SettlePlacement());
+
         // The avatar .glb has a rig but no animation clips, so it would stand in a T-pose.
         // This poses the arms down and adds breathing / head tracking procedurally.
         if (usingOriginalAvatar)
@@ -128,6 +141,9 @@ public class LabAssistantCharacter : MonoBehaviour
 
     public void Despawn()
     {
+        StopAllCoroutines();
+        hiddenRenderers.Clear();
+
         if (model != null)
         {
             Destroy(model);
@@ -179,8 +195,21 @@ public class LabAssistantCharacter : MonoBehaviour
         modelTransform.localScale = modelTransform.localScale * scale;
     }
 
+    /// <summary>
+    /// Distance and side multipliers tried in order, relative to <see cref="distanceInFront"/> and
+    /// <see cref="sideOffset"/>. The authored spot comes first; then the other side; then further
+    /// away, since standing behind a bench looks natural; then nearer.
+    /// </summary>
+    private static readonly float[] CandidateDistances = { 1.0f, 1.35f, 0.8f, 1.7f, 0.65f };
+    private static readonly float[] CandidateSides = { 1.0f, -1.0f, 0.0f, 1.8f, -1.8f };
+
     private void PlaceInFrontOfPlayer()
     {
+        if (modelTransform == null)
+        {
+            return;
+        }
+
         Camera camera = Camera.main;
 
         Vector3 origin = camera != null ? camera.transform.position : Vector3.zero;
@@ -192,22 +221,217 @@ public class LabAssistantCharacter : MonoBehaviour
         forward = forward.sqrMagnitude > 0.0001f ? forward.normalized : Vector3.forward;
         right = right.sqrMagnitude > 0.0001f ? right.normalized : Vector3.right;
 
-        // Drop to the floor beneath the camera, then stand the model on it.
-        float floorY = origin.y - 1.6f + floorOffset;
-        RaycastHit hit;
-        if (Physics.Raycast(origin + forward * distanceInFront + Vector3.up * 0.5f,
-                            Vector3.down, out hit, 6.0f))
+        float feetY = PlayerFeetY(camera, origin);
+        float height = usingOriginalAvatar ? avatarTargetHeight : targetHeight;
+
+        // The original spot is kept as the fallback, so if nothing tests clear the assistant
+        // stands exactly where it always did.
+        Vector3 position = origin + forward * distanceInFront + right * sideOffset;
+        float floorY;
+        if (!TryFindFloorAt(position, feetY, out floorY))
         {
-            floorY = hit.point.y + floorOffset;
+            floorY = FallbackFloorY(feetY);
         }
 
-        Vector3 position = origin + forward * distanceInFront + right * sideOffset;
-        position.y = floorY + HalfHeight();
+        bool found = false;
+        for (int d = 0; d < CandidateDistances.Length && !found; d++)
+        {
+            for (int side = 0; side < CandidateSides.Length && !found; side++)
+            {
+                Vector3 candidate = origin +
+                                    forward * (distanceInFront * CandidateDistances[d]) +
+                                    right * (sideOffset * CandidateSides[side]);
+
+                float candidateFloor;
+                if (!TryFindFloorAt(candidate, feetY, out candidateFloor))
+                {
+                    continue;
+                }
+
+                if (IsClearSpot(candidate, candidateFloor, height, origin))
+                {
+                    position = candidate;
+                    floorY = candidateFloor;
+                    found = true;
+                }
+            }
+        }
+
+        position.y = floorY + floorOffset + HalfHeight();
 
         modelTransform.position = position;
         restPosition = position;
 
         FacePlayerImmediately();
+    }
+
+    /// <summary>How far above the player's feet the floor probe starts.</summary>
+    private const float FloorProbeLift = 0.25f;
+
+    /// <summary>How far below the player's feet the floor may be found.</summary>
+    private const float FloorProbeDepth = 1.0f;
+
+    /// <summary>
+    /// Where the player's feet are: the bottom of their CharacterController.
+    ///
+    /// Measuring from the eyes, as the previous version did, left the assistant standing in
+    /// mid-air: whatever that ray met first was not the floor the assistant stands on. Probing at
+    /// the assistant's own spot, from just above the feet, does not depend on what is under the
+    /// player at all.
+    /// </summary>
+    private static float PlayerFeetY(Camera camera, Vector3 origin)
+    {
+        CharacterController body = camera != null ? camera.GetComponent<CharacterController>() : null;
+        if (body != null && body.enabled)
+        {
+            return body.bounds.min.y;
+        }
+
+        return origin.y - 1.6f;
+    }
+
+    /// <summary>
+    /// The floor at <paramref name="spot"/> itself.
+    ///
+    /// Probed at the spot the assistant will stand on - the original code probed one point and
+    /// stood him at another - starting just above the player's feet. That is below every table
+    /// top, so a table standing on the spot is never mistaken for the floor; the probe passes
+    /// under it, finds the floor, and the clearance capsule then rejects the spot because the
+    /// table is in it.
+    /// </summary>
+    private static bool TryFindFloorAt(Vector3 spot, float feetY, out float floorY)
+    {
+        floorY = 0.0f;
+
+        Vector3 from = new Vector3(spot.x, feetY + FloorProbeLift, spot.z);
+        RaycastHit[] hits = Physics.RaycastAll(from, Vector3.down, FloorProbeLift + FloorProbeDepth,
+                                               ~0, QueryTriggerInteraction.Ignore);
+
+        float nearest = float.MaxValue;
+        for (int i = 0; i < hits.Length; i++)
+        {
+            if (hits[i].normal.y > 0.65f && hits[i].distance < nearest)
+            {
+                nearest = hits[i].distance;
+                floorY = hits[i].point.y;
+            }
+        }
+
+        return nearest < float.MaxValue;
+    }
+
+    /// <summary>Used only when no floor could be probed anywhere near the player.</summary>
+    private static float FallbackFloorY(float feetY)
+    {
+        LabBoundary boundary = LabBoundary.Active;
+        if (boundary != null && boundary.HasInterior)
+        {
+            return boundary.Interior.min.y;
+        }
+
+        return feetY;
+    }
+
+    /// <summary>
+    /// A spot is usable if a body-sized capsule there touches nothing, it is inside the room, and
+    /// the player can see the assistant's head from where they stand.
+    /// </summary>
+    private bool IsClearSpot(Vector3 spot, float floorY, float height, Vector3 eye)
+    {
+        float radius = Mathf.Max(0.05f, clearanceRadius);
+
+        // Starts 10 cm up so the floor itself never counts as an obstruction; every table and
+        // bench in the lab is far taller than that.
+        Vector3 bottom = new Vector3(spot.x, floorY + 0.1f + radius, spot.z);
+        Vector3 top = new Vector3(spot.x, floorY + Mathf.Max(height - radius, 0.2f + radius), spot.z);
+
+        if (Physics.CheckCapsule(bottom, top, radius, ~0, QueryTriggerInteraction.Ignore))
+        {
+            return false;
+        }
+
+        LabBoundary boundary = LabBoundary.Active;
+        if (boundary != null && boundary.HasInterior)
+        {
+            Bounds room = boundary.Interior;
+            if (spot.x < room.min.x + radius || spot.x > room.max.x - radius ||
+                spot.z < room.min.z + radius || spot.z > room.max.z - radius)
+            {
+                return false;
+            }
+        }
+
+        Vector3 head = new Vector3(spot.x, floorY + height * 0.85f, spot.z);
+        return !Physics.Linecast(eye, head, ~0, QueryTriggerInteraction.Ignore);
+    }
+
+    /// <summary>
+    /// Waits for the player's rig and the room boundary, then chooses the spot for real.
+    /// </summary>
+    private IEnumerator SettlePlacement()
+    {
+        // The rest of this scene's load callbacks, then every Start - including
+        // FirstPersonController's and LabBoundary's.
+        yield return null;
+        yield return null;
+
+        float deadline = Time.unscaledTime + 1.0f;
+        while (Time.unscaledTime < deadline && !RigIsReady())
+        {
+            yield return null;
+        }
+
+        if (modelTransform == null)
+        {
+            yield break;
+        }
+
+        PlaceInFrontOfPlayer();
+        SetModelVisible(true);
+    }
+
+    private static bool RigIsReady()
+    {
+        Camera camera = Camera.main;
+        bool desktopRig = camera != null && camera.GetComponent<FirstPersonController>() != null;
+        bool room = LabBoundary.Active != null && LabBoundary.Active.HasInterior;
+        return desktopRig && room;
+    }
+
+    /// <summary>
+    /// Hides or shows the model. Only renderers that were visible when hidden are shown again, so
+    /// anything the model's author switched off stays off.
+    /// </summary>
+    private void SetModelVisible(bool visible)
+    {
+        if (model == null)
+        {
+            return;
+        }
+
+        if (!visible)
+        {
+            hiddenRenderers.Clear();
+            Renderer[] renderers = model.GetComponentsInChildren<Renderer>(true);
+            for (int i = 0; i < renderers.Length; i++)
+            {
+                if (renderers[i] != null && renderers[i].enabled)
+                {
+                    renderers[i].enabled = false;
+                    hiddenRenderers.Add(renderers[i]);
+                }
+            }
+            return;
+        }
+
+        for (int i = 0; i < hiddenRenderers.Count; i++)
+        {
+            if (hiddenRenderers[i] != null)
+            {
+                hiddenRenderers[i].enabled = true;
+            }
+        }
+        hiddenRenderers.Clear();
     }
 
     private float HalfHeight()

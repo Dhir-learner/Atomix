@@ -11,20 +11,28 @@ public class NatriumContainerScriptAnimation : MonoBehaviour
     private DateTime timpInitial;
     private bool active = false;
     private Vector3 coord;
-    private Vector3 previousPosition;
-    private Quaternion previousRotation;
-    private bool wasMoving = false;
+    [Header("Actuation")]
+    [Tooltip("Movement of the control is what operates it. The latch ignores movement while the " +
+             "scene is still assembling itself, so being placed by the desktop rig cannot " +
+             "actuate it.")]
+    public MovementLatch movement = new MovementLatch();
+
     private bool hasTriggered = false;
+
+
+    void OnEnable()
+    {
+        // Re-armed on every activation, not just the first. Both labs switch equipment off until
+        // its experiment is chosen, and whatever places the object when it comes back would
+        // otherwise land outside the window opened by Start and actuate it.
+        movement.Begin(lid != null ? lid.transform : null);
+    }
 
     void Start()
     {
         new_container.SetActive(false);
 
-        if (lid != null)
-        {
-            previousPosition = lid.transform.position;
-            previousRotation = lid.transform.rotation;
-        }
+        movement.Begin(lid != null ? lid.transform : null);
     }
 
     void Update()
@@ -38,28 +46,11 @@ public class NatriumContainerScriptAnimation : MonoBehaviour
             active = false;
         }
 
-        if (MovementStoppedThisFrame())
+        if (!hasTriggered &&
+            movement.StoppedThisFrame(lid != null ? lid.transform : null))
         {
             TriggerUnscrew();
         }
-    }
-
-    bool MovementStoppedThisFrame()
-    {
-        if (lid == null || hasTriggered)
-        {
-            return false;
-        }
-
-        Transform lidTransform = lid.transform;
-        bool isMoving = Vector3.Distance(previousPosition, lidTransform.position) > 0.0005f ||
-                        Quaternion.Angle(previousRotation, lidTransform.rotation) > 0.1f;
-
-        bool stoppedThisFrame = wasMoving && !isMoving;
-        previousPosition = lidTransform.position;
-        previousRotation = lidTransform.rotation;
-        wasMoving = isMoving;
-        return stoppedThisFrame;
     }
 
     public void TriggerUnscrew()

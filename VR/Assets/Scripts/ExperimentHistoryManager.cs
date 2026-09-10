@@ -318,6 +318,25 @@ public class ExperimentHistoryManager : MonoBehaviour
         {
             manager.gameObject.AddComponent<AtomixSettingsApplier>();
         }
+
+        // Turns the verdict of an experiment into something the player can hear and feel.
+        // It listens to the attempt records written here, so it needs no reaction-script hooks.
+        if (manager.gameObject.GetComponent<ExperimentFeedbackDirector>() == null)
+        {
+            manager.gameObject.AddComponent<ExperimentFeedbackDirector>();
+        }
+
+        // Fades scene changes and puts a loading card over them.
+        if (manager.gameObject.GetComponent<SceneTransition>() == null)
+        {
+            manager.gameObject.AddComponent<SceneTransition>();
+        }
+
+        // The first-run orientation card in the laboratory.
+        if (manager.gameObject.GetComponent<LabOnboarding>() == null)
+        {
+            manager.gameObject.AddComponent<LabOnboarding>();
+        }
     }
 
     void Awake()
@@ -838,7 +857,22 @@ public class ReactionHistoryRecorder
         {
             Completed(reactionId, reactionName, outcome);
         }
+
+        if (Resolved != null)
+        {
+            Resolved(reactionId, reactionName, outcome);
+        }
     }
+
+    /// <summary>
+    /// Raised when any experiment closes, whatever the outcome - success, failure or abandoned.
+    ///
+    /// <see cref="Completed"/> deliberately fires only on success, because the systems that
+    /// listen to it (the graph panel, the post-success video) exist to reward one. Feedback that
+    /// has to respond to a failure as well - a sting, a shake, an edge flash - needs to hear
+    /// about every verdict, so it listens here instead.
+    /// </summary>
+    public static event System.Action<int, string, ExperimentOutcome> Resolved;
 
     /// <summary>
     /// Raised when any experiment finishes successfully, with its reaction id and name.

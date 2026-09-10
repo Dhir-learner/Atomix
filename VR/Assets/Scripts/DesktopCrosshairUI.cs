@@ -28,8 +28,16 @@ public class DesktopCrosshairUI : MonoBehaviour
 
     private static DesktopCrosshairUI activeCrosshair;
     private GameObject crosshairRoot;
+    private RectTransform crosshairRect;
     private readonly List<Image> crosshairImages = new List<Image>();
     private bool isHoveringGrabbable;
+
+    /// <summary>
+    /// Colour alone was doing all the work of telling the student that something is grabbable,
+    /// and colour alone is exactly the signal a colour-blind student does not get. The crosshair
+    /// now also opens outward, which reads at a glance and needs no palette at all.
+    /// </summary>
+    private float hoverBlend;
 
     void OnEnable()
     {
@@ -54,6 +62,29 @@ public class DesktopCrosshairUI : MonoBehaviour
     void Update()
     {
         UpdateVisibility();
+        UpdateHoverAnimation();
+    }
+
+    void UpdateHoverAnimation()
+    {
+        if (crosshairRect == null)
+        {
+            return;
+        }
+
+        float target = isHoveringGrabbable ? 1.0f : 0.0f;
+        float blend = 1.0f - Mathf.Exp(-16.0f * Time.unscaledDeltaTime);
+        hoverBlend = Mathf.Lerp(hoverBlend, target, blend);
+
+        if (Mathf.Abs(hoverBlend - target) < 0.002f)
+        {
+            hoverBlend = target;
+        }
+
+        // A small bloom outward. Scaling the root rather than moving four arms keeps this to one
+        // transform write and no Canvas layout rebuild.
+        float scale = Mathf.Lerp(1.0f, 1.35f, hoverBlend);
+        crosshairRect.localScale = new Vector3(scale, scale, 1.0f);
     }
 
     void CreateCrosshair()
@@ -77,6 +108,7 @@ public class DesktopCrosshairUI : MonoBehaviour
         crosshairRoot.transform.SetParent(transform, false);
 
         RectTransform rootRect = crosshairRoot.AddComponent<RectTransform>();
+        crosshairRect = rootRect;
         rootRect.anchorMin = new Vector2(0.5f, 0.5f);
         rootRect.anchorMax = new Vector2(0.5f, 0.5f);
         rootRect.pivot = new Vector2(0.5f, 0.5f);

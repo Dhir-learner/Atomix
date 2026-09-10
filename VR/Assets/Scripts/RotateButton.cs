@@ -8,26 +8,38 @@ public class RotateButton : MonoBehaviour
     public AudioSource audioSource;
     public AudioClip clip;
 
+    [Header("Actuation")]
+    [Tooltip("Movement of the control is what operates it. The latch ignores movement while the " +
+             "scene is still assembling itself, so being placed by the desktop rig cannot " +
+             "actuate it.")]
+    public MovementLatch movement = new MovementLatch();
+
     private bool isPlaying = false;
     private bool play = false;
-    private Vector3 previousPosition;
-    private Quaternion previousRotation;
-    private bool wasMoving = false;
+
+
+    void OnEnable()
+    {
+        // Re-armed on every activation, not just the first. Both labs switch equipment off until
+        // its experiment is chosen, and whatever places the object when it comes back would
+        // otherwise land outside the window opened by Start and actuate it.
+        movement.Begin(rotatingButton != null ? rotatingButton.transform : null);
+    }
 
     void Start()
     {
-        waterLeak.Stop();
-
-        if (rotatingButton != null)
+        if (waterLeak != null)
         {
-            previousPosition = rotatingButton.transform.position;
-            previousRotation = rotatingButton.transform.rotation;
+            waterLeak.Stop();
         }
+
+        play = false;
+        movement.Begin(rotatingButton != null ? rotatingButton.transform : null);
     }
 
     void Update()
     {
-        if (MovementStoppedThisFrame())
+        if (movement.StoppedThisFrame(rotatingButton != null ? rotatingButton.transform : null))
         {
             ToggleWaterFlow();
         }
@@ -46,24 +58,6 @@ public class RotateButton : MonoBehaviour
             isPlaying = false;
             audioSource.Stop();
         }
-    }
-
-    bool MovementStoppedThisFrame()
-    {
-        if (rotatingButton == null)
-        {
-            return false;
-        }
-
-        Transform buttonTransform = rotatingButton.transform;
-        bool isMoving = Vector3.Distance(previousPosition, buttonTransform.position) > 0.0005f ||
-                        Quaternion.Angle(previousRotation, buttonTransform.rotation) > 0.1f;
-
-        bool stoppedThisFrame = wasMoving && !isMoving;
-        previousPosition = buttonTransform.position;
-        previousRotation = buttonTransform.rotation;
-        wasMoving = isMoving;
-        return stoppedThisFrame;
     }
 
     public void ToggleWaterFlow()

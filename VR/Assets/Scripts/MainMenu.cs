@@ -17,26 +17,40 @@ public class MainMenu : MonoBehaviour
     
     void Start()
     {
-        settingsPanel.SetActive(false);
+        // Every field here is wired in the scene, and every one of them is a NullReferenceException
+        // in Start if that wiring is ever lost - which takes the whole menu down, because a throw
+        // here skips InitializeToggles and leaves the buttons unlistened.
+        if (settingsPanel != null)
+        {
+            settingsPanel.SetActive(false);
+        }
+
         InitializeToggles();
     }
 
     public void OpenLabScene()
     {
-        SceneManager.LoadScene("LabScene");
-        Debug.Log("Opening LabScene");
+        Enter("LabScene");
     }
 
     public void OpenTestingPhaseLabScene()
     {
-        SceneManager.LoadScene("TestingPhaseLab");
-        Debug.Log("Opening TestingPhaseLab");
+        Enter("TestingPhaseLab");
     }
 
     public void OpenLabAssistantScene()
     {
-        SceneManager.LoadScene("LabAssistantScene");
-        Debug.Log("Opening LabAssistantScene");
+        Enter("LabAssistantScene");
+    }
+
+    /// <summary>
+    /// Loads behind a fade rather than blocking the main thread. LabScene is 249 GameObjects and
+    /// a synchronous load froze the window long enough for Windows to offer to close it.
+    /// </summary>
+    private void Enter(string sceneName)
+    {
+        AtomixAudio.UiClick();
+        SceneTransition.Load(sceneName);
     }
 
     public void QuitApplication()
@@ -52,16 +66,29 @@ public class MainMenu : MonoBehaviour
 
     public void OpenSettingsPanel()
     {
-        settingsPanel.SetActive(true);
+        AtomixAudio.UiOpen();
+        if (settingsPanel != null)
+        {
+            settingsPanel.SetActive(true);
+        }
     }
 
     public void CloseSettingsPanel()
     {
-        settingsPanel.SetActive(false);
+        AtomixAudio.UiClose();
+        if (settingsPanel != null)
+        {
+            settingsPanel.SetActive(false);
+        }
     }
 
     void InitializeToggles()
     {
+        if (practiceToggle == null || theoryToggle == null)
+        {
+            return;
+        }
+
         if (StaticData.includedTasksValue == 0)
         {
             practiceToggle.GetComponent<Toggle>().isOn = true;
@@ -90,6 +117,13 @@ public class MainMenu : MonoBehaviour
 
     public void UpdateIncludedTaskTypes()
     {
+        if (practiceToggle == null || theoryToggle == null)
+        {
+            return;
+        }
+
+        AtomixAudio.UiClick();
+
         if (practiceToggle.GetComponent<Toggle>().isOn && theoryToggle.GetComponent<Toggle>().isOn)
         {
             StaticData.includedTasksValue = 2;

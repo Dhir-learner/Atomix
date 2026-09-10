@@ -191,6 +191,11 @@ public class AtomixCoinBank : MonoBehaviour
             return;
         }
 
+        // Pitched up a little for a bigger award, so the size of a payout is audible. The testing
+        // scene's reward loop paid out in complete silence before this.
+        AtomixAudio.Play(AtomixAudio.Cue.Coin, 0.9f,
+            Mathf.Lerp(0.95f, 1.18f, Mathf.InverseLerp(5.0f, 100.0f, amount)));
+
         PlayerPrefs.SetInt(KeyLifetime, LifetimeEarned + amount);
         PlayerPrefs.Save();
     }

@@ -8,30 +8,54 @@ public class LightFire : MonoBehaviour
     public AudioSource audioSource;
     public AudioClip clip;
 
+    [Header("Actuation")]
+    [Tooltip("Movement of the control is what operates it. The latch ignores movement while the " +
+             "scene is still assembling itself, so being placed by the desktop rig cannot " +
+             "actuate it.")]
+    public MovementLatch movement = new MovementLatch();
+
     private bool isPlaying = false;
     private bool play = false;
 
     public bool esteAprins = false;
 
-    private Vector3 previousPosition;
-    private Quaternion previousRotation;
-    private bool wasMoving = false;
+    void Awake()
+    {
+        // Awake, not Start. The flame's particle system is authored active with playOnAwake set,
+        // so it is already emitting by the time anything else runs - and if ControlReactions has
+        // this burner switched off at load, Start never runs at all and the flame simply stays
+        // lit. Putting it out here covers both.
+        if (fireAnimation != null)
+        {
+            fireAnimation.SetActive(false);
+        }
+    }
+
+
+    void OnEnable()
+    {
+        // Re-armed on every activation, not just the first. Both labs switch equipment off until
+        // its experiment is chosen, and whatever places the object when it comes back would
+        // otherwise land outside the window opened by Start and actuate it.
+        movement.Begin(burnerSupport != null ? burnerSupport.transform : null);
+    }
 
     void Start()
     {
-        fireAnimation.SetActive(false);
-        esteAprins = false;
-
-        if (burnerSupport != null)
+        if (fireAnimation != null)
         {
-            previousPosition = burnerSupport.transform.position;
-            previousRotation = burnerSupport.transform.rotation;
+            fireAnimation.SetActive(false);
         }
+
+        esteAprins = false;
+        play = false;
+
+        movement.Begin(burnerSupport != null ? burnerSupport.transform : null);
     }
 
     void Update()
     {
-        if (MovementStoppedThisFrame())
+        if (movement.StoppedThisFrame(burnerSupport != null ? burnerSupport.transform : null))
         {
             ToggleFire();
         }
@@ -39,7 +63,10 @@ public class LightFire : MonoBehaviour
         if (play)
         {
             esteAprins = true;
-            fireAnimation.SetActive(true);
+            if (fireAnimation != null)
+            {
+                fireAnimation.SetActive(true);
+            }
             if (!isPlaying)
             {
                 StartCoroutine(PlaySoundRepeatedly());
@@ -48,28 +75,16 @@ public class LightFire : MonoBehaviour
         else
         {
             esteAprins = false;
-            fireAnimation.SetActive(false);
+            if (fireAnimation != null)
+            {
+                fireAnimation.SetActive(false);
+            }
             isPlaying = false;
-            audioSource.Stop();
+            if (audioSource != null)
+            {
+                audioSource.Stop();
+            }
         }
-    }
-
-    bool MovementStoppedThisFrame()
-    {
-        if (burnerSupport == null)
-        {
-            return false;
-        }
-
-        Transform supportTransform = burnerSupport.transform;
-        bool isMoving = Vector3.Distance(previousPosition, supportTransform.position) > 0.0005f ||
-                        Quaternion.Angle(previousRotation, supportTransform.rotation) > 0.1f;
-
-        bool stoppedThisFrame = wasMoving && !isMoving;
-        previousPosition = supportTransform.position;
-        previousRotation = supportTransform.rotation;
-        wasMoving = isMoving;
-        return stoppedThisFrame;
     }
 
     public void ToggleFire()
@@ -79,6 +94,11 @@ public class LightFire : MonoBehaviour
 
     IEnumerator PlaySoundRepeatedly()
     {
+        if (audioSource == null || clip == null)
+        {
+            yield break;
+        }
+
         isPlaying = true;
         while (isPlaying)
         {

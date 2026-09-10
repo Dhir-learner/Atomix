@@ -71,6 +71,26 @@ public class LabEffectsInitializer : MonoBehaviour
         foreach (PourMetalSubstance c in FindAll<PourMetalSubstance>()) { Add(effects, c.substanceLeak); }
         foreach (PourFromPipette c in FindAll<PourFromPipette>()) { Add(effects, c.substanceLeak); }
 
+        // The burner flame. Its particle system is authored active with playOnAwake set, and
+        // it is the one effect in the lab that is a *control state* rather than a reaction - the
+        // student is supposed to light the burner themselves. It was missing from this sweep, so
+        // a burner whose LightFire never woke up (ControlReactions switches equipment off until
+        // its experiment is chosen) simply stayed lit from the moment the scene opened.
+        foreach (LightFire c in FindAll<LightFire>())
+        {
+            if (c.fireAnimation == null)
+            {
+                continue;
+            }
+
+            foreach (ParticleSystem flame in c.fireAnimation.GetComponentsInChildren<ParticleSystem>(true))
+            {
+                Add(effects, flame);
+            }
+
+            c.fireAnimation.SetActive(false);
+        }
+
         // Reaction effects
         foreach (Reaction c in FindAll<Reaction>()) { Add(effects, c.explosion); }
         foreach (Reaction_hcl_nahco3 c in FindAll<Reaction_hcl_nahco3>()) { Add(effects, c.explosion); }

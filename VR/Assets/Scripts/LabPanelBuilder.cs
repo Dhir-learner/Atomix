@@ -210,6 +210,15 @@ public static class LabPanelBuilder
 
         Button button = buttonObject.GetComponent<Button>();
         button.targetGraphic = image;
+
+        // Hover lift, press dip, and a hover tick. Attached here rather than at each of the
+        // twenty-odd call sites so every runtime-built panel gets it for nothing.
+        buttonObject.AddComponent<UiButtonFeel>();
+
+        // Registered before the action, so the click is still heard if the action throws - and
+        // so buttons whose listener is added later (the toggle rows) are covered too.
+        button.onClick.AddListener(AtomixAudio.UiClick);
+
         if (onClick != null)
         {
             button.onClick.AddListener(() => onClick());
@@ -261,32 +270,50 @@ public static class LabPanelBuilder
     /// Steppers rather than a uGUI Slider because a Slider needs a pointer <em>drag</em>, and the
     /// crosshair never produces one.
     /// </summary>
+    /// <summary>Width of the - and + buttons on a stepper row.</summary>
+    private const float StepButtonWidth = 52.0f;
+
+    /// <summary>Width reserved for the value readout on a stepper row.</summary>
+    private const float StepValueWidth = 190.0f;
+
     public static TMP_Text CreateStepperRow(Transform parent, string label, Vector2 anchoredPosition,
                                             float rowWidth, float fontSize,
                                             Func<string> readValue, Action stepDown, Action stepUp)
     {
+        // Everything is measured in from the right edge of the row, so a row laid out at 740 px
+        // in a two-column tab is as correct as one at 1100 px in a single column. The previous
+        // version hard-coded offsets that only worked at 1100 - narrower than that and the label
+        // ran straight through the value.
         float half = rowWidth * 0.5f;
+        float upX = half - 18.0f - (StepButtonWidth * 0.5f);
+        float downX = upX - StepButtonWidth - 6.0f;
+        float valueCentre = downX - (StepButtonWidth * 0.5f) - 12.0f - (StepValueWidth * 0.5f);
+        float labelLeft = -half + 22.0f;
+        float labelRight = valueCentre - (StepValueWidth * 0.5f) - 14.0f;
+        float labelWidth = Mathf.Max(120.0f, labelRight - labelLeft);
+        float labelCentre = (labelLeft + labelRight) * 0.5f;
+
         CreatePlate(label + "Row", parent, anchoredPosition,
             new Vector2(rowWidth, SettingRowHeight), RowColour);
 
         CreateText(label + "Label", parent,
-            new Vector2(anchoredPosition.x - half + 300.0f, anchoredPosition.y),
-            new Vector2(560.0f, SettingRowHeight), label, fontSize,
+            new Vector2(anchoredPosition.x + labelCentre, anchoredPosition.y),
+            new Vector2(labelWidth, SettingRowHeight), label, fontSize,
             TextAlignmentOptions.Left, AtomixSettings.BodyTextColour);
 
         TMP_Text value = CreateText(label + "Value", parent,
-            new Vector2(anchoredPosition.x + half - 250.0f, anchoredPosition.y),
-            new Vector2(240.0f, SettingRowHeight), readValue(), fontSize,
+            new Vector2(anchoredPosition.x + valueCentre, anchoredPosition.y),
+            new Vector2(StepValueWidth, SettingRowHeight), readValue(), fontSize,
             TextAlignmentOptions.Right, Color.white);
 
         CreateButton(label + "Down", parent, StepDownGlyph,
-            new Vector2(anchoredPosition.x + half - 96.0f, anchoredPosition.y),
-            new Vector2(52.0f, SettingRowHeight - 10.0f), fontSize + 4.0f,
+            new Vector2(anchoredPosition.x + downX, anchoredPosition.y),
+            new Vector2(StepButtonWidth, SettingRowHeight - 10.0f), fontSize + 4.0f,
             () => { stepDown(); value.text = readValue(); });
 
         CreateButton(label + "Up", parent, StepUpGlyph,
-            new Vector2(anchoredPosition.x + half - 38.0f, anchoredPosition.y),
-            new Vector2(52.0f, SettingRowHeight - 10.0f), fontSize + 4.0f,
+            new Vector2(anchoredPosition.x + upX, anchoredPosition.y),
+            new Vector2(StepButtonWidth, SettingRowHeight - 10.0f), fontSize + 4.0f,
             () => { stepUp(); value.text = readValue(); });
 
         return value;
@@ -297,18 +324,26 @@ public static class LabPanelBuilder
                                            float rowWidth, float fontSize,
                                            Func<bool> read, Action<bool> write)
     {
+        const float toggleWidth = 128.0f;
+
         float half = rowWidth * 0.5f;
+        float toggleCentre = half - 22.0f - (toggleWidth * 0.5f);
+        float labelLeft = -half + 22.0f;
+        float labelRight = toggleCentre - (toggleWidth * 0.5f) - 14.0f;
+        float labelWidth = Mathf.Max(120.0f, labelRight - labelLeft);
+        float labelCentre = (labelLeft + labelRight) * 0.5f;
+
         CreatePlate(label + "Row", parent, anchoredPosition,
             new Vector2(rowWidth, SettingRowHeight), RowColour);
 
         CreateText(label + "Label", parent,
-            new Vector2(anchoredPosition.x - half + 300.0f, anchoredPosition.y),
-            new Vector2(560.0f, SettingRowHeight), label, fontSize,
+            new Vector2(anchoredPosition.x + labelCentre, anchoredPosition.y),
+            new Vector2(labelWidth, SettingRowHeight), label, fontSize,
             TextAlignmentOptions.Left, AtomixSettings.BodyTextColour);
 
         Button button = CreateButton(label + "Toggle", parent, read() ? "ON" : "OFF",
-            new Vector2(anchoredPosition.x + half - 74.0f, anchoredPosition.y),
-            new Vector2(128.0f, SettingRowHeight - 10.0f), fontSize, null);
+            new Vector2(anchoredPosition.x + toggleCentre, anchoredPosition.y),
+            new Vector2(toggleWidth, SettingRowHeight - 10.0f), fontSize, null);
 
         TMP_Text state = button.GetComponentInChildren<TMP_Text>();
         Image image = button.GetComponent<Image>();

@@ -211,7 +211,7 @@ public class ExamSetupUI : MonoBehaviour
             {
                 Close(false);
                 FirstPersonController.SetCursorLock(false);
-                SceneManager.LoadScene("MainMenuScene");
+                SceneTransition.Load("MainMenuScene");
             });
 
         canvas.gameObject.SetActive(false);

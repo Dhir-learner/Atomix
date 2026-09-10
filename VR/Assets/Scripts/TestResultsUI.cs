@@ -240,7 +240,7 @@ public class TestResultsUI : MonoBehaviour
             () =>
             {
                 StaticData.taskCountValue = 0;
-                SceneManager.LoadScene("TestingPhaseLab");
+                SceneTransition.Load("TestingPhaseLab");
             });
 
         LabPanelBuilder.CreateButton("Menu", panel, "Main menu",
@@ -248,7 +248,7 @@ public class TestResultsUI : MonoBehaviour
             () =>
             {
                 FirstPersonController.SetCursorLock(false);
-                SceneManager.LoadScene("MainMenuScene");
+                SceneTransition.Load("MainMenuScene");
             });
     }
 

@@ -334,6 +334,8 @@ The desktop system is injected at runtime by `DesktopBootstrap.cs`, which adapts
 | **L** | Measurement label: full / compact / off |
 | **H** | Controls help overlay |
 | **F1** | Pause menu — settings, achievements, controls |
+| **Enter** | Type a question to the assistant |
+| **Y** | Ask why the last experiment failed |
 
 #### Testing scene only
 
@@ -721,7 +723,16 @@ The code compiles clean against the real Unity 6000.3.7f1 assemblies (0 errors, 
 ### Known limitations
 
 - A complete end-to-end Play-mode regression pass is still recommended. The molecular animation's
-  *geometry* is tested; its *framing on screen* is not.
+  *geometry* is tested; its *framing on screen* is not, and neither is the colour grade, the head
+  bob amplitude or the reflection probe's framing.
+- **The application still identifies itself as `UnityLab` by `AlinaInc`**, so that is what the
+  window title says. It was left alone deliberately: on Windows both PlayerPrefs and
+  `persistentDataPath` are keyed on the company and product name, so renaming would silently
+  discard every player's coins, achievements, settings and experiment history. It should be done
+  as a rename *plus* a migration, in one deliberate change.
+- Ambient light in all four scenes is set to Skybox mode while the interior-tuned trilight colours
+  authored beneath it go unused — very likely a latent authoring bug, but correcting it changes how
+  bright the room looks and wants an eyes-on pass rather than a guess.
 - Convai requires valid credentials and internet for cloud AI. Without them the assistant falls back
   to the offline knowledge base, which answers only about these eight reactions.
 - Offline voice uses the Windows speech synthesiser and is **Windows-only**; elsewhere the assistant
@@ -766,7 +777,95 @@ The code compiles clean against the real Unity 6000.3.7f1 assemblies (0 errors, 
 | Theory questions recorded in the results | ✅ |
 | Downloadable HTML + CSV test report | ✅ |
 | Interactive periodic table, achievements, pause menu | ✅ |
+| Interaction, result and ambience audio | ✅ |
+| Camera feel — head bob, sprint kick, screen shake | ✅ |
+| Post-processing, antialiasing and room reflections | ✅ |
+| Async scene loading with a loading screen | ✅ |
+| First-run onboarding and a live objective line | ✅ |
+| Audio, comfort and display settings | ✅ |
 | Full final Play-mode regression | ⏳ Recommended |
+
+---
+
+## 🔊 16. Feel, Sound and Presentation
+
+The simulation underneath Atomix was always careful; for a long time the game around it said very
+little back. Picking up a beaker was silent, clicking a button in the laboratory was
+unacknowledged, and succeeding at an experiment after four failed attempts changed one word in a
+HUD strip from blue to green.
+
+### Audio
+
+Every interaction now has a sound, and the laboratory has a room tone. The cue set is
+**synthesised at runtime** rather than imported — the repository gains no binary assets, no scene
+has to be edited to wire a source up, and the cues are consistent with one another by construction:
+one pitch palette (a D major triad) and one envelope family across the whole set.
+
+| | |
+|---|---|
+| **Interface** | Click, hover, refusal, panel open and close |
+| **Handling** | Grab and release, **pitched by the size of the object** — a test tube ticks, a full berzelius thunks |
+| **Results** | A rising arpeggio for success; two warm falling tones for failure — deliberately not a buzzer, because failure is the expected path in a teaching tool and a student hears it many times an hour |
+| **Progress** | Coin awards pitched by size, achievement unlocks, bench resets |
+| **Beds** | A main-menu pad, pour loops for the three pours that previously had no sound at all, and a laboratory room tone that **ships switched off** |
+
+`Master volume` is unchanged — it is still `AudioListener.volume`, over everything. Three buses now
+sit underneath it, so the room tone can be silenced **without** silencing the narration that
+explains the experiment.
+
+The room tone defaults to **off**. Its first version was built on filtered noise, which is
+acoustically what running water is — under a scene containing a visible sink it was reliably heard
+as a tap left running. It has been rebuilt as mains hum and extraction-fan beat with nothing above
+200 Hz, but a teaching tool should open in silence, so turning it on is now a choice.
+
+### Camera
+
+A shake on reactions and results, and — for anyone who wants them — a walk bob and a
+field-of-view kick while sprinting.
+
+**Walking motion ships off.** It was reported as causing motion sickness, and there is no version
+of that trade worth making in software a student may be required to use for an hour. The bob and
+the sprint zoom sit behind a single **Walking motion** control, because someone turning one off to
+stop feeling ill should not have to hunt for the second. Camera shake is a separate control and
+also scales to zero.
+
+The camera offset is applied in `Application.onBeforeRender` and removed at the top of the next
+frame, so no other system — the movement controller, the lab boundary clamp, or the held-object
+placement — ever sees the camera in its offset state. Held glassware therefore stays rock steady in
+front of a bobbing view, which is what carrying something carefully actually looks like.
+
+### Visuals
+
+- **Post-processing**: ambient occlusion, which is what stops every beaker from looking as though
+  it is hovering a millimetre above the bench, plus a restrained bloom thresholded well above white
+  so it catches the burner flame and nothing else.
+- **No colour grading.** An earlier version tonemapped with ACES, lifted the shadows and pushed
+  contrast and saturation. On an image whose lighting is already authored to look right, that only
+  removed contrast — white walls went grey. The pass now does not touch a single colour value; the
+  authored palette is exactly as it was.
+- **Antialiasing**: the biggest legibility win in the set — the scene is full of thin glass rims
+  and burette graduations, and the project ships MSAA off on four of its six quality levels.
+- **Room reflections**: a box-projected reflection probe. Before it, the glassware, tap and steel
+  sink in a windowless basement laboratory were reflecting a procedural blue sky.
+- **Object highlighting** now adds emission rather than overwriting the surface colour, so a copper
+  sulfate solution, a brown iodine crystal and a clear beaker no longer all turn the same yellow.
+
+Ambient occlusion is applied in the laboratories only. `MainMenuScene`'s menu is a *world-space*
+canvas, so it sits inside the post stack rather than over it; the menu keeps antialiasing and
+nothing else.
+
+### Loading
+
+Scene changes are asynchronous behind a fade, with a card that carries a chemistry or controls tip.
+Previously every scene change was a blocking `LoadScene` on a 3.6 MB scene, during which the window
+stopped answering the operating system.
+
+### Onboarding
+
+A short card on the first visit to the laboratory explains what the student is, what to do, and —
+most importantly — that **the amount is what is being judged**. It never blocks: it does not pause
+the game, does not take the cursor, and fades on its own. Underneath it, a single objective line
+tracks live experiment state and says what to do next. Both can be brought back from the pause menu.
 
 ---
 

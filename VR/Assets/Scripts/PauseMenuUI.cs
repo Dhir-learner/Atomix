@@ -76,6 +76,15 @@ public class PauseMenuUI : MonoBehaviour
     private const float FooterY = -424.0f;
     private const float RowWidth = 1100.0f;
 
+    /// <summary>
+    /// The settings tab is two columns. It was one, and it fitted - right up until the audio
+    /// buses, the comfort options and the display controls were added, at which point a single
+    /// column ran off the bottom of the screen. Splitting it is also simply a better settings
+    /// screen: controls and comfort on the left, everything about the machine on the right.
+    /// </summary>
+    private const float ColumnWidth = 740.0f;
+    private const float ColumnOffset = 395.0f;
+
     void Update()
     {
         // A question is being typed into the assistant panel; every letter belongs to it.
@@ -286,13 +295,23 @@ public class PauseMenuUI : MonoBehaviour
             new Vector2(20.0f, FooterY), new Vector2(320.0f, 58.0f), 22.0f,
             () => { if (statusText != null) { statusText.text = LabReportExporter.ExportAll(); } });
 
+        // The welcome card shows once per machine and then never again, which makes it the one
+        // piece of guidance in the game a student cannot get back. Now they can.
+        LabPanelBuilder.CreateButton("ShowIntro", panel, "Show introduction",
+            new Vector2(650.0f, FooterY), new Vector2(280.0f, 58.0f), 22.0f,
+            () =>
+            {
+                Close();
+                LabOnboarding.ShowAgain();
+            });
+
         quitToMenuButton = LabPanelBuilder.CreateButton("QuitToMenu", panel, "Main menu",
             new Vector2(350.0f, FooterY), new Vector2(280.0f, 58.0f), 22.0f,
             () =>
             {
                 Close();
                 FirstPersonController.SetCursorLock(false);
-                SceneManager.LoadScene("MainMenuScene");
+                SceneTransition.Load("MainMenuScene");
             });
     }
 
@@ -339,72 +358,206 @@ public class PauseMenuUI : MonoBehaviour
 
     private void BuildSettingsTab()
     {
-        const float labelSize = 25.0f;
-        const float headingSize = 20.0f;
+        const float labelSize = 22.0f;
+        const float headingSize = 19.0f;
+
+        BuildControlsColumn(-ColumnOffset, labelSize, headingSize);
+        BuildMachineColumn(ColumnOffset, labelSize, headingSize);
+
+        if (statusText != null && string.IsNullOrEmpty(statusText.text))
+        {
+            statusText.text =
+                "Walking motion covers the head bob and the sprint zoom, and ships off.  " +
+                "Laboratory ambience ships off too.  " +
+                "Colour-blind safe swaps the green and red result pair for blue and orange.";
+        }
+    }
+
+    /// <summary>Left column: how the player controls the game, and how it accommodates them.</summary>
+    private void BuildControlsColumn(float x, float labelSize, float headingSize)
+    {
         float y = BodyTop - 18.0f;
 
-        LabPanelBuilder.CreateSectionHeading(bodyRoot, "Controls", new Vector2(0.0f, y), RowWidth, headingSize);
+        LabPanelBuilder.CreateSectionHeading(bodyRoot, "Controls", new Vector2(x, y), ColumnWidth, headingSize);
         y -= HeaderStep;
 
-        LabPanelBuilder.CreateStepperRow(bodyRoot, "Mouse sensitivity", new Vector2(0.0f, y), RowWidth, labelSize,
+        LabPanelBuilder.CreateStepperRow(bodyRoot, "Mouse sensitivity", new Vector2(x, y), ColumnWidth, labelSize,
             () => AtomixSettings.MouseSensitivity.ToString("0.00"),
             () => AtomixSettings.MouseSensitivity -= 0.25f,
             () => AtomixSettings.MouseSensitivity += 0.25f);
         y -= RowStep;
 
-        LabPanelBuilder.CreateToggleRow(bodyRoot, "Invert vertical look", new Vector2(0.0f, y), RowWidth, labelSize,
+        LabPanelBuilder.CreateToggleRow(bodyRoot, "Invert vertical look", new Vector2(x, y), ColumnWidth, labelSize,
             () => AtomixSettings.InvertLook,
             value => AtomixSettings.InvertLook = value);
         y -= RowStep;
 
-        LabPanelBuilder.CreateStepperRow(bodyRoot, "Movement speed", new Vector2(0.0f, y), RowWidth, labelSize,
+        LabPanelBuilder.CreateStepperRow(bodyRoot, "Movement speed", new Vector2(x, y), ColumnWidth, labelSize,
             () => AtomixSettings.MoveSpeed.ToString("0.0") + " m/s",
             () => AtomixSettings.MoveSpeed -= 0.2f,
             () => AtomixSettings.MoveSpeed += 0.2f);
         y -= SectionStep;
 
-        LabPanelBuilder.CreateSectionHeading(bodyRoot, "Display and sound", new Vector2(0.0f, y), RowWidth, headingSize);
+        LabPanelBuilder.CreateSectionHeading(bodyRoot, "Accessibility and comfort", new Vector2(x, y),
+            ColumnWidth, headingSize);
         y -= HeaderStep;
 
-        LabPanelBuilder.CreateStepperRow(bodyRoot, "Field of view", new Vector2(0.0f, y), RowWidth, labelSize,
+        // Both of these go all the way to zero. Motion sensitivity is common enough in a
+        // classroom that "reduce" is not a good enough answer.
+        LabPanelBuilder.CreateStepperRow(bodyRoot, "Camera shake", new Vector2(x, y), ColumnWidth, labelSize,
+            () => AtomixSettings.ScreenShake <= 0.0f
+                ? "Off"
+                : Mathf.RoundToInt(AtomixSettings.ScreenShake * 100.0f) + "%",
+            () => AtomixSettings.ScreenShake -= 0.25f,
+            () => AtomixSettings.ScreenShake += 0.25f);
+        y -= RowStep;
+
+        // One control for the bob and the sprint lens zoom together. Someone turning this down
+        // is doing it because the movement is making them feel ill, and finding two separate
+        // switches for that is a bad answer.
+        LabPanelBuilder.CreateStepperRow(bodyRoot, "Walking motion", new Vector2(x, y), ColumnWidth, labelSize,
+            () => AtomixSettings.HeadBob <= 0.0f
+                ? "Off"
+                : Mathf.RoundToInt(AtomixSettings.HeadBob * 100.0f) + "%",
+            () => AtomixSettings.HeadBob -= 0.25f,
+            () => AtomixSettings.HeadBob += 0.25f);
+        y -= RowStep;
+
+        LabPanelBuilder.CreateToggleRow(bodyRoot, "High-contrast panels", new Vector2(x, y), ColumnWidth, labelSize,
+            () => AtomixSettings.HighContrastUi,
+            value => AtomixSettings.HighContrastUi = value);
+        y -= RowStep;
+
+        LabPanelBuilder.CreateToggleRow(bodyRoot, "Colour-blind safe results", new Vector2(x, y), ColumnWidth, labelSize,
+            () => AtomixSettings.ColourBlindSafe,
+            value => AtomixSettings.ColourBlindSafe = value);
+        y -= RowStep;
+
+        LabPanelBuilder.CreateToggleRow(bodyRoot, "Show crosshair", new Vector2(x, y), ColumnWidth, labelSize,
+            () => AtomixSettings.ShowCrosshair,
+            value => AtomixSettings.ShowCrosshair = value);
+        y -= RowStep;
+
+        LabPanelBuilder.CreateStepperRow(bodyRoot, "Menu size", new Vector2(x, y), ColumnWidth, labelSize,
+            () => Mathf.RoundToInt(AtomixSettings.UiScale * 100.0f) + "%",
+            () => { AtomixSettings.UiScale -= 0.1f; ApplyScale(); },
+            () => { AtomixSettings.UiScale += 0.1f; ApplyScale(); });
+    }
+
+    /// <summary>Right column: everything about the machine this is running on.</summary>
+    private void BuildMachineColumn(float x, float labelSize, float headingSize)
+    {
+        float y = BodyTop - 18.0f;
+
+        LabPanelBuilder.CreateSectionHeading(bodyRoot, "Display", new Vector2(x, y), ColumnWidth, headingSize);
+        y -= HeaderStep;
+
+        LabPanelBuilder.CreateStepperRow(bodyRoot, "Field of view", new Vector2(x, y), ColumnWidth, labelSize,
             () => AtomixSettings.FieldOfView.ToString("0") + " deg",
             () => AtomixSettings.FieldOfView -= 5.0f,
             () => AtomixSettings.FieldOfView += 5.0f);
         y -= RowStep;
 
-        LabPanelBuilder.CreateStepperRow(bodyRoot, "Volume", new Vector2(0.0f, y), RowWidth, labelSize,
-            () => Mathf.RoundToInt(AtomixSettings.MasterVolume * 100.0f) + "%",
+        LabPanelBuilder.CreateStepperRow(bodyRoot, "Graphics quality", new Vector2(x, y), ColumnWidth, labelSize,
+            QualityLabel, () => StepQuality(-1), () => StepQuality(1));
+        y -= RowStep;
+
+        LabPanelBuilder.CreateToggleRow(bodyRoot, "Visual effects", new Vector2(x, y), ColumnWidth, labelSize,
+            () => AtomixSettings.PostFx,
+            value => { AtomixSettings.PostFx = value; AtomixPostFx.Refresh(); });
+        y -= RowStep;
+
+        LabPanelBuilder.CreateToggleRow(bodyRoot, "Fullscreen", new Vector2(x, y), ColumnWidth, labelSize,
+            () => AtomixSettings.Fullscreen,
+            value => AtomixSettings.Fullscreen = value);
+        y -= RowStep;
+
+        LabPanelBuilder.CreateStepperRow(bodyRoot, "Frame rate limit", new Vector2(x, y), ColumnWidth, labelSize,
+            () => AtomixSettings.FrameCap <= 0 ? "Unlimited" : AtomixSettings.FrameCap + " fps",
+            () => StepFrameCap(-1), () => StepFrameCap(1));
+        y -= SectionStep;
+
+        LabPanelBuilder.CreateSectionHeading(bodyRoot, "Sound", new Vector2(x, y), ColumnWidth, headingSize);
+        y -= HeaderStep;
+
+        LabPanelBuilder.CreateStepperRow(bodyRoot, "Master volume", new Vector2(x, y), ColumnWidth, labelSize,
+            () => Percent(AtomixSettings.MasterVolume),
             () => AtomixSettings.MasterVolume -= 0.1f,
             () => AtomixSettings.MasterVolume += 0.1f);
         y -= RowStep;
 
-        LabPanelBuilder.CreateStepperRow(bodyRoot, "Menu size", new Vector2(0.0f, y), RowWidth, labelSize,
-            () => Mathf.RoundToInt(AtomixSettings.UiScale * 100.0f) + "%",
-            () => { AtomixSettings.UiScale -= 0.1f; ApplyScale(); },
-            () => { AtomixSettings.UiScale += 0.1f; ApplyScale(); });
-        y -= SectionStep;
-
-        LabPanelBuilder.CreateSectionHeading(bodyRoot, "Accessibility", new Vector2(0.0f, y), RowWidth, headingSize);
-        y -= HeaderStep;
-
-        LabPanelBuilder.CreateToggleRow(bodyRoot, "High-contrast panels", new Vector2(0.0f, y), RowWidth, labelSize,
-            () => AtomixSettings.HighContrastUi,
-            value => AtomixSettings.HighContrastUi = value);
+        LabPanelBuilder.CreateStepperRow(bodyRoot, "Interaction sounds", new Vector2(x, y), ColumnWidth, labelSize,
+            () => Percent(AtomixSettings.SfxVolume),
+            () => AtomixSettings.SfxVolume -= 0.1f,
+            () => AtomixSettings.SfxVolume += 0.1f);
         y -= RowStep;
 
-        LabPanelBuilder.CreateToggleRow(bodyRoot, "Colour-blind safe results", new Vector2(0.0f, y), RowWidth, labelSize,
-            () => AtomixSettings.ColourBlindSafe,
-            value => AtomixSettings.ColourBlindSafe = value);
+        LabPanelBuilder.CreateStepperRow(bodyRoot, "Laboratory ambience", new Vector2(x, y), ColumnWidth, labelSize,
+            () => Percent(AtomixSettings.AmbienceVolume),
+            () => AtomixSettings.AmbienceVolume -= 0.1f,
+            () => AtomixSettings.AmbienceVolume += 0.1f);
         y -= RowStep;
 
-        LabPanelBuilder.CreateToggleRow(bodyRoot, "Show crosshair", new Vector2(0.0f, y), RowWidth, labelSize,
-            () => AtomixSettings.ShowCrosshair,
-            value => AtomixSettings.ShowCrosshair = value);
+        LabPanelBuilder.CreateStepperRow(bodyRoot, "Menu music", new Vector2(x, y), ColumnWidth, labelSize,
+            () => Percent(AtomixSettings.MusicVolume),
+            () => AtomixSettings.MusicVolume -= 0.1f,
+            () => AtomixSettings.MusicVolume += 0.1f);
+    }
 
-        if (statusText != null && string.IsNullOrEmpty(statusText.text))
+    private static string Percent(float value)
+    {
+        return value <= 0.0f ? "Off" : Mathf.RoundToInt(value * 100.0f) + "%";
+    }
+
+    private static string QualityLabel()
+    {
+        int level = AtomixSettings.QualityLevel;
+        string[] names = QualitySettings.names;
+
+        if (level < 0 || level >= names.Length)
         {
-            statusText.text = "Colour-blind safe swaps the green and red result pair for blue and orange.";
+            // Nothing has been chosen yet, so report what the project is actually running at.
+            int current = QualitySettings.GetQualityLevel();
+            return current >= 0 && current < names.Length ? names[current] : "Default";
         }
+
+        return names[level];
+    }
+
+    private static void StepQuality(int direction)
+    {
+        string[] names = QualitySettings.names;
+        if (names.Length == 0)
+        {
+            return;
+        }
+
+        int level = AtomixSettings.QualityLevel;
+        if (level < 0 || level >= names.Length)
+        {
+            level = QualitySettings.GetQualityLevel();
+        }
+
+        AtomixSettings.QualityLevel = Mathf.Clamp(level + direction, 0, names.Length - 1);
+
+        // The stack decides for itself what it can afford at the new level, so it has to be told.
+        AtomixPostFx.Refresh();
+    }
+
+    private static void StepFrameCap(int direction)
+    {
+        int[] choices = AtomixSettings.FrameCapChoices;
+        int index = 0;
+        for (int i = 0; i < choices.Length; i++)
+        {
+            if (choices[i] == AtomixSettings.FrameCap)
+            {
+                index = i;
+                break;
+            }
+        }
+
+        AtomixSettings.FrameCap = choices[Mathf.Clamp(index + direction, 0, choices.Length - 1)];
     }
 
     private void BuildAchievementsTab()
@@ -512,7 +665,10 @@ public class PauseMenuUI : MonoBehaviour
             { "L", "Cycle the measurement label" },
             { "H", "Controls help overlay" },
             { "V", "Hold to talk to the lab assistant" },
+            { "Enter", "Type a question - no microphone needed" },
+            { "Y", "Ask why the last experiment failed" },
             { "M", "Minimise the assistant panel" },
+            { "F2 / F3 / F4", "Testing scene: hint, +30 seconds, skip" },
             { "F1", "This menu" },
             { "Escape", "Unlock cursor / close a panel" }
         };
