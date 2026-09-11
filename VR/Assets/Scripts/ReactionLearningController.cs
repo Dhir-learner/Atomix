@@ -50,6 +50,25 @@ public class ReactionLearningController : MonoBehaviour
     private bool molecularMode = false;
     private float askCooldownUntil = 0.0f;
 
+    // --- Level and challenge (book flow only) --------------------------------------------
+    // The LEARN/PERFORM page is where an experiment is chosen, so it is where the student says
+    // how they want to run it: Guided / Standard / Expert, or as a stoichiometry challenge.
+    private GameObject levelRoot;
+    private readonly Button[] levelButtons = new Button[3];
+    private static readonly LabDifficulty[] LevelOrder =
+        { LabDifficulty.Guided, LabDifficulty.Standard, LabDifficulty.Expert };
+    private TMP_Text levelDescription;
+    private TMP_Text challengeCaption;
+    private Button challengeButton;
+    private TMP_Text challengeBriefText;
+
+    /// <summary>A challenge shown to the student but not yet started. Null outside that screen.</summary>
+    private StoichiometryChallenge challengeOffer;
+
+    private static readonly Color LevelIdleColour = new Color(0.16f, 0.30f, 0.50f, 1f);
+    private static readonly Color LevelChosenColour = new Color(0.24f, 0.52f, 0.78f, 1f);
+    private static readonly Color LevelLockedColour = new Color(0.17f, 0.19f, 0.24f, 1f);
+
     private VideoPlayer videoPlayer;
     private AudioSource videoAudioSource;
     private RenderTexture renderTexture;
@@ -768,6 +787,8 @@ public class ReactionLearningController : MonoBehaviour
                 videoButtonSize
             );
 
+        BuildChoiceOptions();
+
         playPauseLabel =
             playPauseButton.GetComponentInChildren<TMP_Text>();
 
@@ -809,6 +830,8 @@ public class ReactionLearningController : MonoBehaviour
         );
 
         // Keep buttons above the video/background.
+        levelRoot.transform.SetAsLastSibling();
+        challengeButton.transform.SetAsLastSibling();
         learnButton.transform.SetAsLastSibling();
         performButton.transform.SetAsLastSibling();
         backButton.transform.SetAsLastSibling();
@@ -1034,6 +1057,196 @@ public class ReactionLearningController : MonoBehaviour
     }
 
     // =========================================================
+    // LEVEL AND CHALLENGE
+    // =========================================================
+
+    /// <summary>
+    /// The level picker and the challenge button, in the space between the question and the
+    /// LEARN / PERFORM row. The video display covers the same space, but it is never shown on
+    /// the choice page, and these are never shown anywhere else.
+    /// </summary>
+    void BuildChoiceOptions()
+    {
+        levelRoot = new GameObject("LevelOptions", typeof(RectTransform));
+        levelRoot.transform.SetParent(rootPanel.transform, false);
+
+        RectTransform levelRect = levelRoot.GetComponent<RectTransform>();
+        levelRect.anchorMin = new Vector2(0.5f, 0.5f);
+        levelRect.anchorMax = new Vector2(0.5f, 0.5f);
+        levelRect.pivot = new Vector2(0.5f, 0.5f);
+        levelRect.anchoredPosition = Vector2.zero;
+        levelRect.sizeDelta = new Vector2(1000f, 720f);
+
+        TMP_Text levelCaption = CreateText("LevelCaption", levelRoot.transform,
+            new Vector2(0f, 150f), new Vector2(900f, 32f), 22f, FontStyles.Normal,
+            TextAlignmentOptions.Center);
+        levelCaption.text = "Level for this experiment";
+        levelCaption.color = new Color(0.72f, 0.78f, 0.86f, 1f);
+
+        for (int i = 0; i < LevelOrder.Length; i++)
+        {
+            LabDifficulty level = LevelOrder[i];
+            levelButtons[i] = CreateButton("Level" + level, levelRoot.transform,
+                ExperimentScoring.Label(level).ToUpperInvariant(),
+                new Vector2((i - 1) * 230f, 100f), new Vector2(210f, 54f));
+            levelButtons[i].onClick.AddListener(() => OnLevelClicked(level));
+        }
+
+        levelDescription = CreateText("LevelDescription", levelRoot.transform,
+            new Vector2(0f, 38f), new Vector2(900f, 62f), 22f, FontStyles.Normal,
+            TextAlignmentOptions.Center);
+        levelDescription.color = new Color(0.86f, 0.89f, 0.94f, 1f);
+
+        challengeCaption = CreateText("ChallengeCaption", levelRoot.transform,
+            new Vector2(0f, -32f), new Vector2(900f, 34f), 20f, FontStyles.Italic,
+            TextAlignmentOptions.Center);
+        challengeCaption.text = "Or be given an amount of product and work out the reagents yourself:";
+        challengeCaption.color = new Color(0.72f, 0.78f, 0.86f, 1f);
+
+        // Outside levelRoot: it stays on screen while a challenge is being offered.
+        challengeButton = CreateButton("ChallengeButton", rootPanel.transform, "CHALLENGE",
+            new Vector2(0f, -86f), new Vector2(340f, 54f));
+        challengeButton.onClick.AddListener(OnChallengeClicked);
+
+        challengeBriefText = CreateText("ChallengeBrief", rootPanel.transform,
+            new Vector2(0f, 42f), new Vector2(900f, 220f), 23f, FontStyles.Normal,
+            TextAlignmentOptions.Top);
+
+        levelRoot.SetActive(false);
+        challengeButton.gameObject.SetActive(false);
+        challengeBriefText.gameObject.SetActive(false);
+    }
+
+    /// <summary>Hides every level / challenge control - for the video and post-success screens.</summary>
+    void HideChoiceOptions()
+    {
+        challengeOffer = null;
+
+        if (levelRoot != null)
+        {
+            levelRoot.SetActive(false);
+        }
+        if (challengeButton != null)
+        {
+            challengeButton.gameObject.SetActive(false);
+        }
+        if (challengeBriefText != null)
+        {
+            challengeBriefText.gameObject.SetActive(false);
+        }
+    }
+
+    /// <summary>Shows the controls that fit the choice page's current state.</summary>
+    void RefreshChoiceOptions()
+    {
+        if (levelRoot == null)
+        {
+            return;
+        }
+
+        bool valid = !postSuccessMode && pendingReactionId >= 1 && pendingReactionId <= 8;
+        if (!valid)
+        {
+            HideChoiceOptions();
+            return;
+        }
+
+        bool offering = challengeOffer != null;
+        levelRoot.SetActive(!offering);
+        challengeBriefText.gameObject.SetActive(offering);
+
+        ReactionDefinition definition = ReactionDefinition.Load(pendingReactionId);
+        bool eligible = StoichiometryChallenge.IsEligible(definition);
+        challengeButton.gameObject.SetActive(eligible);
+        challengeCaption.gameObject.SetActive(eligible);
+        SetButtonLabel(challengeButton, offering ? "ANOTHER AMOUNT" : "CHALLENGE");
+
+        if (offering)
+        {
+            challengeBriefText.text = challengeOffer.Brief;
+            return;
+        }
+
+        LabDifficulty chosen = LabRunOptions.SelectedDifficulty(pendingReactionId);
+        bool expertUnlocked = LabRunOptions.IsExpertUnlocked(pendingReactionId);
+
+        for (int i = 0; i < LevelOrder.Length; i++)
+        {
+            LabDifficulty level = LevelOrder[i];
+            bool locked = level == LabDifficulty.Expert && !expertUnlocked;
+
+            levelButtons[i].GetComponent<Image>().color = locked ? LevelLockedColour
+                : level == chosen ? LevelChosenColour
+                : LevelIdleColour;
+
+            SetButtonLabel(levelButtons[i], locked
+                ? "EXPERT (LOCKED)"
+                : (level == chosen ? "> " : string.Empty) + ExperimentScoring.Label(level).ToUpperInvariant());
+        }
+
+        levelDescription.text = ExperimentScoring.Describe(chosen) +
+            (expertUnlocked ? string.Empty : "\nExpert unlocks once you pass this experiment on Standard.");
+    }
+
+    void OnLevelClicked(LabDifficulty level)
+    {
+        if (pendingReactionId < 1 || pendingReactionId > 8 || challengeOffer != null)
+        {
+            return;
+        }
+
+        if (level == LabDifficulty.Expert && !LabRunOptions.IsExpertUnlocked(pendingReactionId))
+        {
+            AtomixAudio.UiDenied();
+            levelDescription.text = "Expert is locked for this experiment.\n" +
+                                    "Pass it on Standard first - in the Lab, a challenge or the test.";
+            return;
+        }
+
+        AtomixAudio.UiClick();
+        AtomixSettings.SetLabDifficulty(pendingReactionId, level);
+        RefreshChoiceOptions();
+    }
+
+    void OnChallengeClicked()
+    {
+        if (pendingReactionId < 1 || pendingReactionId > 8 || postSuccessMode)
+        {
+            return;
+        }
+
+        StoichiometryChallenge offer =
+            StoichiometryChallenge.CreateRandom(ReactionDefinition.Load(pendingReactionId));
+
+        // A re-roll that lands on the same amount is not a new challenge; try once more.
+        if (offer != null && offer.SameAs(challengeOffer))
+        {
+            offer = StoichiometryChallenge.CreateRandom(offer.Definition);
+        }
+
+        if (offer == null)
+        {
+            AtomixAudio.UiDenied();
+            return;
+        }
+
+        AtomixAudio.UiClick();
+        challengeOffer = offer;
+
+        bodyText.text = "Stoichiometry challenge";
+        learnButton.gameObject.SetActive(false);
+        SetButtonLabel(performButton, "START");
+        RefreshChoiceOptions();
+    }
+
+    /// <summary>Leaves the challenge screen for the ordinary LEARN / PERFORM page.</summary>
+    void CancelChallengeOffer()
+    {
+        challengeOffer = null;
+        ShowChoiceUi();
+    }
+
+    // =========================================================
     // CHOICE UI
     // =========================================================
 
@@ -1079,6 +1292,10 @@ public class ReactionLearningController : MonoBehaviour
 
         ApplyButtonLabels();
 
+        // Always opens on the ordinary page; a challenge is offered only when asked for.
+        challengeOffer = null;
+        RefreshChoiceOptions();
+
         SetCursorForUi();
     }
 
@@ -1121,6 +1338,7 @@ public class ReactionLearningController : MonoBehaviour
         currentState =
             LearningUiState.Unavailable;
 
+        HideChoiceOptions();
         SetVideoVisibility(false);
 
         titleText.text =
@@ -1171,6 +1389,7 @@ public class ReactionLearningController : MonoBehaviour
         currentState =
             LearningUiState.Video;
 
+        HideChoiceOptions();
         SetVideoVisibility(true);
 
         titleText.text =
@@ -1463,6 +1682,11 @@ public class ReactionLearningController : MonoBehaviour
         int reactionToPerform =
             pendingReactionId;
 
+        // START on the challenge screen runs the challenge; PERFORM anywhere else is a normal
+        // run at the chosen level.
+        StoichiometryChallenge challenge = challengeOffer;
+        HideChoiceOptions();
+
         pendingReactionId = -1;
 
         StopVideoPlayback(true);
@@ -1472,13 +1696,42 @@ public class ReactionLearningController : MonoBehaviour
         currentState =
             LearningUiState.Hidden;
 
+        if (challenge != null)
+        {
+            LabRunOptions.QueueChallenge(challenge);
+        }
+        else
+        {
+            LabRunOptions.ClearChallenge();
+        }
+
         if (flipPages != null)
         {
+            string announcement = RunAnnouncement(reactionToPerform, challenge);
+
+            // The experiment is already on the bench, set up differently. Picking it again would
+            // not reset anything, so the bench is reset and the experiment re-selected - the same
+            // thing F5 does - and the new settings apply to the fresh run.
+            if (LabRunOptions.NeedsBenchReset(reactionToPerform))
+            {
+                LabRetryController retry = ExperimentHistoryManager.Instance.GetComponent<LabRetryController>();
+                if (retry != null && retry.RestartWithReaction(reactionToPerform,
+                        string.IsNullOrEmpty(announcement) ? "Bench reset" : "Bench reset\n" + announcement))
+                {
+                    return;
+                }
+            }
+
             // IMPORTANT:
             // Preserve original Atomix reaction flow.
             flipPages.StartReactionExperiment(
                 reactionToPerform
             );
+
+            if (!string.IsNullOrEmpty(announcement))
+            {
+                LabHudController.Toast(announcement);
+            }
         }
         else
         {
@@ -1492,8 +1745,35 @@ public class ReactionLearningController : MonoBehaviour
     // BACK
     // =========================================================
 
+    /// <summary>What the toast says as a run starts - nothing for an ordinary Standard run.</summary>
+    static string RunAnnouncement(int reactionId, StoichiometryChallenge challenge)
+    {
+        if (challenge != null)
+        {
+            string data = challenge.DataLine;
+            return "Challenge: " + challenge.Headline + "\n" +
+                   (string.IsNullOrEmpty(data) ? "The amounts are not shown - work them out." : data);
+        }
+
+        switch (LabRunOptions.SelectedDifficulty(reactionId))
+        {
+            case LabDifficulty.Guided:
+                return "Guided level\nA wider margin for error.";
+            case LabDifficulty.Expert:
+                return "Expert level\nNo targets, and a tighter margin for error.";
+            default:
+                return string.Empty;
+        }
+    }
+
     void OnBackClicked()
     {
+        if (challengeOffer != null)
+        {
+            CancelChallengeOffer();
+            return;
+        }
+
         BackToReactionSelection();
     }
 
@@ -1552,6 +1832,16 @@ public class ReactionLearningController : MonoBehaviour
                 break;
 
             case LearningUiState.Choice:
+
+                if (challengeOffer != null)
+                {
+                    CancelChallengeOffer();
+                    break;
+                }
+
+                BackToReactionSelection();
+
+                break;
 
             case LearningUiState.Unavailable:
 

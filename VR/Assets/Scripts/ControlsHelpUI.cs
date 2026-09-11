@@ -35,8 +35,8 @@ AI LAB ASSISTANT
 
 HELD OBJECT ROTATION
   Q / E        Rotate left or right
-  Z / X        Tilt forward or back
-  C            Roll (hold Shift to reverse)
+  Z / X        Tilt - steeper pours faster
+  C            Roll (Shift reverses) - also pours
   Mouse Wheel  Spin object
 
 CHEMISTRY BOOK

@@ -33,8 +33,6 @@ public class Feso4Reaction : MonoBehaviour
 
     [Header("Free-Hand Mode (heating time matters)")]
     public bool enableFreeHandMode = true;
-    [Tooltip("Percentage tolerance around heatingDuration that still counts as a correct decomposition.")]
-    public float tolerancePercent = 15.0f;
     public float tooltipHeightOffset = 0.22f;
     [Tooltip("World-space font size for the floating tracker. TMP renders roughly (fontSize x 0.12) metres per line, so keep this small.")]
     public float tooltipFontSize = 0.55f;
@@ -42,10 +40,11 @@ public class Feso4Reaction : MonoBehaviour
     public AudioSource audioSource_failure;
     public AudioClip clip_failure;
 
-    [Header("Experiment History")]
+    [Header("Recipe and History")]
     [Tooltip("Matches the book / StartReaction number, 1-8.")]
     public int reactionId = 8;
-    public string reactionDisplayName = "2FeSO4 -> Fe2O3 + SO2 + SO3";
+    [Tooltip("Optional. Left empty, Resources/ReactionDefinitions supplies the heating time, tolerance and messages.")]
+    public ReactionDefinition definition;
     [Tooltip("Re-selecting this experiment from the book logs a fresh attempt.")]
     public bool restartAttemptOnReSelect = true;
 
@@ -77,15 +76,20 @@ public class Feso4Reaction : MonoBehaviour
             return;
         }
 
-        engine = new FreeHandReactionEngine();
-        engine.tolerancePercent = tolerancePercent;
-        engine.settleTimeRequired = 1.5f;
-        engine.trackerTitle = "[Lab Heating Tracker]";
-        engine.AddSubstance("Heating", Mathf.Max(0.1f, heatingDuration), "s",
-            overdose: "The tube was left in the flame long past full decomposition - the Fe2O3 bakes onto the glass and the SO2/SO3 fumes build up dangerously.",
-            underdose: "Insufficient heating produces incomplete decomposition - some FeSO4 never breaks down, so the solid stays green instead of turning reddish brown.");
+        if (definition == null)
+        {
+            definition = ReactionDefinition.Load(reactionId);
+        }
+        if (definition == null)
+        {
+            return;
+        }
 
-        recorder = new ReactionHistoryRecorder(reactionId, reactionDisplayName, engine);
+        engine = new FreeHandReactionEngine();
+        definition.Configure(engine);
+
+        recorder = new ReactionHistoryRecorder(reactionId, definition.displayName, engine);
+        LabRunOptions.Apply(reactionId, definition, engine, recorder);
 
         tooltip = new FreeHandTooltip();
         tooltip.Create("TubeFloatingTooltip_FeSO4", canvasText, tooltipFontSize);
@@ -111,6 +115,7 @@ public class Feso4Reaction : MonoBehaviour
         {
             recorder.Abandon(); // switching experiments away mid-run
         }
+        LabRunOptions.NoteBenchCleared(reactionId);
     }
 
     void OnDestroy()
@@ -172,7 +177,7 @@ public class Feso4Reaction : MonoBehaviour
 
         if (!engine.IsResolved)
         {
-            engine.UpdatePouringQuantity("Heating", 1.0f, overFlame);
+            engine.UpdatePouringQuantity("Heating", definition.FlowFor("Heating"), overFlame);
         }
 
         ReactionResult result = engine.CheckReactionOutcome();
@@ -182,7 +187,8 @@ public class Feso4Reaction : MonoBehaviour
         }
         SetFumeActive(overFlame && !engine.IsResolved);
 
-        float duration = Mathf.Max(0.1f, heatingDuration);
+        // The colour follows the heating the engine is judging, so the two always agree.
+        float duration = Mathf.Max(0.1f, definition.TargetFor("Heating"));
         heatingProgress = Mathf.Clamp01(engine.GetCurrent("Heating") / duration);
         ApplySubstanceColor(EvaluateGradientColor(heatingProgress));
 
@@ -442,6 +448,7 @@ public class Feso4Reaction : MonoBehaviour
         }
 
         engine.Reset();
+        LabRunOptions.Apply(reactionId, definition, engine, recorder);
         failureReported = false;
         reactionCompleted = false;
         audioSource2Started = false;

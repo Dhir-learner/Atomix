@@ -47,27 +47,23 @@ public class ExamReactionRunner
     public ReactionHistoryRecorder Recorder { get { return recorder; } }
 
     /// <summary>
-    /// Sets the runner up. Call from Start, then register the substances on
-    /// <see cref="engine"/> exactly as the matching lab reaction does.
+    /// Sets the runner up from the experiment's <see cref="ReactionDefinition"/> - the very same
+    /// data file the matching Lab script loads, so the two cannot drift apart. Call from Start.
     /// </summary>
-    /// <param name="reactionId">The Lab reaction number, so attempts group with the lab ones.</param>
-    public void Begin(string tooltipObjectName, TMP_Text canvas, float tooltipFontSize,
-                      int reactionId, string displayName,
-                      CountdownTimer countdown, Randomize randomizer,
-                      float tolerancePercent, string trackerTitle = "[Chemicals Used]")
+    public void Begin(ReactionDefinition definition, string tooltipObjectName, TMP_Text canvas,
+                      float tooltipFontSize, CountdownTimer countdown, Randomize randomizer)
     {
         this.canvasText = canvas;
         this.countdown = countdown;
         this.randomizer = randomizer;
-        this.reactionId = reactionId;
-        this.reactionName = displayName;
+        this.reactionId = definition.reactionId;
+        this.reactionName = definition.examDisplayName;
 
+        definition.Configure(engine);
         engine.hideTargets = true;          // the whole point of the testing scene
-        engine.tolerancePercent = tolerancePercent;
-        engine.settleTimeRequired = 1.5f;
-        engine.trackerTitle = trackerTitle;
+        engine.trackerTitle = definition.ExamTrackerTitle;
 
-        recorder = new ReactionHistoryRecorder(reactionId, displayName, engine);
+        recorder = new ReactionHistoryRecorder(reactionId, reactionName, engine);
         recorder.hideTargets = true;        // the history panel must not become an answer key
 
         if (!string.IsNullOrEmpty(tooltipObjectName))
@@ -93,6 +89,19 @@ public class ExamReactionRunner
         if (started && !engine.IsResolved)
         {
             engine.UpdatePouringQuantity(substanceName, ratePerSecond, isPouring);
+        }
+    }
+
+    /// <summary>
+    /// Feeds a tipped vessel, whose rate follows its tilt. Mirrors the Lab's engine.UpdatePour.
+    /// A separate name rather than a Pour overload: every Pour* script is a UnityEngine.Object,
+    /// which converts to bool, so an overload would be ambiguous.
+    /// </summary>
+    public void PourFrom(string substanceName, float fullRatePerSecond, IPourSource source)
+    {
+        if (started && !engine.IsResolved)
+        {
+            engine.UpdatePour(substanceName, fullRatePerSecond, source);
         }
     }
 

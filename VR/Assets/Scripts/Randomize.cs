@@ -50,7 +50,6 @@ public class Randomize : MonoBehaviour
 
     List<int> reactionsDone;
     public bool stopTesting;
-    private int totalReactionsNumber;
 
     void Start()
     {
@@ -62,6 +61,40 @@ public class Randomize : MonoBehaviour
         stopTesting = false;
         reactionsDone = new List<int>();
         //Debug.Log(StaticData.includedTasksValue);
+    }
+
+    /// <summary>How many different tasks a mode can hand out: practical, theory, or both.</summary>
+    static int TaskPoolSize(int includedTasksValue)
+    {
+        switch (includedTasksValue)
+        {
+            case 1: return 10;   // theory questions 9-18
+            case 2: return 18;   // both
+            default: return 8;   // the eight practical experiments
+        }
+    }
+
+    /// <summary>
+    /// Ends the run after its last task is over. Leaves the screen as it always ended - the
+    /// reaction-task canvas up with "You have finished all the tasks!" on it, the question canvas
+    /// down - and puts the last task's equipment away, so its script stops writing to the canvas
+    /// and closes its attempt the same way every earlier task's did.
+    /// </summary>
+    void FinishRun()
+    {
+        stopTesting = true;
+        generateNewReaction = false;
+
+        HideAllObjects();
+        if (canvasForReactionTask != null)
+        {
+            canvasForReactionTask.SetActive(true);
+        }
+
+        if (countdown != null)
+        {
+            countdown.continua = false;
+        }
     }
 
     void HideAllObjects()
@@ -157,6 +190,18 @@ public class Randomize : MonoBehaviour
         {
             if (generateNewReaction)
             {
+                // A new task is only asked for once the current one is over - finished, failed,
+                // skipped or out of time. So this is the moment to end the run, if every task the
+                // student asked for has now been played. The run used to be ended while the last
+                // task was being handed out instead, which skipped it: its equipment appeared for
+                // a single frame, the report card opened over it, and it was filed as timed out.
+                int requested = Mathf.Clamp(StaticData.TaskCount, 1, TaskPoolSize(StaticData.includedTasksValue));
+                if (reactionsDone.Count >= requested)
+                {
+                    FinishRun();
+                    return;
+                }
+
                 HideAllObjects();
                 if (StaticData.includedTasksValue == 0)
                 {
@@ -164,7 +209,6 @@ public class Randomize : MonoBehaviour
                     {
                         currentReactionInTestPhase = Random.Range(1, 9);
                     } while (reactionsDone.Contains(currentReactionInTestPhase));
-                    totalReactionsNumber = 8;
                 }
                 else if (StaticData.includedTasksValue == 1)
                 {
@@ -172,7 +216,6 @@ public class Randomize : MonoBehaviour
                     {
                         currentReactionInTestPhase = Random.Range(9, 19);
                     } while (reactionsDone.Contains(currentReactionInTestPhase));
-                    totalReactionsNumber = 10;
                 }
                 else if (StaticData.includedTasksValue == 2)
                 {
@@ -180,18 +223,12 @@ public class Randomize : MonoBehaviour
                     {
                         currentReactionInTestPhase = Random.Range(1, 19);
                     } while (reactionsDone.Contains(currentReactionInTestPhase));
-                    totalReactionsNumber = 18;
                 }
                 reactionsDone.Add(currentReactionInTestPhase);
 
-                // The 10 here used to be hard-coded, so every run was the same length whatever the
-                // student wanted. It now comes from the setup screen, still clamped to how many
-                // tasks the chosen mode actually has.
-                int requested = Mathf.Clamp(StaticData.TaskCount, 1, totalReactionsNumber);
-                if (reactionsDone.Count >= totalReactionsNumber || reactionsDone.Count >= requested)
-                {
-                    stopTesting = true;
-                }
+                // How many tasks there are in total comes from the setup screen (it used to be a
+                // hard-coded 10), clamped to how many the chosen mode has. Checked above, when
+                // the next task is asked for - not here, where the task is still to be played.
                 Debug.Log($"Generated Random Number: {currentReactionInTestPhase}");
                 if (currentReactionInTestPhase < 9)
                 {

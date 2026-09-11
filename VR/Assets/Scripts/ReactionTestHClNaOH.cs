@@ -23,25 +23,23 @@ public class ReactionTestHClNaOH : MonoBehaviour
     [Header("Exam Mode (same rules as the Lab, quantities hidden)")]
     [Tooltip("Judged by the same FreeHandReactionEngine as Reaction_hcl_nahco3, but the student is never told the target or the accepted range.")]
     public bool enableExamMode = true;
-    public float targetHClMl = 15.0f;
-    public float targetNaHCO3Grams = 12.0f;
-    public float tolerancePercent = 10.0f;
-    public float hclFlowMlPerSecond = 5.0f;
-    public float nahco3FlowGramsPerSecond = 3.0f;
     public float tooltipHeightOffset = 0.20f;
     public float tooltipFontSize = 0.55f;
     [Tooltip("Optional - played when the task is failed.")]
     public AudioSource audioSource_failure;
     public AudioClip clip_failure;
 
-    [Header("Experiment History")]
+    [Header("Recipe")]
     [Tooltip("Matches the Lab reaction number so test attempts group with lab attempts.")]
     public int reactionId = 3;
-    public string reactionDisplayName = "HCl + NaHCO3 -> NaCl + H2O + CO2 [Test]";
+    [Tooltip("Optional. Left empty, Resources/ReactionDefinitions is used - the same file the Lab reads.")]
+    public ReactionDefinition definition;
 
     private const string TaskPrompt = "Create table salt.";
 
     private ExamReactionRunner exam;
+    private float hclFlow;
+    private float nahco3Flow;
 
     private DateTime timpInitial;
     private bool isPlaying = false;
@@ -61,19 +59,21 @@ public class ReactionTestHClNaOH : MonoBehaviour
             return;
         }
 
+        if (definition == null)
+        {
+            definition = ReactionDefinition.Load(reactionId);
+        }
+        if (definition == null)
+        {
+            return;
+        }
+
         exam = new ExamReactionRunner();
-        exam.Begin("ExamTooltip_HCl_NaHCO3", canvasText, tooltipFontSize,
-            reactionId, reactionDisplayName, countdown, randomizer, tolerancePercent);
+        exam.Begin(definition, "ExamTooltip_HCl_NaHCO3", canvasText, tooltipFontSize, countdown, randomizer);
         exam.SetFailureAudio(audioSource_failure, clip_failure);
 
-        exam.engine.wrongOrderMessage =
-            "Sodium bicarbonate was tipped in before the acid, so the CO2 escaped from a dry powder instead of a controlled neutralisation.";
-        exam.engine.AddSubstance("HCl", targetHClMl, "ml",
-            overdose: "Too much acid produces excessive CO2 gas violently - the froth overflows and the leftover HCl stays in the beaker.",
-            underdose: "Too little acid leaves most of the bicarbonate unreacted, so effervescence stops almost immediately.");
-        exam.engine.AddSubstance("NaHCO3", targetNaHCO3Grams, "g",
-            overdose: "Excess bicarbonate cannot react - only the HCl present can be neutralised, so solid NaHCO3 is left behind.",
-            underdose: "Insufficient bicarbonate leaves an acidic solution, so the neutralisation to NaCl is incomplete.");
+        hclFlow = definition.FlowFor("HCl");
+        nahco3Flow = definition.FlowFor("NaHCO3");
     }
 
     void OnEnable()
@@ -112,8 +112,8 @@ public class ReactionTestHClNaOH : MonoBehaviour
 
         if (exam != null)
         {
-            exam.Pour("HCl", hclFlowMlPerSecond, hcl != null && hcl.IsPouring);
-            exam.Pour("NaHCO3", nahco3FlowGramsPerSecond, salt != null && salt.IsPouring);
+            exam.PourFrom("HCl", hclFlow, hcl);
+            exam.PourFrom("NaHCO3", nahco3Flow, salt);
             examResult = exam.Tick();
             exam.UpdateTooltip(currentBerzelius != null ? currentBerzelius.transform : transform,
                 tooltipHeightOffset, "Task finished!");

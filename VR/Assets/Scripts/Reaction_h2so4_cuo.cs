@@ -23,11 +23,6 @@ public class Reaction_h2so4_cuo : MonoBehaviour
 
     [Header("Free-Hand Mode (quantity + order matter)")]
     public bool enableFreeHandMode = true;
-    public float targetH2SO4Ml = 20.0f;
-    public float targetCuOGrams = 8.0f;
-    public float tolerancePercent = 8.0f;
-    public float h2so4FlowMlPerSecond = 5.0f;
-    public float cuoFlowGramsPerSecond = 2.0f;
     public float tooltipHeightOffset = 0.20f;
     [Tooltip("World-space font size for the floating tracker. TMP renders roughly (fontSize x 0.12) metres per line, so keep this small.")]
     public float tooltipFontSize = 0.55f;
@@ -35,10 +30,11 @@ public class Reaction_h2so4_cuo : MonoBehaviour
     public AudioSource audioSource_failure;
     public AudioClip clip_failure;
 
-    [Header("Experiment History")]
+    [Header("Recipe and History")]
     [Tooltip("Matches the book / StartReaction number, 1-8.")]
     public int reactionId = 2;
-    public string reactionDisplayName = "H2SO4 + CuO -> CuSO4 + H2O";
+    [Tooltip("Optional. Left empty, Resources/ReactionDefinitions supplies the targets, tolerance and messages.")]
+    public ReactionDefinition definition;
     [Tooltip("Re-selecting this experiment from the book logs a fresh attempt.")]
     public bool restartAttemptOnReSelect = true;
 
@@ -46,6 +42,8 @@ public class Reaction_h2so4_cuo : MonoBehaviour
     private FreeHandTooltip tooltip;
     private bool failureReported = false;
     private ReactionHistoryRecorder recorder;
+    private float h2so4Flow;
+    private float cuoFlow;
 
     private DateTime timpInitial;
     private bool oneReaction = false;
@@ -60,20 +58,23 @@ public class Reaction_h2so4_cuo : MonoBehaviour
             return;
         }
 
+        if (definition == null)
+        {
+            definition = ReactionDefinition.Load(reactionId);
+        }
+        if (definition == null)
+        {
+            return;
+        }
+
         engine = new FreeHandReactionEngine();
-        engine.tolerancePercent = tolerancePercent;
-        engine.settleTimeRequired = 1.5f;
-        engine.wrongOrderMessage =
-            "Copper(II) oxide was tipped in before any acid was present, so there was no H2SO4 for the oxide to dissolve in.";
-        engine.AddSubstance("H2SO4", targetH2SO4Ml, "ml",
-            overdose: "Excess acid creates corrosive fumes - the leftover H2SO4 has no CuO left to neutralise it.",
-            underdose: "Too little acid leaves most of the copper oxide undissolved, so no CuSO4 forms.");
-        engine.AddSubstance("CuO", targetCuOGrams, "g",
-            overdose: "Excess copper oxide simply settles out - only the acid present can be converted to CuSO4.",
-            underdose: "Insufficient CuO leaves unreacted acid, so the solution stays strongly acidic instead of turning blue.");
+        definition.Configure(engine);
+        h2so4Flow = definition.FlowFor("H2SO4");
+        cuoFlow = definition.FlowFor("CuO");
 
         tooltip = new FreeHandTooltip();
-        recorder = new ReactionHistoryRecorder(reactionId, reactionDisplayName, engine);
+        recorder = new ReactionHistoryRecorder(reactionId, definition.displayName, engine);
+        LabRunOptions.Apply(reactionId, definition, engine, recorder);
 
         tooltip.Create("BeakerFloatingTooltip_H2SO4_CuO", canvasText, tooltipFontSize);
         tooltip.Show(FreeHandTooltip.ProgressColor, engine.GetTooltipText());
@@ -98,6 +99,7 @@ public class Reaction_h2so4_cuo : MonoBehaviour
         {
             recorder.Abandon(); // switching experiments away mid-run
         }
+        LabRunOptions.NoteBenchCleared(reactionId);
     }
 
     void OnDestroy()
@@ -117,8 +119,8 @@ public class Reaction_h2so4_cuo : MonoBehaviour
         {
             if (!engine.IsResolved)
             {
-                engine.UpdatePouringQuantity("H2SO4", h2so4FlowMlPerSecond, h2so4 != null && h2so4.IsPouring);
-                engine.UpdatePouringQuantity("CuO", cuoFlowGramsPerSecond, salt != null && salt.IsPouring);
+                engine.UpdatePour("H2SO4", h2so4Flow, h2so4);
+                engine.UpdatePour("CuO", cuoFlow, salt);
             }
 
             ReactionResult result = engine.CheckReactionOutcome();
@@ -263,6 +265,7 @@ public class Reaction_h2so4_cuo : MonoBehaviour
         }
 
         engine.Reset();
+        LabRunOptions.Apply(reactionId, definition, engine, recorder);
         failureReported = false;
         oneReaction = false;
         showPopup = false;

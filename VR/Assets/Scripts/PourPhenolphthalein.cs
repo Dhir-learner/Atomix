@@ -2,7 +2,7 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
-public class PourPhenolphthalein : MonoBehaviour
+public class PourPhenolphthalein : MonoBehaviour, IPourSource
 {
     public GameObject FirstGlass;
     public GameObject SecondGlass;
@@ -12,8 +12,15 @@ public class PourPhenolphthalein : MonoBehaviour
     public AudioClip clip;
     public bool containsPhenolphthalein = false;
 
+    /// <summary>True while the indicator is actually running into the target vessel.</summary>
+    public bool IsPouring { get { return play; } }
+
+    /// <summary>How hard the vessel is pouring, 0..1 of its full rate. See <see cref="PourTilt"/>.</summary>
+    public float FlowRate { get { return play ? flow : 0.0f; } }
+
     private bool play = false;
     private bool isPlaying = false;
+    private float flow = 0.0f;
     private GameObject StartForSubstanceLeak;
     private GameObject substance;
     private Renderer secondGlassSubstanceRenderer;
@@ -32,15 +39,11 @@ public class PourPhenolphthalein : MonoBehaviour
 
     void Update()
     {
-        Quaternion firstGlassRotation = FirstGlass.transform.rotation;
         Vector3 firstGlassPosition = FirstGlass.transform.position;
         Vector3 secondGlassPosition = SecondGlass.transform.position;
         Vector3 pivotPosition = StartForSubstanceLeak.transform.position;
-        if ((
-            firstGlassRotation.eulerAngles.x >= 45.0f && firstGlassRotation.eulerAngles.x < 90.0f ||
-            firstGlassRotation.eulerAngles.x <= 315.0f && firstGlassRotation.eulerAngles.x >= 270.0f ||
-            firstGlassRotation.eulerAngles.y >= 45.0f && firstGlassRotation.eulerAngles.y < 90.0f ||
-            firstGlassRotation.eulerAngles.y <= 315.0f && firstGlassRotation.eulerAngles.y >= 270.0f)
+        float tilt = PourTilt.TiltAngle(FirstGlass.transform);
+        if (PourTilt.IsTipped(tilt)
             && (
                 firstGlassPosition.y > secondGlassPosition.y &&
                 pivotPosition.x <= secondGlassPosition.x + 0.15 && pivotPosition.x >= secondGlassPosition.x - 0.15 &&
@@ -48,8 +51,11 @@ public class PourPhenolphthalein : MonoBehaviour
                 )
             )
         {
+            flow = PourTilt.FlowFactor(tilt);
             waterLeak.transform.position = pivotPosition;
             waterLeak.Play();
+            PourTilt.ScaleEmission(waterLeak, flow);
+            PourTilt.ScaleVolume(audioSource, flow);
             secondGlassSubstanceRenderer.material = PhenolphthaleinBase;
             substance.SetActive(true);
             play = true;
@@ -64,6 +70,8 @@ public class PourPhenolphthalein : MonoBehaviour
             if (play)
             {
                 waterLeak.Stop();
+                PourTilt.RestoreEmission(waterLeak);
+                PourTilt.RestoreVolume(audioSource);
                 play = false;
                 isPlaying = false;
                 audioSource.Stop();

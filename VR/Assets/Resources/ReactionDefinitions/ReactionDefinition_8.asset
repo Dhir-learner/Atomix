@@ -1,0 +1,46 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 671463ce27fc4d8098bb74ffd73b5544, type: 3}
+  m_Name: ReactionDefinition_8
+  m_EditorClassIdentifier: 
+  reactionId: 8
+  displayName: "2FeSO4 -> Fe2O3 + SO2 + SO3"
+  examDisplayName: "2FeSO4 -> Fe2O3 + SO2 + SO3 [Test]"
+  equation: "2FeSO4 -> Fe2O3 + SO2 + SO3"
+  kind: 1
+  tolerancePercent: 15
+  settleSeconds: 1.5
+  enforceOrder: 1
+  wrongOrderMessage: ""
+  procedureFailureReason: ""
+  procedureFailureHeadline: ""
+  reagents:
+  - name: "Heating"
+    unit: "s"
+    target: 10
+    flowPerSecond: 1
+    tolerancePercentOverride: -1
+    orderMatters: 1
+    orderGroup: -1
+    addition: 2
+    overdoseMessage: "The tube was left in the flame long past full decomposition - the Fe2O3 bakes onto the glass and the SO2/SO3 fumes build up dangerously."
+    underdoseMessage: "Insufficient heating produces incomplete decomposition - some FeSO4 never breaks down, so the solid stays green instead of turning reddish brown."
+    lumpGraceSeconds: 0
+    lumpOverflowPerSecond: 0
+    formula: ""
+    coefficient: 0
+    challengeRole: 0
+  challengeEligible: 0
+  productName: "iron(III) oxide"
+  productFormula: "Fe2O3"
+  productCoefficient: 1
+  challengeBasisReagent: ""

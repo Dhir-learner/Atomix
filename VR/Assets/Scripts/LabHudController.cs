@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using TMPro;
 using UnityEngine;
 using UnityEngine.SceneManagement;
@@ -35,6 +36,20 @@ public class LabHudController : MonoBehaviour
     public bool showMeasurementHud = true;
 
     public float measurementFontSize = 24.0f;
+
+    [Header("Pour gauge")]
+    [Tooltip("A small bar just under the crosshair while something is being poured, showing the " +
+             "amount against the accepted range - so the student's eyes can stay on the vessel " +
+             "instead of darting up to the readout at the top of the screen.")]
+    public bool showPourGauge = true;
+
+    [Tooltip("Where the gauge sits, in 1920x1080 pixels from the centre of the screen.")]
+    public Vector2 gaugeOffset = new Vector2(0.0f, -70.0f);
+
+    public float gaugeWidth = 300.0f;
+
+    [Tooltip("Seconds the gauge stays up after a pour stops, so the student can see where they stopped.")]
+    public float gaugeLingerSeconds = 1.5f;
 
     [Header("Scenes")]
     [Tooltip("The key only does anything in these scenes.")]
@@ -82,6 +97,7 @@ public class LabHudController : MonoBehaviour
         if (!showMeasurementHud || !IsEnabledScene())
         {
             SetMeasurementVisible(false);
+            SetGaugeVisible(false);
             return;
         }
 
@@ -101,8 +117,9 @@ public class LabHudController : MonoBehaviour
 
         FreeHandReactionEngine engine = active != null ? active.Engine : null;
 
-        // No engine means either no experiment selected, or reaction 1, which tracks its
-        // quantities inline and has no engine to read.
+        UpdatePourGauge(engine);
+
+        // No engine means no experiment is selected.
         if (engine == null || engine.Substances.Count == 0)
         {
             SetMeasurementVisible(false);
@@ -211,6 +228,260 @@ public class LabHudController : MonoBehaviour
         // The readout belongs to the scene it was measuring; do not carry it across.
         SetMeasurementVisible(false);
         lastMeasurementLine = null;
+        SetGaugeVisible(false);
+        gaugeSubstance = null;
+        gaugeEngine = null;
+        gaugeLinger = 0.0f;
+    }
+
+    // =========================================================
+    // POUR GAUGE
+    // =========================================================
+    //
+    // While pouring, the student is looking at the vessel - but the numbers were only ever at the
+    // top edge of the screen, so their eyes had to jump between the two at exactly the moment
+    // that matters most. The gauge sits just under the crosshair instead.
+    //
+    // It reads the same engine the top strip does. With the targets hidden (the testing scene,
+    // the Expert level, a stoichiometry challenge) it shows the amount and the flow only: no bar
+    // against a range, because the range is the answer.
+
+    private RectTransform gaugeRoot;
+    private CanvasGroup gaugeGroup;
+    private TMP_Text gaugeLabel;
+    private RectTransform gaugeTrack;
+    private RectTransform gaugeBand;
+    private RectTransform gaugeMarker;
+    private RectTransform gaugeFill;
+    private Image gaugeFillImage;
+    private RectTransform gaugeFlowTrack;
+    private RectTransform gaugeFlowFill;
+
+    private FreeHandReactionEngine gaugeEngine;
+    private string gaugeSubstance;
+    private float gaugeLinger;
+    private string lastGaugeLabel;
+
+    private const float GaugeBarHeight = 12.0f;
+    private const float GaugeFlowHeight = 4.0f;
+
+    private void UpdatePourGauge(FreeHandReactionEngine engine)
+    {
+        if (!showPourGauge || engine == null || !FirstPersonController.IsCursorLocked)
+        {
+            SetGaugeVisible(false);
+            gaugeLinger = 0.0f;
+            return;
+        }
+
+        // Whatever is being poured right now; failing that, keep the last one up for a moment.
+        string pouring = null;
+        List<string> substances = engine.Substances;
+        for (int i = 0; i < substances.Count; i++)
+        {
+            if (engine.IsPouring(substances[i]))
+            {
+                pouring = substances[i];
+                break;
+            }
+        }
+
+        if (pouring != null)
+        {
+            gaugeEngine = engine;
+            gaugeSubstance = pouring;
+            gaugeLinger = gaugeLingerSeconds;
+        }
+        else if (gaugeEngine != engine)
+        {
+            gaugeLinger = 0.0f;    // a different experiment is on the bench now
+        }
+        else
+        {
+            gaugeLinger -= Time.unscaledDeltaTime;
+        }
+
+        if (gaugeLinger <= 0.0f || string.IsNullOrEmpty(gaugeSubstance) ||
+            !engine.targetQuantities.ContainsKey(gaugeSubstance))
+        {
+            SetGaugeVisible(false);
+            return;
+        }
+
+        EnsureGaugeBuilt();
+        if (gaugeRoot == null)
+        {
+            return;
+        }
+
+        SetGaugeVisible(true);
+
+        // Hold solid while pouring, then fade over the last half second of the linger.
+        gaugeGroup.alpha = pouring != null ? 1.0f : Mathf.Clamp01(gaugeLinger / 0.5f);
+
+        RenderGauge(engine, gaugeSubstance);
+    }
+
+    private void RenderGauge(FreeHandReactionEngine engine, string substance)
+    {
+        float current = engine.GetCurrent(substance);
+        string unit = engine.UnitFor(substance);
+        bool showTargets = engine.ShowTargetsNow;
+
+        string label = showTargets
+            ? string.Format("{0}  {1:F1} / {2:F1} {3}", substance, current,
+                engine.targetQuantities[substance], unit)
+            : string.Format("{0}  {1:F1} {2}", substance, current, unit);
+
+        if (label != lastGaugeLabel)
+        {
+            lastGaugeLabel = label;
+            gaugeLabel.text = label;
+        }
+
+        gaugeTrack.gameObject.SetActive(showTargets);
+        if (showTargets)
+        {
+            float min = engine.MinAllowed(substance);
+            float max = engine.MaxAllowed(substance);
+            float target = engine.targetQuantities[substance];
+
+            // A little headroom past the top of the range, so an overshoot is visible as one.
+            float scale = Mathf.Max(max * 1.25f, current * 1.05f, 0.001f);
+
+            SetSpan(gaugeBand, min / scale, max / scale);
+            SetSpan(gaugeFill, 0.0f, Mathf.Clamp01(current / scale));
+
+            // A zero-width span, widened to a 2 px line either side of the target.
+            SetSpan(gaugeMarker, target / scale, target / scale);
+            gaugeMarker.offsetMin = new Vector2(-1.0f, -3.0f);
+            gaugeMarker.offsetMax = new Vector2(1.0f, 3.0f);
+
+            gaugeFillImage.color = current > max
+                ? AtomixSettings.FailureColour
+                : (current >= min ? AtomixSettings.SuccessColour : FreeHandTooltip.ProgressColor);
+        }
+
+        float flow;
+        bool hasFlow = engine.TryGetFlowFraction(substance, out flow) && engine.IsPouring(substance);
+        gaugeFlowTrack.gameObject.SetActive(hasFlow);
+        if (hasFlow)
+        {
+            SetSpan(gaugeFlowFill, 0.0f, Mathf.Clamp01(flow));
+        }
+    }
+
+    /// <summary>Stretches a child across part of its parent's width, 0..1 from the left edge.</summary>
+    private static void SetSpan(RectTransform rect, float from, float to)
+    {
+        rect.anchorMin = new Vector2(Mathf.Clamp01(from), 0.0f);
+        rect.anchorMax = new Vector2(Mathf.Clamp01(to), 1.0f);
+        rect.offsetMin = Vector2.zero;
+        rect.offsetMax = Vector2.zero;
+    }
+
+    private void SetGaugeVisible(bool visible)
+    {
+        if (gaugeRoot != null && gaugeRoot.gameObject.activeSelf != visible)
+        {
+            gaugeRoot.gameObject.SetActive(visible);
+        }
+    }
+
+    private void EnsureGaugeBuilt()
+    {
+        if (gaugeRoot != null)
+        {
+            return;
+        }
+
+        EnsureHudCanvas();
+        if (hudCanvas == null)
+        {
+            return;
+        }
+
+        GameObject root = new GameObject("PourGauge", typeof(RectTransform), typeof(CanvasGroup));
+        root.transform.SetParent(hudCanvas.transform, false);
+
+        gaugeRoot = root.GetComponent<RectTransform>();
+        gaugeRoot.anchorMin = new Vector2(0.5f, 0.5f);
+        gaugeRoot.anchorMax = new Vector2(0.5f, 0.5f);
+        gaugeRoot.pivot = new Vector2(0.5f, 1.0f);
+        gaugeRoot.anchoredPosition = gaugeOffset;
+        gaugeRoot.sizeDelta = new Vector2(gaugeWidth, 52.0f);
+
+        gaugeGroup = root.GetComponent<CanvasGroup>();
+        gaugeGroup.interactable = false;
+        gaugeGroup.blocksRaycasts = false;
+
+        Image plate = CreateGaugeImage("Plate", gaugeRoot, new Color(0.04f, 0.05f, 0.08f, 0.66f));
+        Stretch(plate.rectTransform, Vector2.zero, Vector2.one, new Vector2(-10.0f, -6.0f), new Vector2(10.0f, 4.0f));
+
+        GameObject labelObject = new GameObject("Label", typeof(RectTransform), typeof(TextMeshProUGUI));
+        labelObject.transform.SetParent(gaugeRoot, false);
+        RectTransform labelRect = labelObject.GetComponent<RectTransform>();
+        Stretch(labelRect, new Vector2(0.0f, 1.0f), new Vector2(1.0f, 1.0f),
+            new Vector2(0.0f, -26.0f), new Vector2(0.0f, 0.0f));
+
+        gaugeLabel = labelObject.GetComponent<TextMeshProUGUI>();
+        gaugeLabel.fontSize = 20.0f;
+        gaugeLabel.alignment = TextAlignmentOptions.Center;
+        gaugeLabel.color = Color.white;
+        gaugeLabel.textWrappingMode = TextWrappingModes.NoWrap;
+        gaugeLabel.raycastTarget = false;
+
+        // The amount against the range.
+        Image track = CreateGaugeImage("Track", gaugeRoot, new Color(1.0f, 1.0f, 1.0f, 0.14f));
+        gaugeTrack = track.rectTransform;
+        Stretch(gaugeTrack, new Vector2(0.0f, 1.0f), new Vector2(1.0f, 1.0f),
+            new Vector2(0.0f, -30.0f - GaugeBarHeight), new Vector2(0.0f, -30.0f));
+
+        Color band = AtomixSettings.SuccessColour;
+        band.a = 0.35f;
+        gaugeBand = CreateGaugeImage("AcceptedRange", gaugeTrack, band).rectTransform;
+
+        gaugeFillImage = CreateGaugeImage("Amount", gaugeTrack, FreeHandTooltip.ProgressColor);
+        gaugeFill = gaugeFillImage.rectTransform;
+
+        gaugeMarker = CreateGaugeImage("Target", gaugeTrack, Color.white).rectTransform;
+        gaugeMarker.pivot = new Vector2(0.5f, 0.5f);
+
+        // How hard it is pouring - the tilt, made visible.
+        Image flowTrack = CreateGaugeImage("FlowTrack", gaugeRoot, new Color(1.0f, 1.0f, 1.0f, 0.10f));
+        gaugeFlowTrack = flowTrack.rectTransform;
+        Stretch(gaugeFlowTrack, new Vector2(0.25f, 1.0f), new Vector2(0.75f, 1.0f),
+            new Vector2(0.0f, -48.0f - GaugeFlowHeight), new Vector2(0.0f, -48.0f));
+
+        gaugeFlowFill = CreateGaugeImage("Flow", gaugeFlowTrack, new Color(1.0f, 0.84f, 0.36f, 0.9f)).rectTransform;
+
+        root.SetActive(false);
+    }
+
+    private static Image CreateGaugeImage(string name, Transform parent, Color colour)
+    {
+        GameObject imageObject = new GameObject(name, typeof(RectTransform), typeof(Image));
+        imageObject.transform.SetParent(parent, false);
+
+        Image image = imageObject.GetComponent<Image>();
+        image.color = colour;
+        image.raycastTarget = false;
+
+        RectTransform rect = image.rectTransform;
+        rect.anchorMin = Vector2.zero;
+        rect.anchorMax = Vector2.one;
+        rect.offsetMin = Vector2.zero;
+        rect.offsetMax = Vector2.zero;
+        return image;
+    }
+
+    private static void Stretch(RectTransform rect, Vector2 anchorMin, Vector2 anchorMax,
+                                Vector2 offsetMin, Vector2 offsetMax)
+    {
+        rect.anchorMin = anchorMin;
+        rect.anchorMax = anchorMax;
+        rect.offsetMin = offsetMin;
+        rect.offsetMax = offsetMax;
     }
 
     private bool IsEnabledScene()

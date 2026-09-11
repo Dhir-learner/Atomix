@@ -32,7 +32,8 @@ public static class ChemistryKnowledgeBase
         Molecular,
         Safety,
         Progress,
-        Overview
+        Overview,
+        Calculation
     }
 
     // =====================================================================================
@@ -240,6 +241,10 @@ public static class ChemistryKnowledgeBase
                         "chemistry", "chemically") +
             Score(q, 1, "explain", "why does", "how does", "what does", "tell me about");
 
+        int calculation =
+            Score(q, 3, "calculate", "calculation", "stoichiometr", "moles", "molar",
+                        "work out", "challenge");
+
         int best = failed;
         Intent intent = Intent.WhyFailed;
 
@@ -250,6 +255,10 @@ public static class ChemistryKnowledgeBase
         if (safety > best) { best = safety; intent = Intent.Safety; }
         if (progress > best) { best = progress; intent = Intent.Progress; }
         if (happened > best) { best = happened; intent = Intent.WhatHappened; }
+
+        // Checked last and on a strict "greater than", so a question any older intent already
+        // answered keeps going where it went before.
+        if (calculation > best) { best = calculation; intent = Intent.Calculation; }
 
         return best == 0 ? Intent.Overview : intent;
     }
@@ -290,8 +299,35 @@ public static class ChemistryKnowledgeBase
             case Intent.Safety: return AnswerSafety(f);
             case Intent.Progress: return AnswerProgress(reactionId, f);
             case Intent.WhatHappened: return AnswerWhatHappened(f);
+            case Intent.Calculation: return AnswerCalculation(f);
             default: return AnswerOverview(f);
         }
+    }
+
+    /// <summary>
+    /// How to work out the amounts. During a stoichiometry challenge that is the whole point, so
+    /// before the verdict it gives the method and the brief but never the numbers; after the
+    /// verdict it walks through the real calculation.
+    /// </summary>
+    private static string AnswerCalculation(ReactionFacts f)
+    {
+        ReactionHistoryRecorder active = ReactionHistoryRecorder.Active;
+        StoichiometryChallenge challenge = active != null ? active.Challenge : null;
+        FreeHandReactionEngine engine = active != null ? active.Engine : null;
+
+        if (challenge == null)
+        {
+            return AnswerQuantities(f);
+        }
+
+        if (engine != null && engine.IsResolved)
+        {
+            return (engine.HasSucceeded ? "You got it. " : string.Empty) + challenge.WorkedSolution;
+        }
+
+        return "Here is your brief:\n" + challenge.Brief + "\n\nThe method:\n" + challenge.Method +
+               "\n\nI will not give you the numbers yet - that is the challenge. " +
+               "Ask me again once it is judged and I will go through the working.";
     }
 
     private static string AnswerWhyFailed(ReactionFacts f)
@@ -328,6 +364,12 @@ public static class ChemistryKnowledgeBase
                 default:
                     b.Append(engine.failureReason).Append("\n\n");
                     break;
+            }
+
+            // A failed challenge is usually a calculation that went wrong, not a pour.
+            if (active.Challenge != null)
+            {
+                b.Append(active.Challenge.WorkedSolution).Append("\n\n");
             }
         }
         else if (engine != null && engine.HasSucceeded)
@@ -423,13 +465,19 @@ public static class ChemistryKnowledgeBase
         if (engine != null && !engine.IsResolved)
         {
             string pending = engine.GetPendingSubstance();
-            if (!string.IsNullOrEmpty(pending))
+            if (!string.IsNullOrEmpty(pending) && engine.ShowTargetsNow)
             {
                 float target;
                 engine.targetQuantities.TryGetValue(pending, out target);
                 b.Append("Right now the next thing you need is ").Append(pending)
                  .Append(" - ").Append(target.ToString("0.0")).Append(' ')
                  .Append(engine.UnitFor(pending)).Append(".\n\n");
+            }
+            else if (!string.IsNullOrEmpty(pending))
+            {
+                // Expert or a challenge: the amount is the student's to know.
+                b.Append("Right now the next thing you need is ").Append(pending)
+                 .Append(" - how much is up to you at this level.\n\n");
             }
         }
 
@@ -451,6 +499,20 @@ public static class ChemistryKnowledgeBase
                   "you currently are.";
         }
 
+        if (!engine.ShowTargetsNow)
+        {
+            // Asking the assistant must not be a way round the hidden targets.
+            StoichiometryChallenge challenge = active.Challenge;
+            if (challenge != null)
+            {
+                return AnswerCalculation(f);
+            }
+
+            return "At the Expert level the amounts are yours to remember - I will not read them out " +
+                   "while the experiment is running. Ask me again once it is judged, or switch this " +
+                   "experiment to Standard in the book to see the targets.";
+        }
+
         StringBuilder b = new StringBuilder("Here is what this reaction needs, and where you are:\n\n");
         List<string> substances = engine.Substances;
 
@@ -470,7 +532,7 @@ public static class ChemistryKnowledgeBase
              .Append(") - you have ").Append(engine.GetCurrent(name).ToString("0.0")).Append('\n');
         }
 
-        b.Append("\nThe tolerance is ").Append(engine.tolerancePercent.ToString("0"))
+        b.Append("\nThe tolerance is ").Append(engine.EffectiveTolerancePercent.ToString("0.#"))
          .Append("%, the same margin a real lab would accept for this kind of preparation.");
 
         return b.ToString();

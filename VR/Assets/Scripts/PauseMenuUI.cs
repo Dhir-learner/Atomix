@@ -607,7 +607,11 @@ public class PauseMenuUI : MonoBehaviour
             20.0f, TextAlignmentOptions.Center, LabPanelBuilder.MutedTextColour);
 
         float y = BodyTop - 126.0f;
-        const float rowHeight = 40.0f;
+
+        // 40 px rows, unless that would run the list past the bottom of the body band and into
+        // the status line - which thirteen of them already did.
+        float available = y - (-BodyHeight * 0.5f) + 20.0f;
+        float rowHeight = Mathf.Min(40.0f, available / Mathf.Max(1, catalogue.Count));
 
         for (int i = 0; i < catalogue.Count; i++)
         {
@@ -653,8 +657,8 @@ public class PauseMenuUI : MonoBehaviour
             { "Left click", "Grab, release or activate" },
             { "R", "Release held object" },
             { "Q / E", "Rotate held object left or right" },
-            { "Z / X", "Tilt held object forward or back" },
-            { "C", "Roll held object (Shift to reverse)" },
+            { "Z / X", "Tilt held object - steeper pours faster" },
+            { "C", "Roll held object (Shift to reverse) - also pours" },
             { "T", "Reset held object pose" },
             { "B", "Open or close the reaction book" },
             { "1 - 8", "Jump straight to an experiment" },

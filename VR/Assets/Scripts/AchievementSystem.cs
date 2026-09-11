@@ -104,6 +104,8 @@ public class AchievementSystem : MonoBehaviour
             "Finish the testing phase with a grade of A or better.", hidden: true));
         catalogue.Add(new Achievement("chemist", "Chemist",
             "Succeed at all eight experiments without a single failure on your record.", hidden: true));
+        catalogue.Add(new Achievement("three_stars_all", "Precision Chemist",
+            "Earn three stars on all eight experiments."));
     }
 
     // =========================================================
@@ -220,6 +222,7 @@ public class AchievementSystem : MonoBehaviour
 
         HashSet<int> succeeded = new HashSet<int>();
         HashSet<int> failed = new HashSet<int>();
+        HashSet<int> threeStarred = new HashSet<int>();
         bool anyAiInteraction = false;
 
         for (int i = 0; i < attempts.Count; i++)
@@ -233,6 +236,16 @@ public class AchievementSystem : MonoBehaviour
             if (attempt.outcome == ExperimentOutcome.Success)
             {
                 succeeded.Add(attempt.reactionId);
+
+                // Rated on read, so attempts made before stars existed count as well.
+                float accuracy;
+                int stars;
+                if (!threeStarred.Contains(attempt.reactionId) &&
+                    ExperimentScoring.TryGetScore(attempt, out accuracy, out stars) &&
+                    stars >= ExperimentScoring.MaxStars)
+                {
+                    threeStarred.Add(attempt.reactionId);
+                }
             }
             else if (IsFailure(attempt.outcome))
             {
@@ -260,6 +273,20 @@ public class AchievementSystem : MonoBehaviour
         if (anyAiInteraction)
         {
             Unlock("asked_ai");
+        }
+
+        bool allThreeStarred = true;
+        for (int reactionId = 1; reactionId <= 8; reactionId++)
+        {
+            if (!threeStarred.Contains(reactionId))
+            {
+                allThreeStarred = false;
+                break;
+            }
+        }
+        if (allThreeStarred)
+        {
+            Unlock("three_stars_all");
         }
 
         // "Succeeded first time" - the reaction's only recorded attempt is a success.
@@ -322,8 +349,10 @@ public class AchievementSystem : MonoBehaviour
                 return;
             }
 
+            // Judged against the recipe's own tolerance, so the wider Guided margin does not make
+            // "half the allowed tolerance" any easier to hit.
             float current = engine.GetCurrent(substance);
-            float halfTolerance = target * (engine.ToleranceFor(substance) / 100.0f) * 0.5f;
+            float halfTolerance = target * (engine.ScoringToleranceFor(substance) / 100.0f) * 0.5f;
             if (Mathf.Abs(current - target) > halfTolerance)
             {
                 return;

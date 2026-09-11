@@ -181,6 +181,14 @@ public class ExamCoinHud : MonoBehaviour
     {
         int taskId = randomizer != null ? randomizer.currentReactionInTestPhase : -1;
 
+        // Once the run is over the last task's number is still here, but there is nothing left
+        // to use a hint on.
+        if (randomizer != null && randomizer.stopTesting)
+        {
+            ShowMessage("The test is over - there is no task left to use a hint on.", MutedColour);
+            return;
+        }
+
         if (taskId < 1 || taskId > 8)
         {
             // A hint for a multiple-choice question would just be the answer.

@@ -2,15 +2,19 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
-public class PourMetalSubstance : MonoBehaviour
+public class PourMetalSubstance : MonoBehaviour, IPourSource
 {
     public GameObject Container;
     public GameObject SecondGlass;
     public ParticleSystem substanceLeak;
     private bool play = false;
+    private float flow = 0.0f;
     private GameObject StartForSubstanceLeak;
     public bool containsNatrium = false;
     public bool IsPouring => play;
+
+    /// <summary>How hard the vessel is pouring, 0..1 of its full rate. See <see cref="PourTilt"/>.</summary>
+    public float FlowRate => play ? flow : 0.0f;
 
     void Start()
     {
@@ -24,15 +28,11 @@ public class PourMetalSubstance : MonoBehaviour
 
     void Update()
     {
-        Quaternion firstGlassRotation = Container.transform.rotation;
         Vector3 firstGlassPosition = Container.transform.position;
         Vector3 secondGlassPosition = SecondGlass.transform.position;
         Vector3 pivotPosition = StartForSubstanceLeak.transform.position;
-        if ((
-            firstGlassRotation.eulerAngles.x >= 45.0f && firstGlassRotation.eulerAngles.x < 90.0f ||
-            firstGlassRotation.eulerAngles.x <= 315.0f && firstGlassRotation.eulerAngles.x >= 270.0f ||
-            firstGlassRotation.eulerAngles.y >= 45.0f && firstGlassRotation.eulerAngles.y < 90.0f ||
-            firstGlassRotation.eulerAngles.y <= 315.0f && firstGlassRotation.eulerAngles.y >= 270.0f)
+        float tilt = PourTilt.TiltAngle(Container.transform);
+        if (PourTilt.IsTipped(tilt)
             && (
                 firstGlassPosition.y > secondGlassPosition.y &&
                 pivotPosition.x <= secondGlassPosition.x + 0.15 && pivotPosition.x >= secondGlassPosition.x - 0.15 &&
@@ -40,6 +40,7 @@ public class PourMetalSubstance : MonoBehaviour
                 )
             )
         {
+            flow = PourTilt.FlowFactor(tilt);
             substanceLeak.transform.position = pivotPosition;
             if (!play)
             {
@@ -48,6 +49,7 @@ public class PourMetalSubstance : MonoBehaviour
                 containsNatrium = true;
                 play = true;
             }
+            PourTilt.ScaleEmission(substanceLeak, flow);
         }
         else
         {
@@ -55,6 +57,7 @@ public class PourMetalSubstance : MonoBehaviour
             {
                 substanceLeak.Stop();
                 substanceLeak.Clear(); // Clear existing particles when stopping
+                PourTilt.RestoreEmission(substanceLeak);
                 play = false;
             }
         }

@@ -25,14 +25,6 @@ public class KOHReaction : MonoBehaviour
 
     [Header("Free-Hand Mode (quantity + order matter)")]
     public bool enableFreeHandMode = true;
-    public float targetWaterMl = 50.0f;
-    public float targetPotassiumGrams = 3.0f;
-    public float tolerancePercent = 5.0f;
-    public float waterFlowMlPerSecond = 10.0f;
-    [Tooltip("Seconds the potassium container may stay tipped before extra metal starts falling in.")]
-    public float potassiumPourGraceSeconds = 2.0f;
-    [Tooltip("Extra potassium added per second once the grace period has elapsed.")]
-    public float potassiumExtraFlowGramsPerSecond = 1.0f;
     public float tooltipHeightOffset = 0.20f;
     [Tooltip("World-space font size for the floating tracker. TMP renders roughly (fontSize x 0.12) metres per line, so keep this small.")]
     public float tooltipFontSize = 0.55f;
@@ -40,10 +32,12 @@ public class KOHReaction : MonoBehaviour
     public AudioSource audioSource_failure;
     public AudioClip clip_failure;
 
-    [Header("Experiment History")]
+    [Header("Recipe and History")]
     [Tooltip("Matches the book / StartReaction number, 1-8.")]
     public int reactionId = 4;
-    public string reactionDisplayName = "K + H2O -> KOH + H2";
+    [Tooltip("Optional. Left empty, Resources/ReactionDefinitions supplies the targets, tolerance and messages - " +
+             "including how long the potassium container may stay tipped before extra metal falls in.")]
+    public ReactionDefinition definition;
     [Tooltip("Re-selecting this experiment from the book logs a fresh attempt.")]
     public bool restartAttemptOnReSelect = true;
 
@@ -51,6 +45,8 @@ public class KOHReaction : MonoBehaviour
     private FreeHandTooltip tooltip;
     private bool failureReported = false;
     private ReactionHistoryRecorder recorder;
+    private float waterFlow;
+    private ReagentDefinition potassium;
     private bool potassiumDropped = false;
     private float potassiumContactTimer = 0.0f;
 
@@ -76,20 +72,23 @@ public class KOHReaction : MonoBehaviour
             return;
         }
 
+        if (definition == null)
+        {
+            definition = ReactionDefinition.Load(reactionId);
+        }
+        if (definition == null)
+        {
+            return;
+        }
+
         engine = new FreeHandReactionEngine();
-        engine.tolerancePercent = tolerancePercent;
-        engine.settleTimeRequired = 1.5f;
-        engine.wrongOrderMessage =
-            "Potassium was dropped in before the water was measured out. Alkali metals must meet a known volume of water, never a dry or half-filled vessel.";
-        engine.AddSubstance("Water", targetWaterMl, "ml",
-            overdose: "Excess water dilutes the reaction - the KOH produced is too dilute to show a clear basic result.",
-            underdose: "Too little water cannot dissolve the KOH that forms, so the reaction stalls and heats dangerously.");
-        engine.AddSubstance("Potassium", targetPotassiumGrams, "g",
-            overdose: "Too much potassium causes a dangerous explosion - the hydrogen released ignites from the reaction heat.",
-            underdose: "Too little potassium leaves most of the water unreacted, so hardly any KOH is formed.");
+        definition.Configure(engine);
+        waterFlow = definition.FlowFor("Water");
+        potassium = definition.Reagent("Potassium");
 
         tooltip = new FreeHandTooltip();
-        recorder = new ReactionHistoryRecorder(reactionId, reactionDisplayName, engine);
+        recorder = new ReactionHistoryRecorder(reactionId, definition.displayName, engine);
+        LabRunOptions.Apply(reactionId, definition, engine, recorder);
 
         tooltip.Create("BeakerFloatingTooltip_KOH", canvasText, tooltipFontSize);
         tooltip.Show(FreeHandTooltip.ProgressColor, engine.GetTooltipText());
@@ -114,6 +113,7 @@ public class KOHReaction : MonoBehaviour
         {
             recorder.Abandon(); // switching experiments away mid-run
         }
+        LabRunOptions.NoteBenchCleared(reactionId);
     }
 
     void OnDestroy()
@@ -138,7 +138,7 @@ public class KOHReaction : MonoBehaviour
         {
             if (!engine.IsResolved)
             {
-                engine.UpdatePouringQuantity("Water", waterFlowMlPerSecond, water != null && water.IsPouring);
+                engine.UpdatePour("Water", waterFlow, water);
                 TrackPotassium();
             }
 
@@ -271,7 +271,7 @@ public class KOHReaction : MonoBehaviour
     /// </summary>
     void TrackPotassium()
     {
-        if (metal == null)
+        if (metal == null || potassium == null)
         {
             return;
         }
@@ -282,7 +282,7 @@ public class KOHReaction : MonoBehaviour
             {
                 potassiumDropped = true;
                 potassiumContactTimer = 0.0f;
-                engine.SetQuantity("Potassium", targetPotassiumGrams);
+                engine.SetQuantity("Potassium", potassium.target);
             }
             return;
         }
@@ -291,9 +291,11 @@ public class KOHReaction : MonoBehaviour
         if (stillTipped)
         {
             potassiumContactTimer += Time.deltaTime;
-            if (potassiumContactTimer > potassiumPourGraceSeconds)
+            if (potassiumContactTimer > potassium.lumpGraceSeconds)
             {
-                engine.AddDiscreteQuantity("Potassium", potassiumExtraFlowGramsPerSecond * Time.deltaTime);
+                // Tipped harder, the extra metal falls in faster - the same tilt rule as a pour.
+                engine.AddDiscreteQuantity("Potassium",
+                    potassium.lumpOverflowPerSecond * metal.FlowRate * Time.deltaTime);
             }
             // Keep the settle timer honest while the container is still being emptied.
             engine.UpdatePouringQuantity("Potassium", 0.0f, true);
@@ -344,6 +346,7 @@ public class KOHReaction : MonoBehaviour
         }
 
         engine.Reset();
+        LabRunOptions.Apply(reactionId, definition, engine, recorder);
         failureReported = false;
         potassiumDropped = false;
         potassiumContactTimer = 0.0f;

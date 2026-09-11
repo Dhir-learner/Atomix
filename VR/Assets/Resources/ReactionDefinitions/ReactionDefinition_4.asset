@@ -1,0 +1,61 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 671463ce27fc4d8098bb74ffd73b5544, type: 3}
+  m_Name: ReactionDefinition_4
+  m_EditorClassIdentifier: 
+  reactionId: 4
+  displayName: "K + H2O -> KOH + H2"
+  examDisplayName: "K + H2O -> KOH + H2 [Test]"
+  equation: "2K + 2H2O -> 2KOH + H2"
+  kind: 0
+  tolerancePercent: 5
+  settleSeconds: 1.5
+  enforceOrder: 1
+  wrongOrderMessage: "Potassium was dropped in before the water was measured out. Alkali metals must meet a known volume of water, never a dry or half-filled vessel."
+  procedureFailureReason: ""
+  procedureFailureHeadline: ""
+  reagents:
+  - name: "Water"
+    unit: "ml"
+    target: 50
+    flowPerSecond: 10
+    tolerancePercentOverride: -1
+    orderMatters: 1
+    orderGroup: -1
+    addition: 0
+    overdoseMessage: "Excess water dilutes the reaction - the KOH produced is too dilute to show a clear basic result."
+    underdoseMessage: "Too little water cannot dissolve the KOH that forms, so the reaction stalls and heats dangerously."
+    lumpGraceSeconds: 0
+    lumpOverflowPerSecond: 0
+    formula: "H2O"
+    coefficient: 2
+    challengeRole: 0
+  - name: "Potassium"
+    unit: "g"
+    target: 3
+    flowPerSecond: 0
+    tolerancePercentOverride: -1
+    orderMatters: 1
+    orderGroup: -1
+    addition: 1
+    overdoseMessage: "Too much potassium causes a dangerous explosion - the hydrogen released ignites from the reaction heat."
+    underdoseMessage: "Too little potassium leaves most of the water unreacted, so hardly any KOH is formed."
+    lumpGraceSeconds: 2
+    lumpOverflowPerSecond: 1
+    formula: "K"
+    coefficient: 2
+    challengeRole: 0
+  challengeEligible: 0
+  productName: "potassium hydroxide"
+  productFormula: "KOH"
+  productCoefficient: 2
+  challengeBasisReagent: ""

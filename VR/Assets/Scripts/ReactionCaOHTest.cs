@@ -29,25 +29,23 @@ public class ReactionCaOHTest : MonoBehaviour
     [Header("Exam Mode (same rules as the Lab, quantities hidden)")]
     [Tooltip("Judged by the same FreeHandReactionEngine as reactionCaOH, but the student is never told the target or the accepted range.")]
     public bool enableExamMode = true;
-    public float targetWaterMl = 30.0f;
-    public float targetCaOGrams = 15.0f;
-    public float tolerancePercent = 8.0f;
-    public float waterFlowMlPerSecond = 5.0f;
-    public float caoFlowGramsPerSecond = 3.0f;
     public float tooltipHeightOffset = 0.20f;
     public float tooltipFontSize = 0.55f;
     [Tooltip("Optional - played when the task is failed.")]
     public AudioSource audioSource_failure;
     public AudioClip clip_failure;
 
-    [Header("Experiment History")]
+    [Header("Recipe")]
     [Tooltip("Matches the Lab reaction number so test attempts group with lab attempts.")]
     public int reactionId = 6;
-    public string reactionDisplayName = "CaO + H2O -> Ca(OH)2 [Test]";
+    [Tooltip("Optional. Left empty, Resources/ReactionDefinitions is used - the same file the Lab reads.")]
+    public ReactionDefinition definition;
 
     private const string TaskPrompt = "Create Ca(OH)2 and check the basicity.";
 
     private ExamReactionRunner exam;
+    private float waterFlow;
+    private float caoFlow;
 
     private DateTime timpInitial;
     private bool isPlaying = false;
@@ -67,19 +65,21 @@ public class ReactionCaOHTest : MonoBehaviour
             return;
         }
 
+        if (definition == null)
+        {
+            definition = ReactionDefinition.Load(reactionId);
+        }
+        if (definition == null)
+        {
+            return;
+        }
+
         exam = new ExamReactionRunner();
-        exam.Begin("ExamTooltip_CaO_H2O", canvasText, tooltipFontSize,
-            reactionId, reactionDisplayName, countdown, randomizer, tolerancePercent);
+        exam.Begin(definition, "ExamTooltip_CaO_H2O", canvasText, tooltipFontSize, countdown, randomizer);
         exam.SetFailureAudio(audioSource_failure, clip_failure);
 
-        exam.engine.wrongOrderMessage =
-            "The quicklime went into a dry beaker. CaO must be slaked into a measured volume of water, otherwise the heat released has nothing to absorb it.";
-        exam.engine.AddSubstance("Water", targetWaterMl, "ml",
-            overdose: "Excess water produces dilute Ca(OH)2 - limewater so weak that the litmus test barely changes colour.",
-            underdose: "Insufficient water leaves unreacted quicklime, so part of the CaO never slakes into calcium hydroxide.");
-        exam.engine.AddSubstance("CaO", targetCaOGrams, "g",
-            overdose: "Too much quicklime for this volume of water - the surplus CaO stays as a dry lump and the mixture boils dangerously.",
-            underdose: "Too little quicklime leaves mostly water in the beaker, so hardly any Ca(OH)2 forms.");
+        waterFlow = definition.FlowFor("Water");
+        caoFlow = definition.FlowFor("CaO");
     }
 
     void OnEnable()
@@ -119,8 +119,8 @@ public class ReactionCaOHTest : MonoBehaviour
 
         if (exam != null)
         {
-            exam.Pour("Water", waterFlowMlPerSecond, h2o != null && h2o.IsPouring);
-            exam.Pour("CaO", caoFlowGramsPerSecond, salt != null && salt.IsPouring);
+            exam.PourFrom("Water", waterFlow, h2o);
+            exam.PourFrom("CaO", caoFlow, salt);
             examResult = exam.Tick();
             exam.UpdateTooltip(currentBerzelius != null ? currentBerzelius.transform : transform,
                 tooltipHeightOffset, "Task finished!");

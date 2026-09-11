@@ -1,0 +1,61 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 671463ce27fc4d8098bb74ffd73b5544, type: 3}
+  m_Name: ReactionDefinition_6
+  m_EditorClassIdentifier: 
+  reactionId: 6
+  displayName: "CaO + H2O -> Ca(OH)2"
+  examDisplayName: "CaO + H2O -> Ca(OH)2 [Test]"
+  equation: "CaO + H2O -> Ca(OH)2"
+  kind: 0
+  tolerancePercent: 8
+  settleSeconds: 1.5
+  enforceOrder: 1
+  wrongOrderMessage: "The quicklime went into a dry beaker. CaO must be slaked into a measured volume of water, otherwise the heat released has nothing to absorb it."
+  procedureFailureReason: ""
+  procedureFailureHeadline: ""
+  reagents:
+  - name: "Water"
+    unit: "ml"
+    target: 30
+    flowPerSecond: 5
+    tolerancePercentOverride: -1
+    orderMatters: 1
+    orderGroup: -1
+    addition: 0
+    overdoseMessage: "Excess water produces dilute Ca(OH)2 - limewater so weak that the litmus test barely changes colour."
+    underdoseMessage: "Insufficient water leaves unreacted quicklime, so part of the CaO never slakes into calcium hydroxide."
+    lumpGraceSeconds: 0
+    lumpOverflowPerSecond: 0
+    formula: "H2O"
+    coefficient: 1
+    challengeRole: 2
+  - name: "CaO"
+    unit: "g"
+    target: 15
+    flowPerSecond: 3
+    tolerancePercentOverride: -1
+    orderMatters: 1
+    orderGroup: -1
+    addition: 0
+    overdoseMessage: "Too much quicklime for this volume of water - the surplus CaO stays as a dry lump and the mixture boils dangerously."
+    underdoseMessage: "Too little quicklime leaves mostly water in the beaker, so hardly any Ca(OH)2 forms."
+    lumpGraceSeconds: 0
+    lumpOverflowPerSecond: 0
+    formula: "CaO"
+    coefficient: 1
+    challengeRole: 1
+  challengeEligible: 1
+  productName: "calcium hydroxide"
+  productFormula: "Ca(OH)2"
+  productCoefficient: 1
+  challengeBasisReagent: "CaO"
