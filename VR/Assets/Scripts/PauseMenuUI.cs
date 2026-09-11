@@ -667,7 +667,6 @@ public class PauseMenuUI : MonoBehaviour
             { "F", "Scientific graphs" },
             { "P", "Periodic table" },
             { "L", "Cycle the measurement label" },
-            { "H", "Controls help overlay" },
             { "V", "Hold to talk to the lab assistant" },
             { "Enter", "Type a question - no microphone needed" },
             { "Y", "Ask why the last experiment failed" },

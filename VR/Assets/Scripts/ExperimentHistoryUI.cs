@@ -9,7 +9,7 @@ using UnityEngine.UI;
 /// WorldSpace canvas, matching how ReactionLearningController builds its UI, so it needs no scene
 /// or prefab edits and is clickable with the existing crosshair interaction.
 ///
-/// Toggle with Tab (H is already taken by the controls help overlay). Click a row to expand it
+/// Toggle with Tab. Click a row to expand it
 /// and read the steps, quantities and AI questions for that attempt.
 /// </summary>
 public class ExperimentHistoryUI : MonoBehaviour

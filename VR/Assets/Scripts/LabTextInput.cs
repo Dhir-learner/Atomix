@@ -6,7 +6,7 @@ using UnityEngine;
 /// Why this has to exist at all: the lab keeps the OS cursor locked so the crosshair works, which
 /// rules out a normal uGUI InputField - those need a pointer click to focus. So a typed question
 /// has to be read straight from <see cref="Input.inputString"/>. But the lab binds nearly every
-/// letter to something: W A S D move, E interacts, C rolls, H is help, B is the book, P is the
+/// letter to something: W A S D move, E interacts, C rolls, B is the book, P is the
 /// periodic table, F the graphs, V the microphone, 1-8 start reactions. Typing "why did the sodium
 /// fail" without a gate would walk the player across the room, open three panels and start a
 /// reaction.
