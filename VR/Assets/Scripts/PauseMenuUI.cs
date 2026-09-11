@@ -700,14 +700,17 @@ public class PauseMenuUI : MonoBehaviour
                     new Color(1.0f, 1.0f, 1.0f, 0.035f));
             }
 
+            // Key names are short, so their column gives width to the descriptions: at 430 px the
+            // longer ones ("Roll held object (Shift to reverse) - also pours") wrapped onto a
+            // second line taller than the row and ran into the next.
             LabPanelBuilder.CreateText("KeyName" + i, bodyRoot,
-                new Vector2(centre - columnWidth * 0.5f + 170.0f, rowY),
-                new Vector2(300.0f, rowHeight), rows[i, 0], 23.0f,
+                new Vector2(centre - columnWidth * 0.5f + 145.0f, rowY),
+                new Vector2(250.0f, rowHeight), rows[i, 0], 23.0f,
                 TextAlignmentOptions.Left, Color.white);
 
             LabPanelBuilder.CreateText("KeyDesc" + i, bodyRoot,
-                new Vector2(centre - columnWidth * 0.5f + 580.0f, rowY),
-                new Vector2(430.0f, rowHeight), rows[i, 1], 21.0f,
+                new Vector2(centre - columnWidth * 0.5f + 540.0f, rowY),
+                new Vector2(520.0f, rowHeight), rows[i, 1], 21.0f,
                 TextAlignmentOptions.Left, AtomixSettings.BodyTextColour);
         }
     }

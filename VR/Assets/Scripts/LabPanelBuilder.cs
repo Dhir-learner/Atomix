@@ -143,8 +143,12 @@ public static class LabPanelBuilder
         return panelRect;
     }
 
-    /// <summary>Places a world-space panel squarely in front of the player's eyes.</summary>
-    public static void FaceCamera(Canvas canvas, float distance)
+    /// <summary>
+    /// Places a world-space panel squarely in front of the player's eyes, at a comfortable reading
+    /// distance - or the one the student last chose with the mouse wheel.
+    /// </summary>
+    /// <param name="chosenFill">The panel's remembered wheel choice; 0 until the student scrolls.</param>
+    public static void FaceCamera(Canvas canvas, float chosenFill)
     {
         if (canvas == null)
         {
@@ -158,34 +162,94 @@ public static class LabPanelBuilder
         }
 
         canvas.worldCamera = camera;
-        canvas.transform.localScale = Vector3.one * WorldScale * AtomixSettings.UiScale;
-        canvas.transform.position = camera.transform.position + camera.transform.forward * distance;
+        canvas.transform.localScale = Vector3.one * WorldScale;
         canvas.transform.rotation = camera.transform.rotation;
+        canvas.transform.position = camera.transform.position +
+                                    camera.transform.forward * OpeningDistance(canvas, chosenFill);
         KeepInsideLab(canvas);
     }
 
     // =========================================================
-    // PLACEMENT - mouse-wheel distance, kept inside the lab
+    // PLACEMENT - reading distance, mouse wheel, kept inside the lab
     // =========================================================
 
-    /// <summary>Closest the mouse wheel can bring a panel to the player's eyes, in metres.</summary>
-    public const float MinPanelDistance = 0.6f;
+    /// <summary>
+    /// Share of the view height a panel fills when it opens, at the default Menu size.
+    ///
+    /// Panels used to open a fixed 1.5 - 1.6 m away. A fixed physical distance means the apparent
+    /// size of the text depends on how big the panel is and on the field of view: at the default
+    /// 60 degrees the panels filled well under half the screen and a 20 pt hint came out about
+    /// 12 px tall on a 1080p display, and widening the field of view shrank it further. Placing
+    /// by share of the view gives every panel the same, readable apparent size on any setting.
+    /// </summary>
+    public const float ComfortableFill = 0.7f;
 
-    /// <summary>Furthest the mouse wheel can push a panel from the player's eyes, in metres.</summary>
-    public const float MaxPanelDistance = 3.0f;
+    /// <summary>
+    /// Closest the mouse wheel can bring a panel: the whole of it still fits on screen, so no
+    /// text is pushed off the edge or blown up past reading size.
+    /// </summary>
+    public const float NearestFill = 0.95f;
 
-    /// <summary>Metres one wheel notch moves a panel.</summary>
-    private const float ScrollStepPerNotch = 0.15f;
+    /// <summary>
+    /// Furthest the mouse wheel can push a panel. Beyond this the smallest labels on the denser
+    /// panels drop below about 11 px on a 1080p display.
+    /// </summary>
+    public const float FarthestFill = 0.5f;
+
+    /// <summary>How much one wheel notch changes the distance - 8 %, so it feels the same near or far.</summary>
+    private const float ScrollStepFactor = 1.08f;
 
     /// <summary>Gap kept between a panel and the wall, bench or equipment behind it.</summary>
     private const float PanelClearance = 0.05f;
 
     /// <summary>
-    /// Nearest a wall may push a panel in towards the eyes. Deliberately below
-    /// <see cref="MinPanelDistance"/>: a panel opened with the player's back to a wall has to go
+    /// Nearest a wall may push a panel in towards the eyes. Deliberately closer than
+    /// <see cref="NearestFill"/> allows: a panel opened with the player's back to a wall has to go
     /// somewhere, and in front of the wall is better than through it.
     /// </summary>
     private const float NearestPanelDistance = 0.3f;
+
+    /// <summary>
+    /// Metres from the eyes a panel should open at: where the student last put it with the wheel,
+    /// or a comfortable reading distance scaled by the Menu size setting if they have not.
+    /// </summary>
+    /// <param name="chosenFill">The panel's remembered wheel choice; 0 until the student scrolls.</param>
+    public static float OpeningDistance(Canvas canvas, float chosenFill)
+    {
+        float fill = chosenFill > 0.0f
+            ? chosenFill
+            : ComfortableFill * AtomixSettings.UiScale;
+
+        return DistanceForFill(canvas, Mathf.Clamp(fill, FarthestFill, NearestFill));
+    }
+
+    /// <summary>
+    /// Metres from the eyes at which the panel fills <paramref name="fill"/> of the view - by
+    /// height, or by width on a screen narrow enough for that to be the tighter fit.
+    /// </summary>
+    private static float DistanceForFill(Canvas canvas, float fill)
+    {
+        Vector2 half = HalfSize(canvas);
+        float tanHalfHeight = Mathf.Tan(AtomixSettings.BaseFieldOfView * 0.5f * Mathf.Deg2Rad);
+        Camera camera = Camera.main;
+        float aspect = camera != null ? camera.aspect : 16.0f / 9.0f;
+
+        if (half.y <= 0.0f || tanHalfHeight <= 0.0f || fill <= 0.0f)
+        {
+            return 1.5f;
+        }
+
+        float byHeight = half.y / (fill * tanHalfHeight);
+        float byWidth = half.x / (fill * tanHalfHeight * aspect);
+        return Mathf.Max(byHeight, byWidth);
+    }
+
+    /// <summary>The share of the view the panel fills at <paramref name="distance"/> metres.</summary>
+    private static float FillAtDistance(Canvas canvas, float distance)
+    {
+        // Fill is inversely proportional to distance, so one reference point is enough.
+        return distance > 0.0001f ? DistanceForFill(canvas, 1.0f) / distance : NearestFill;
+    }
 
     /// <summary>Everything solid except the UI layer, which the panels themselves sit on.</summary>
     private static readonly int PlacementMask = Physics.DefaultRaycastLayers & ~(1 << 5);
@@ -193,19 +257,21 @@ public static class LabPanelBuilder
     private static readonly RaycastHit[] placementHits = new RaycastHit[16];
 
     /// <summary>
-    /// Mouse wheel: forward brings the panel closer, back pushes it away. The panel slides along
-    /// the line from the player's eyes to where it is now, so it keeps its place in view, and
-    /// <see cref="KeepInsideLab"/> stops it at walls, benches and the room boundary.
+    /// Mouse wheel: forward brings the panel closer, back pushes it away, between
+    /// <see cref="NearestFill"/> and <see cref="FarthestFill"/> so the text never gets too big or
+    /// too small to read. The panel slides along the line from the player's eyes to where it is
+    /// now, so it keeps its place in view, and <see cref="KeepInsideLab"/> stops it at walls,
+    /// benches and the room boundary.
     ///
     /// Leaves the wheel alone while an object is held - the wheel spins that instead - and when the
     /// panel is behind the player, so a panel they cannot see is never moved.
     /// </summary>
-    /// <param name="distance">
-    /// The panel's remembered distance. Updated to the distance asked for, so the panel reopens
-    /// where the student left it.
+    /// <param name="chosenFill">
+    /// The panel's remembered wheel choice, as a share of the view. Updated here, so the panel
+    /// reopens at the size the student left it, whatever the field of view is by then.
     /// </param>
     /// <returns>True when the wheel moved the panel.</returns>
-    public static bool ScrollPanelDistance(Canvas canvas, ref float distance)
+    public static bool ScrollPanelDistance(Canvas canvas, ref float chosenFill)
     {
         float wheel = Input.mouseScrollDelta.y;
         if (wheel == 0.0f || canvas == null || !canvas.gameObject.activeInHierarchy)
@@ -227,11 +293,17 @@ public static class LabPanelBuilder
             return false;
         }
 
-        float target = Mathf.Clamp(current - wheel * ScrollStepPerNotch, MinPanelDistance, MaxPanelDistance);
+        // The limits only ever stop the wheel, never reverse it: a panel the player has walked
+        // away from, or one a wall pushed in close, must not jump the other way on a scroll.
+        float target = current * Mathf.Pow(ScrollStepFactor, -wheel);
+        target = wheel > 0.0f
+            ? Mathf.Max(target, Mathf.Min(current, DistanceForFill(canvas, NearestFill)))
+            : Mathf.Min(target, Mathf.Max(current, DistanceForFill(canvas, FarthestFill)));
+
         canvas.transform.position = eye.position + offset / current * target;
         KeepInsideLab(canvas);
 
-        distance = target;
+        chosenFill = FillAtDistance(canvas, target);
         return true;
     }
 

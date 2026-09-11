@@ -19,10 +19,6 @@ public class ExperimentHistoryUI : MonoBehaviour
     public KeyCode closeKey = KeyCode.Escape;
     public float scrollSpeed = 900.0f;
 
-    [Header("Placement")]
-    [Tooltip("Metres in front of the camera the panel appears.")]
-    public float distanceFromCamera = 1.5f;
-
     [Header("Availability")]
     [Tooltip("Scenes where the panel cannot be opened. The testing scene is excluded because past " +
              "attempts would otherwise be an answer key while the student is being examined.")]
@@ -36,6 +32,9 @@ public class ExperimentHistoryUI : MonoBehaviour
     private RectTransform filterRow;
 
     private bool isOpen = false;
+
+    /// <summary>Mouse-wheel choice of panel size as a share of the view; 0 = reading distance.</summary>
+    private float chosenFill;
     private int filterReactionId = -1;         // -1 = show everything
     private string expandedAttemptId = string.Empty;
     private bool listDirty = true;
@@ -173,7 +172,7 @@ public class ExperimentHistoryUI : MonoBehaviour
         }
         else
         {
-            LabPanelBuilder.ScrollPanelDistance(historyCanvas, ref distanceFromCamera);
+            LabPanelBuilder.ScrollPanelDistance(historyCanvas, ref chosenFill);
         }
         if (Input.GetKey(KeyCode.UpArrow))
         {
@@ -273,7 +272,7 @@ public class ExperimentHistoryUI : MonoBehaviour
 
         footerText = CreateText("Footer", panel.transform,
             new Vector2(0.0f, -338.0f), new Vector2(1100.0f, 34.0f),
-            17.0f, FontStyles.Normal, TextAlignmentOptions.Left);
+            18.0f, FontStyles.Normal, TextAlignmentOptions.Left);
         footerText.color = NeutralColor;
 
         CreateButton("CloseButton", panel.transform, "Close",
@@ -721,22 +720,7 @@ public class ExperimentHistoryUI : MonoBehaviour
 
     private void PositionInFrontOfCamera()
     {
-        if (historyCanvas == null)
-        {
-            return;
-        }
-
-        Camera camera = Camera.main;
-        if (camera == null)
-        {
-            return;
-        }
-
-        historyCanvas.worldCamera = camera;
-        historyCanvas.transform.position =
-            camera.transform.position + camera.transform.forward * distanceFromCamera;
-        historyCanvas.transform.rotation = camera.transform.rotation;
-        LabPanelBuilder.KeepInsideLab(historyCanvas);
+        LabPanelBuilder.FaceCamera(historyCanvas, chosenFill);
     }
 
     private static void AddLayoutHeight(GameObject target, float height)

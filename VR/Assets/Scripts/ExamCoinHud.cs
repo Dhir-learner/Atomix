@@ -379,16 +379,19 @@ public class ExamCoinHud : MonoBehaviour
         plateRect.anchorMax = new Vector2(0.0f, 0.0f);
         plateRect.pivot = new Vector2(0.0f, 0.0f);
         plateRect.anchoredPosition = new Vector2(22.0f, 22.0f);
-        plateRect.sizeDelta = new Vector2(470.0f, 80.0f);
+
+        // Wide enough for a full wallet line - balance, rank and streak - at 20 px. At 470 the
+        // longer rank names auto-shrank the line to 14 px.
+        plateRect.sizeDelta = new Vector2(540.0f, 80.0f);
 
         Image plateImage = plate.GetComponent<Image>();
         plateImage.color = new Color(0.04f, 0.05f, 0.08f, 0.78f);
         plateImage.raycastTarget = false;
 
         walletText = CreateText("Wallet", plate.transform, new Vector2(14.0f, -10.0f),
-            new Vector2(442.0f, 30.0f), 20.0f, Color.white);
+            new Vector2(512.0f, 30.0f), 20.0f, Color.white);
         shopText = CreateText("Shop", plate.transform, new Vector2(14.0f, -44.0f),
-            new Vector2(442.0f, 26.0f), 17.0f, MutedColour);
+            new Vector2(512.0f, 26.0f), 17.0f, MutedColour);
 
         // The message sits directly above the plate, in the same column, so a purchase or an
         // award reads as coming from it rather than appearing at random on the screen.
@@ -423,9 +426,10 @@ public class ExamCoinHud : MonoBehaviour
 
         // The strip is narrow and the rank names vary in length; without this a long line
         // silently wraps behind the plate instead of shrinking to fit it.
+        // Allowed to shrink a little, never below what can be read at a glance mid-experiment.
         text.enableAutoSizing = true;
         text.fontSizeMax = fontSize;
-        text.fontSizeMin = fontSize * 0.7f;
+        text.fontSizeMin = Mathf.Max(fontSize * 0.85f, 15.0f);
         text.overflowMode = TextOverflowModes.Ellipsis;
         text.raycastTarget = false;
         text.richText = true;

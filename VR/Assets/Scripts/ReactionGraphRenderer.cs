@@ -39,7 +39,7 @@ public class ReactionGraphRenderer : MonoBehaviour
     public int textureHeight = 520;
 
     [Header("Labels")]
-    public float axisLabelSize = 17.0f;
+    public float axisLabelSize = 18.0f;
     public float annotationSize = 19.0f;
     public float titleSize = 22.0f;
 

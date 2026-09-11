@@ -235,7 +235,7 @@ public class ReactionLearningController : MonoBehaviour
             PositionUiInFrontOfCamera();
         }
 
-        LabPanelBuilder.ScrollPanelDistance(learningCanvas, ref panelDistance);
+        LabPanelBuilder.ScrollPanelDistance(learningCanvas, ref panelFill);
     }
 
     void OnDestroy()
@@ -2162,10 +2162,10 @@ public class ReactionLearningController : MonoBehaviour
     const KeyCode RecentreKey = KeyCode.O;
 
     /// <summary>
-    /// Metres from the eyes the panel opens at. The mouse wheel changes it, and the panel keeps
-    /// the new distance the next time it opens.
+    /// The student's mouse-wheel choice of panel size, as a share of the view; 0 until they
+    /// scroll, which means a comfortable reading distance. Kept for the next time it opens.
     /// </summary>
-    float panelDistance = 1.5f;
+    float panelFill;
 
     /// <summary>
     /// Puts the panel upright, at eye level, in the direction the player is facing.
@@ -2207,7 +2207,8 @@ public class ReactionLearningController : MonoBehaviour
         facing.Normalize();
 
         learningCanvas.transform.rotation = Quaternion.LookRotation(facing, Vector3.up);
-        learningCanvas.transform.position = camTransform.position + facing * panelDistance;
+        learningCanvas.transform.position = camTransform.position +
+                                            facing * LabPanelBuilder.OpeningDistance(learningCanvas, panelFill);
         LabPanelBuilder.KeepInsideLab(learningCanvas);
     }
 }

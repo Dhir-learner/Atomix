@@ -29,10 +29,6 @@ public class ReactionGraphUI : MonoBehaviour
              "for 10 s, so the default lets that close before the graphs cover it.")]
     public float delayAfterSuccess = 11.0f;
 
-    [Header("Placement")]
-    [Tooltip("Metres in front of the camera the panel appears.")]
-    public float distanceFromCamera = 1.6f;
-
     [Header("Scenes")]
     [Tooltip("Graphs are only offered in these scenes.")]
     public string[] enabledScenes = { "LabScene" };
@@ -48,6 +44,9 @@ public class ReactionGraphUI : MonoBehaviour
     private readonly List<Button> tabButtons = new List<Button>();
 
     private bool isOpen = false;
+
+    /// <summary>Mouse-wheel choice of panel size as a share of the view; 0 = reading distance.</summary>
+    private float chosenFill;
     private int currentReactionId = -1;
     private ReactionGraphType currentType = ReactionGraphType.EnergyProfile;
     private Coroutine pendingAutoShow;
@@ -133,7 +132,7 @@ public class ReactionGraphUI : MonoBehaviour
             return;
         }
 
-        LabPanelBuilder.ScrollPanelDistance(graphCanvas, ref distanceFromCamera);
+        LabPanelBuilder.ScrollPanelDistance(graphCanvas, ref chosenFill);
 
         // The assistant may finish connecting while the panel is already open, so keep the
         // Ask button in step with it rather than only refreshing when the tab changes.
@@ -505,7 +504,7 @@ public class ReactionGraphUI : MonoBehaviour
 
         statusText = CreateText("Status", panel.transform,
             new Vector2(0.0f, -292.0f), new Vector2(1160.0f, 40.0f),
-            19.0f, FontStyles.Normal, TextAlignmentOptions.Center);
+            20.0f, FontStyles.Normal, TextAlignmentOptions.Center);
         statusText.color = NeutralColor;
 
         // --- Footer buttons ------------------------------------------------------------
@@ -526,7 +525,7 @@ public class ReactionGraphUI : MonoBehaviour
 
         TMP_Text hint = CreateText("Hint", panel.transform,
             new Vector2(0.0f, -396.0f), new Vector2(1160.0f, 28.0f),
-            17.0f, FontStyles.Italic, TextAlignmentOptions.Center);
+            18.0f, FontStyles.Italic, TextAlignmentOptions.Center);
         hint.text = "Press [" + toggleKey + "] any time to bring these graphs back.   " +
                     "Mouse wheel moves the panel closer or farther.";
         hint.color = NeutralColor;
@@ -556,22 +555,7 @@ public class ReactionGraphUI : MonoBehaviour
 
     private void PositionInFrontOfCamera()
     {
-        if (graphCanvas == null)
-        {
-            return;
-        }
-
-        Camera camera = Camera.main;
-        if (camera == null)
-        {
-            return;
-        }
-
-        graphCanvas.worldCamera = camera;
-        graphCanvas.transform.position =
-            camera.transform.position + camera.transform.forward * distanceFromCamera;
-        graphCanvas.transform.rotation = camera.transform.rotation;
-        LabPanelBuilder.KeepInsideLab(graphCanvas);
+        LabPanelBuilder.FaceCamera(graphCanvas, chosenFill);
     }
 
     private TMP_Text CreateText(string objectName, Transform parent, Vector2 anchoredPosition,

@@ -21,10 +21,6 @@ public class PeriodicTableUI : MonoBehaviour
     public KeyCode toggleKey = KeyCode.P;
     public KeyCode closeKey = KeyCode.Escape;
 
-    [Header("Placement")]
-    [Tooltip("Metres in front of the camera the panel appears.")]
-    public float distanceFromCamera = 1.6f;
-
     [Header("Availability")]
     [Tooltip("Scenes where P opens the table. The testing scene is excluded: the table names the " +
              "elements, which would help during an examination.")]
@@ -39,6 +35,9 @@ public class PeriodicTableUI : MonoBehaviour
     private RectTransform detailSwatch;
     private bool isOpen;
 
+    /// <summary>Mouse-wheel choice of panel size as a share of the view; 0 = reading distance.</summary>
+    private float chosenFill;
+
     private readonly Dictionary<string, Image> cellImages = new Dictionary<string, Image>();
     private readonly HashSet<string> highlighted = new HashSet<string>();
 
@@ -46,8 +45,11 @@ public class PeriodicTableUI : MonoBehaviour
     private const float CanvasHeight = 900.0f;
     private const float CellSize = 66.0f;
     private const float CellGap = 4.0f;
-    /// <summary>Panel-space Y of the grid's centre; the detail card is placed relative to it.</summary>
-    private const float GridCentreY = 40.0f;
+    /// <summary>
+    /// Panel-space Y of the grid's centre; the detail card is placed relative to it. Low enough
+    /// that the Close button clears helium's cell - at 40 it sat over He's atomic number.
+    /// </summary>
+    private const float GridCentreY = 16.0f;
 
     void Update()
     {
@@ -83,7 +85,7 @@ public class PeriodicTableUI : MonoBehaviour
             return;
         }
 
-        LabPanelBuilder.ScrollPanelDistance(tableCanvas, ref distanceFromCamera);
+        LabPanelBuilder.ScrollPanelDistance(tableCanvas, ref chosenFill);
     }
 
     private bool IsBlockedScene()
@@ -130,7 +132,7 @@ public class PeriodicTableUI : MonoBehaviour
         EnsureUiBuilt();
         isOpen = true;
         tableCanvas.gameObject.SetActive(true);
-        LabPanelBuilder.FaceCamera(tableCanvas, distanceFromCamera);
+        LabPanelBuilder.FaceCamera(tableCanvas, chosenFill);
         RefreshHighlights();
 
         if (AchievementSystem.Instance != null)
@@ -246,16 +248,17 @@ public class PeriodicTableUI : MonoBehaviour
         button.onClick.AddListener(() => ShowDetail(captured));
 
         LabPanelBuilder.CreateText("Z", cell.transform, new Vector2(0.0f, CellSize * 0.5f - 11.0f),
-            new Vector2(CellSize, 16.0f), element.number.ToString(), 13.0f,
+            new Vector2(CellSize, 16.0f), element.number.ToString(), 14.0f,
             TextAlignmentOptions.Center, new Color(1.0f, 1.0f, 1.0f, 0.85f));
 
         LabPanelBuilder.CreateText("Symbol", cell.transform, new Vector2(0.0f, -2.0f),
             new Vector2(CellSize, 30.0f), element.symbol, 24.0f,
             TextAlignmentOptions.Center, Color.white);
 
+        // As large as the cell allows: "(294)" and "101.07" still fit the 66 px width at this size.
         LabPanelBuilder.CreateText("Mass", cell.transform, new Vector2(0.0f, -CellSize * 0.5f + 10.0f),
-            new Vector2(CellSize, 14.0f), element.MassLabel, 10.5f,
-            TextAlignmentOptions.Center, new Color(1.0f, 1.0f, 1.0f, 0.75f));
+            new Vector2(CellSize, 14.0f), element.MassLabel, 13.0f,
+            TextAlignmentOptions.Center, new Color(1.0f, 1.0f, 1.0f, 0.80f));
     }
 
     private void BuildLegend()
@@ -268,17 +271,26 @@ public class PeriodicTableUI : MonoBehaviour
             ElementCategory.NobleGas, ElementCategory.Lanthanide, ElementCategory.Actinide
         };
 
-        float y = -CanvasHeight * 0.5f + 52.0f;
-        float spacing = 168.0f;
-        float startX = -(order.Length - 1) * spacing * 0.5f;
+        // Two rows. On one row nine names had to be squeezed to 14 pt to fit the width, which made
+        // the key the hardest thing on the panel to read.
+        const int perRow = 5;
+        const float spacing = 290.0f;
+        const float rowGap = 34.0f;
+        float firstRowY = -CanvasHeight * 0.5f + 88.0f;
 
         for (int i = 0; i < order.Length; i++)
         {
-            float x = startX + i * spacing;
-            LabPanelBuilder.CreatePlate("Swatch" + i, panel, new Vector2(x - 68.0f, y),
+            int row = i / perRow;
+            int column = i % perRow;
+            int inRow = row == 0 ? perRow : order.Length - perRow;
+
+            float x = -(inRow - 1) * spacing * 0.5f + column * spacing;
+            float y = firstRowY - row * rowGap;
+
+            LabPanelBuilder.CreatePlate("Swatch" + i, panel, new Vector2(x - 110.0f, y),
                 new Vector2(18.0f, 18.0f), PeriodicTableData.CategoryColour(order[i]));
-            LabPanelBuilder.CreateText("Legend" + i, panel, new Vector2(x + 12.0f, y),
-                new Vector2(150.0f, 22.0f), PeriodicTableData.CategoryName(order[i]), 14.0f,
+            LabPanelBuilder.CreateText("Legend" + i, panel, new Vector2(x + 16.0f, y),
+                new Vector2(220.0f, 26.0f), PeriodicTableData.CategoryName(order[i]), 17.0f,
                 TextAlignmentOptions.Left, LabPanelBuilder.MutedTextColour);
         }
     }
@@ -324,14 +336,14 @@ public class PeriodicTableUI : MonoBehaviour
             TextAlignmentOptions.Left, Color.white);
 
         detailBody = LabPanelBuilder.CreateText("DetailBody", panel,
-            new Vector2(left + 265.0f, y - 24.0f), new Vector2(330.0f, 108.0f), "", 17.0f,
+            new Vector2(left + 265.0f, y - 24.0f), new Vector2(330.0f, 108.0f), "", 18.0f,
             TextAlignmentOptions.TopLeft, AtomixSettings.BodyTextColour);
 
         // Created once and re-texted on each open; building it inside RefreshHighlights would
         // stack a fresh copy every time the panel was opened.
         highlightNote = LabPanelBuilder.CreateText("HighlightNote", panel,
             new Vector2(x + paneWidth * 0.5f - 160.0f, y - 24.0f), new Vector2(280.0f, 108.0f),
-            "", 17.0f, TextAlignmentOptions.TopLeft, AtomixSettings.SuccessColour);
+            "", 18.0f, TextAlignmentOptions.TopLeft, AtomixSettings.SuccessColour);
     }
 
     private void ShowDetail(ChemicalElement element)
