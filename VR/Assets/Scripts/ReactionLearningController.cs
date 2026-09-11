@@ -39,10 +39,10 @@ public class ReactionLearningController : MonoBehaviour
     private TMP_Text playPauseLabel;
 
     // --- Live molecular animation -------------------------------------------------------
-    // Reactions 1 and 8 never had an MP4 (videoClip: {fileID: 0} in the catalog asset), so the
-    // LEARN screen used to dead-end on "Molecular explanation video is unavailable." Every
-    // reaction now has an in-engine ball-and-stick animation instead, and the six that do have
-    // an MP4 can switch to it as a second view.
+    // Reaction 1 has no MP4 (videoClip: {fileID: 0} in the catalog asset), so the LEARN screen
+    // used to dead-end on "Molecular explanation video is unavailable." Every reaction now has an
+    // in-engine ball-and-stick animation instead, and the seven that do have an MP4 can switch to
+    // it as a second view.
     private MolecularAnimationRenderer molecular;
     private Button molecularButton;
     private TMP_Text molecularButtonLabel;
@@ -1447,7 +1447,7 @@ public class ReactionLearningController : MonoBehaviour
 
         if (clip == null)
         {
-            // No MP4 for this reaction - reactions 1 and 8 have never had one. Rather than
+            // No MP4 for this reaction - reaction 1 has never had one. Rather than
             // dead-ending, render the molecular animation into the same display.
             if (TryStartMolecularAnimation())
             {

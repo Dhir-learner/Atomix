@@ -9,10 +9,10 @@ using UnityEngine;
 /// A .asset here would also mean hand-writing several hundred lines of YAML with atom indices in
 /// it, which is far harder to review than the fluent form below.
 ///
-/// Two reactions - 1 (Na + H2O) and 8 (FeSO4) - had no molecular video at all: their entries in
-/// ReactionLearningVideoCatalog.asset are `videoClip: {fileID: 0}`, so the LEARN screen told the
-/// student "Molecular explanation video is unavailable." These animations close that gap, and the
-/// other six get one too, so the molecular view is uniform across the bench.
+/// Reaction 1 (Na + H2O) has no molecular video: its entry in ReactionLearningVideoCatalog.asset
+/// is `videoClip: {fileID: 0}`, so the LEARN screen told the student "Molecular explanation video
+/// is unavailable." These animations close that gap, and the other seven get one too, so the
+/// molecular view is uniform across the bench.
 /// </summary>
 public static class MolecularSceneCatalog
 {
