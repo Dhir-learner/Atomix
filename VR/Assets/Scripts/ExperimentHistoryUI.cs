@@ -164,7 +164,17 @@ public class ExperimentHistoryUI : MonoBehaviour
         float scrollablePixels = Mathf.Max(1.0f, listContent.rect.height - scrollRect.viewport.rect.height);
         float pixels = 0.0f;
 
-        pixels += Input.mouseScrollDelta.y * 120.0f;   // one wheel notch
+        // The wheel scrolls whatever the crosshair is on, as a desktop mouse would: the list when
+        // it is aimed at and long enough to scroll, otherwise the panel's distance.
+        bool listScrolls = listContent.rect.height > scrollRect.viewport.rect.height + 1.0f;
+        if (listScrolls && IsAimingAtList())
+        {
+            pixels += Input.mouseScrollDelta.y * 120.0f;   // one wheel notch
+        }
+        else
+        {
+            LabPanelBuilder.ScrollPanelDistance(historyCanvas, ref distanceFromCamera);
+        }
         if (Input.GetKey(KeyCode.UpArrow))
         {
             pixels += scrollSpeed * Time.unscaledDeltaTime;
@@ -181,6 +191,17 @@ public class ExperimentHistoryUI : MonoBehaviour
 
         scrollRect.verticalNormalizedPosition =
             Mathf.Clamp01(scrollRect.verticalNormalizedPosition + pixels / scrollablePixels);
+    }
+
+    /// <summary>True when the crosshair - the centre of the screen - is over the list.</summary>
+    private bool IsAimingAtList()
+    {
+        Camera camera = Camera.main;
+        return camera != null &&
+               RectTransformUtility.RectangleContainsScreenPoint(
+                   scrollRect.viewport,
+                   new Vector2(Screen.width * 0.5f, Screen.height * 0.5f),
+                   camera);
     }
 
     // =========================================================
@@ -243,8 +264,8 @@ public class ExperimentHistoryUI : MonoBehaviour
         TMP_Text hint = CreateText("Hint", panel.transform,
             new Vector2(0.0f, 292.0f), new Vector2(1100.0f, 34.0f),
             20.0f, FontStyles.Normal, TextAlignmentOptions.Left);
-        hint.text = "Click a row to expand it.  Mouse wheel / arrow keys scroll.  " +
-                    toggleKey + " or " + closeKey + " closes.";
+        hint.text = "Click a row to expand.  Wheel: on the list scrolls, off it moves the panel.  " +
+                    toggleKey + " / " + closeKey + " closes.";
         hint.color = NeutralColor;
 
         BuildFilterRow(panel.transform);
@@ -715,6 +736,7 @@ public class ExperimentHistoryUI : MonoBehaviour
         historyCanvas.transform.position =
             camera.transform.position + camera.transform.forward * distanceFromCamera;
         historyCanvas.transform.rotation = camera.transform.rotation;
+        LabPanelBuilder.KeepInsideLab(historyCanvas);
     }
 
     private static void AddLayoutHeight(GameObject target, float height)

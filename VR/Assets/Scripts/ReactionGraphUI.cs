@@ -133,6 +133,8 @@ public class ReactionGraphUI : MonoBehaviour
             return;
         }
 
+        LabPanelBuilder.ScrollPanelDistance(graphCanvas, ref distanceFromCamera);
+
         // The assistant may finish connecting while the panel is already open, so keep the
         // Ask button in step with it rather than only refreshing when the tab changes.
         askRefreshTimer -= Time.unscaledDeltaTime;
@@ -525,7 +527,8 @@ public class ReactionGraphUI : MonoBehaviour
         TMP_Text hint = CreateText("Hint", panel.transform,
             new Vector2(0.0f, -396.0f), new Vector2(1160.0f, 28.0f),
             17.0f, FontStyles.Italic, TextAlignmentOptions.Center);
-        hint.text = "Press [" + toggleKey + "] any time to bring these graphs back.";
+        hint.text = "Press [" + toggleKey + "] any time to bring these graphs back.   " +
+                    "Mouse wheel moves the panel closer or farther.";
         hint.color = NeutralColor;
     }
 
@@ -568,6 +571,7 @@ public class ReactionGraphUI : MonoBehaviour
         graphCanvas.transform.position =
             camera.transform.position + camera.transform.forward * distanceFromCamera;
         graphCanvas.transform.rotation = camera.transform.rotation;
+        LabPanelBuilder.KeepInsideLab(graphCanvas);
     }
 
     private TMP_Text CreateText(string objectName, Transform parent, Vector2 anchoredPosition,

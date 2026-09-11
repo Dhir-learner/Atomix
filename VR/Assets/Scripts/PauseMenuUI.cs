@@ -660,6 +660,7 @@ public class PauseMenuUI : MonoBehaviour
             { "Z / X", "Tilt held object - steeper pours faster" },
             { "C", "Roll held object (Shift to reverse) - also pours" },
             { "T", "Reset held object pose" },
+            { "Mouse wheel", "Spin held object / move a panel" },
             { "B", "Open or close the reaction book" },
             { "1 - 8", "Jump straight to an experiment" },
             { "F5", "Reset the bench and retry the experiment" },

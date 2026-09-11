@@ -72,10 +72,18 @@ public class PeriodicTableUI : MonoBehaviour
             return;
         }
 
-        if (isOpen && Input.GetKeyDown(closeKey))
+        if (!isOpen)
+        {
+            return;
+        }
+
+        if (Input.GetKeyDown(closeKey))
         {
             Close();
+            return;
         }
+
+        LabPanelBuilder.ScrollPanelDistance(tableCanvas, ref distanceFromCamera);
     }
 
     private bool IsBlockedScene()

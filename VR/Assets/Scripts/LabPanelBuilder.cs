@@ -158,9 +158,215 @@ public static class LabPanelBuilder
         }
 
         canvas.worldCamera = camera;
+        canvas.transform.localScale = Vector3.one * WorldScale * AtomixSettings.UiScale;
         canvas.transform.position = camera.transform.position + camera.transform.forward * distance;
         canvas.transform.rotation = camera.transform.rotation;
-        canvas.transform.localScale = Vector3.one * WorldScale * AtomixSettings.UiScale;
+        KeepInsideLab(canvas);
+    }
+
+    // =========================================================
+    // PLACEMENT - mouse-wheel distance, kept inside the lab
+    // =========================================================
+
+    /// <summary>Closest the mouse wheel can bring a panel to the player's eyes, in metres.</summary>
+    public const float MinPanelDistance = 0.6f;
+
+    /// <summary>Furthest the mouse wheel can push a panel from the player's eyes, in metres.</summary>
+    public const float MaxPanelDistance = 3.0f;
+
+    /// <summary>Metres one wheel notch moves a panel.</summary>
+    private const float ScrollStepPerNotch = 0.15f;
+
+    /// <summary>Gap kept between a panel and the wall, bench or equipment behind it.</summary>
+    private const float PanelClearance = 0.05f;
+
+    /// <summary>
+    /// Nearest a wall may push a panel in towards the eyes. Deliberately below
+    /// <see cref="MinPanelDistance"/>: a panel opened with the player's back to a wall has to go
+    /// somewhere, and in front of the wall is better than through it.
+    /// </summary>
+    private const float NearestPanelDistance = 0.3f;
+
+    /// <summary>Everything solid except the UI layer, which the panels themselves sit on.</summary>
+    private static readonly int PlacementMask = Physics.DefaultRaycastLayers & ~(1 << 5);
+
+    private static readonly RaycastHit[] placementHits = new RaycastHit[16];
+
+    /// <summary>
+    /// Mouse wheel: forward brings the panel closer, back pushes it away. The panel slides along
+    /// the line from the player's eyes to where it is now, so it keeps its place in view, and
+    /// <see cref="KeepInsideLab"/> stops it at walls, benches and the room boundary.
+    ///
+    /// Leaves the wheel alone while an object is held - the wheel spins that instead - and when the
+    /// panel is behind the player, so a panel they cannot see is never moved.
+    /// </summary>
+    /// <param name="distance">
+    /// The panel's remembered distance. Updated to the distance asked for, so the panel reopens
+    /// where the student left it.
+    /// </param>
+    /// <returns>True when the wheel moved the panel.</returns>
+    public static bool ScrollPanelDistance(Canvas canvas, ref float distance)
+    {
+        float wheel = Input.mouseScrollDelta.y;
+        if (wheel == 0.0f || canvas == null || !canvas.gameObject.activeInHierarchy)
+        {
+            return false;
+        }
+
+        Camera camera = Camera.main;
+        if (camera == null || HeldObjectTransform(camera) != null)
+        {
+            return false;
+        }
+
+        Transform eye = camera.transform;
+        Vector3 offset = canvas.transform.position - eye.position;
+        float current = offset.magnitude;
+        if (current < 0.0001f || Vector3.Dot(offset, eye.forward) <= 0.0f)
+        {
+            return false;
+        }
+
+        float target = Mathf.Clamp(current - wheel * ScrollStepPerNotch, MinPanelDistance, MaxPanelDistance);
+        canvas.transform.position = eye.position + offset / current * target;
+        KeepInsideLab(canvas);
+
+        distance = target;
+        return true;
+    }
+
+    /// <summary>
+    /// Pulls a world-space panel back inside the laboratory: short of any wall, bench or piece of
+    /// equipment between it and the player's eyes, up off a bench its bottom edge would sink into,
+    /// and with every corner inside the room boundary so no edge pokes out through a wall.
+    ///
+    /// Call after the panel's rotation and scale are set - its footprint is measured from them.
+    /// </summary>
+    public static void KeepInsideLab(Canvas canvas)
+    {
+        if (canvas == null)
+        {
+            return;
+        }
+
+        Camera camera = Camera.main;
+        if (camera == null)
+        {
+            return;
+        }
+
+        Transform panel = canvas.transform;
+        Transform eyeTransform = camera.transform;
+        Transform held = HeldObjectTransform(camera);
+        Vector3 eye = eyeTransform.position;
+        RaycastHit hit;
+
+        // Nothing solid between the eyes and the panel.
+        Vector3 offset = panel.position - eye;
+        float distance = offset.magnitude;
+        if (distance > 0.0001f)
+        {
+            Vector3 direction = offset / distance;
+            if (FirstSolidHit(eye, direction, distance + PanelClearance, eyeTransform, held, out hit))
+            {
+                distance = Mathf.Max(NearestPanelDistance, hit.distance - PanelClearance);
+                panel.position = eye + direction * distance;
+            }
+        }
+
+        // World-space half extents of the rotated panel.
+        Vector2 half = HalfSize(canvas);
+        Vector3 extentX = panel.right * half.x;
+        Vector3 extentY = panel.up * half.y;
+        Vector3 reach = new Vector3(
+            Mathf.Abs(extentX.x) + Mathf.Abs(extentY.x),
+            Mathf.Abs(extentX.y) + Mathf.Abs(extentY.y),
+            Mathf.Abs(extentX.z) + Mathf.Abs(extentY.z));
+
+        // Bottom edge above the bench. At normal eye height it already is; this is for a player
+        // who has flown down low with Ctrl, or is looking down at the bench.
+        Vector3 centre = panel.position;
+        if (FirstSolidHit(centre + Vector3.up * reach.y, Vector3.down, reach.y * 2.0f + PanelClearance,
+                          eyeTransform, held, out hit) &&
+            hit.normal.y > 0.65f)
+        {
+            centre.y = Mathf.Max(centre.y, hit.point.y + reach.y + PanelClearance);
+        }
+
+        // Every corner inside the room. The walls are only a collider cage at the boundary, so a
+        // panel near a corner could otherwise pass the centre ray and still hang out of the room.
+        LabBoundary boundary = LabBoundary.Active;
+        if (boundary != null && boundary.HasInterior)
+        {
+            Bounds room = boundary.Interior;
+            reach += Vector3.one * PanelClearance;
+            centre.x = ClampSpan(centre.x, room.min.x + reach.x, room.max.x - reach.x);
+            centre.y = ClampSpan(centre.y, room.min.y + reach.y, room.max.y - reach.y);
+            centre.z = ClampSpan(centre.z, room.min.z + reach.z, room.max.z - reach.z);
+        }
+
+        panel.position = centre;
+    }
+
+    /// <summary>Half the width and height of a world-space canvas, in metres.</summary>
+    private static Vector2 HalfSize(Canvas canvas)
+    {
+        RectTransform rect = canvas.transform as RectTransform;
+        if (rect == null)
+        {
+            return Vector2.zero;
+        }
+
+        Vector3 scale = rect.lossyScale;
+        return new Vector2(rect.rect.width * Mathf.Abs(scale.x), rect.rect.height * Mathf.Abs(scale.y)) * 0.5f;
+    }
+
+    /// <summary>Clamps into [min, max], or centres in the span when the panel is wider than it.</summary>
+    private static float ClampSpan(float value, float min, float max)
+    {
+        return min > max ? (min + max) * 0.5f : Mathf.Clamp(value, min, max);
+    }
+
+    private static Transform HeldObjectTransform(Camera camera)
+    {
+        ObjectInteraction interaction = camera.GetComponent<ObjectInteraction>();
+        if (interaction == null || interaction.HeldObject == null)
+        {
+            return null;
+        }
+
+        return interaction.HeldObject.transform;
+    }
+
+    /// <summary>
+    /// Nearest solid hit along a ray, ignoring the player's own body and whatever they are
+    /// holding - a beaker carried in front of the eyes is not a wall.
+    /// </summary>
+    private static bool FirstSolidHit(Vector3 origin, Vector3 direction, float maxDistance,
+                                      Transform player, Transform held, out RaycastHit nearest)
+    {
+        int count = Physics.RaycastNonAlloc(origin, direction, placementHits, maxDistance,
+                                            PlacementMask, QueryTriggerInteraction.Ignore);
+        nearest = default(RaycastHit);
+        bool found = false;
+
+        for (int i = 0; i < count; i++)
+        {
+            Transform hitTransform = placementHits[i].collider.transform;
+            if ((player != null && hitTransform.IsChildOf(player)) ||
+                (held != null && hitTransform.IsChildOf(held)))
+            {
+                continue;
+            }
+
+            if (!found || placementHits[i].distance < nearest.distance)
+            {
+                nearest = placementHits[i];
+                found = true;
+            }
+        }
+
+        return found;
     }
 
     public static TMP_Text CreateText(string objectName, Transform parent, Vector2 anchoredPosition,

@@ -59,6 +59,13 @@ public class ObjectInteraction : MonoBehaviour
     public LayerMask interactableLayer = ~0;
 
     private GameObject currentlyHeldObject;
+
+    /// <summary>
+    /// The object in the player's hand, or null. The floating panels read this to leave the mouse
+    /// wheel to the held object's spin instead of moving themselves.
+    /// </summary>
+    public GameObject HeldObject { get { return currentlyHeldObject; } }
+
     private ObjectGrabbable currentlyHeldGrabbable;
     private ObjectGrabbable highlightedGrabbable;
     private DesktopInteractable highlightedInteractable;
