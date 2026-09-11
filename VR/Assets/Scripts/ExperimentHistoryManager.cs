@@ -67,6 +67,56 @@ public class ExperimentAttempt : ISerializationCallbackReceiver
     public List<ExperimentStep> steps = new List<ExperimentStep>();
     public List<AIInteraction> aiInteractions = new List<AIInteraction>();
 
+    /// <summary>
+    /// The <see cref="LabDifficulty"/> the attempt was played at. Every attempt saved before
+    /// levels existed reads back as 0, Standard - which is what it was played at.
+    /// </summary>
+    public int difficulty;
+
+    /// <summary>
+    /// True when <see cref="accuracyPercent"/> and <see cref="stars"/> were stamped as the attempt
+    /// closed. Older attempts are rated on demand instead; see <see cref="ExperimentScoring.TryGetScore"/>.
+    /// </summary>
+    public bool scored;
+
+    /// <summary>0..100 against the recipe's own tolerance; -1 when there was nothing to score.</summary>
+    public float accuracyPercent = -1.0f;
+
+    /// <summary>0 for a failure, otherwise 1-3.</summary>
+    public int stars;
+
+    /// <summary>Formula of the product a stoichiometry challenge asked for; empty for a normal run.</summary>
+    public string challengeProduct = string.Empty;
+
+    /// <summary>Grams of <see cref="challengeProduct"/> the challenge asked for.</summary>
+    public float challengeGrams;
+
+    public LabDifficulty Difficulty
+    {
+        get
+        {
+            return Enum.IsDefined(typeof(LabDifficulty), difficulty)
+                ? (LabDifficulty)difficulty
+                : LabDifficulty.Standard;
+        }
+    }
+
+    public bool IsChallenge
+    {
+        get { return !string.IsNullOrEmpty(challengeProduct); }
+    }
+
+    /// <summary>"Guided", "Expert", "Challenge: 10.0 g CuSO4" ... - how this attempt was set.</summary>
+    public string ModeLabel
+    {
+        get
+        {
+            return IsChallenge
+                ? string.Format("Challenge: {0:0.0} g {1}", challengeGrams, challengeProduct)
+                : ExperimentScoring.Label(Difficulty);
+        }
+    }
+
     [SerializeField] private List<QuantityEntry> quantitiesUsedList = new List<QuantityEntry>();
     [SerializeField] private List<QuantityEntry> targetQuantitiesList = new List<QuantityEntry>();
 
@@ -129,6 +179,8 @@ public class ExperimentAttempt : ISerializationCallbackReceiver
         targetQuantities = ToDictionary(targetQuantitiesList);
         if (steps == null) steps = new List<ExperimentStep>();
         if (aiInteractions == null) aiInteractions = new List<AIInteraction>();
+        if (challengeProduct == null) challengeProduct = string.Empty;
+        if (!scored) accuracyPercent = -1.0f;   // a file from before scoring has no rating to trust
     }
 
     private static List<QuantityEntry> ToList(Dictionary<string, float> source)
@@ -710,6 +762,18 @@ public class ReactionHistoryRecorder
     /// </summary>
     public bool hideTargets = false;
 
+    /// <summary>The level this attempt is being played at. Stamped on the attempt when it closes.</summary>
+    public LabDifficulty Difficulty { get; set; }
+
+    /// <summary>The stoichiometry challenge this attempt is answering, or null for a normal run.</summary>
+    public StoichiometryChallenge Challenge { get; set; }
+
+    /// <summary>
+    /// The attempt most recently closed with a verdict, set just before <see cref="Resolved"/> is
+    /// raised - so a listener can read the stars without being handed the attempt itself.
+    /// </summary>
+    public static ExperimentAttempt LastResolvedAttempt { get; private set; }
+
     /// <summary>
     /// The experiment the student is working on right now (or most recently worked on). Lets the
     /// AI assistant read live experiment state without every reaction script having to know it
@@ -742,6 +806,19 @@ public class ReactionHistoryRecorder
         }
         attemptId = ExperimentHistoryManager.Instance.StartAttempt(reactionId, reactionName);
         Active = this;
+
+        // Stamped on opening as well as on closing: an attempt still open when the game quits is
+        // closed by the manager, not here, and should still say what level it was played at.
+        ExperimentAttempt attempt = ExperimentHistoryManager.Instance.FindAttempt(attemptId);
+        if (attempt != null)
+        {
+            attempt.difficulty = (int)Difficulty;
+            if (Challenge != null)
+            {
+                attempt.challengeProduct = Challenge.ProductFormula;
+                attempt.challengeGrams = Challenge.ProductGrams;
+            }
+        }
     }
 
     /// <summary>
@@ -816,6 +893,48 @@ public class ReactionHistoryRecorder
         Complete(ToOutcome(result));
     }
 
+    /// <summary>
+    /// Writes how the attempt was set (level or challenge) and, for a verdict, its accuracy and
+    /// stars. The engine still holds the targets here even when <see cref="hideTargets"/> kept
+    /// them out of the stored attempt, so a hidden-target run is rated just as precisely.
+    /// </summary>
+    private void StampAttempt(ExperimentAttempt attempt, ExperimentOutcome outcome)
+    {
+        if (attempt == null)
+        {
+            return;
+        }
+
+        attempt.difficulty = (int)Difficulty;
+
+        if (Challenge != null)
+        {
+            attempt.challengeProduct = Challenge.ProductFormula;
+            attempt.challengeGrams = Challenge.ProductGrams;
+        }
+
+        bool verdict = outcome == ExperimentOutcome.Success ||
+                       outcome == ExperimentOutcome.FailOverdose ||
+                       outcome == ExperimentOutcome.FailUnderdose ||
+                       outcome == ExperimentOutcome.FailWrongOrder ||
+                       outcome == ExperimentOutcome.FailTimeout;
+
+        if (!verdict || engine == null)
+        {
+            return;     // no engine means no targets to rate against; read-time scoring covers it
+        }
+
+        float accuracy = engine.ComputeAccuracyPercent();
+        if (accuracy < 0.0f)
+        {
+            return;
+        }
+
+        attempt.accuracyPercent = accuracy;
+        attempt.stars = ExperimentScoring.Stars(accuracy, outcome == ExperimentOutcome.Success);
+        attempt.scored = true;
+    }
+
     public void Complete(ExperimentOutcome outcome)
     {
         if (finished)
@@ -849,7 +968,16 @@ public class ReactionHistoryRecorder
             }
         }
 
+        // Stamped before EndAttempt, which is what saves the file.
+        ExperimentAttempt attempt = manager.FindAttempt(attemptId);
+        StampAttempt(attempt, outcome);
+
         manager.EndAttempt(attemptId, outcome);
+
+        if (attempt != null && outcome != ExperimentOutcome.Abandoned)
+        {
+            LastResolvedAttempt = attempt;
+        }
 
         // Every one of the eight reactions closes its attempt through here, so this is the single
         // place the scientific graphs need to hook into - no per-reaction wiring.

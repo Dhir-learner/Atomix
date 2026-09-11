@@ -62,6 +62,32 @@ public class FreeHandReactionEngine
     /// </summary>
     public bool hideTargets = false;
 
+    /// <summary>
+    /// Lets <see cref="hideTargets"/> lift once the experiment has been judged, so the Lab's Expert
+    /// level and the stoichiometry challenge can show the student the right amounts after a
+    /// verdict - which is when seeing them teaches something. Left off in the testing scene, where
+    /// the targets must stay hidden for the rest of the run.
+    /// </summary>
+    public bool revealTargetsWhenResolved = false;
+
+    /// <summary>
+    /// Multiplies every tolerance - the difficulty level. 1 is the recipe's own tolerance and is
+    /// exactly how every experiment has always been judged. See <see cref="ExperimentScoring"/>.
+    /// </summary>
+    public float toleranceScale = 1.0f;
+
+    /// <summary>Extra text for the failure explanation, e.g. the worked calculation for a challenge.</summary>
+    public string failureAppendix = string.Empty;
+
+    /// <summary>Replaces the reaction name at the start of the HUD readout when set.</summary>
+    public string hudCaption = string.Empty;
+
+    /// <summary>True while targets and accepted ranges may be shown to the student.</summary>
+    public bool ShowTargetsNow
+    {
+        get { return !hideTargets || (revealTargetsWhenResolved && IsResolved); }
+    }
+
     // --- Internal bookkeeping --------------------------------------------------------
     private readonly List<string> registrationOrder = new List<string>();
     private readonly Dictionary<string, string> units = new Dictionary<string, string>();
@@ -72,6 +98,7 @@ public class FreeHandReactionEngine
     private readonly Dictionary<string, int> orderGroups = new Dictionary<string, int>();
     private readonly HashSet<string> pouringSubstances = new HashSet<string>();
     private readonly List<string> additionOrder = new List<string>();
+    private readonly Dictionary<string, float> flowFractions = new Dictionary<string, float>();
 
     private float settleTimer = 0.0f;
     private ReactionResult lastResult = ReactionResult.InProgress;
@@ -152,6 +179,47 @@ public class FreeHandReactionEngine
         else
         {
             pouringSubstances.Remove(substanceName);
+        }
+    }
+
+    /// <summary>
+    /// <see cref="UpdatePouringQuantity"/> for a vessel whose rate follows its tilt: the reagent
+    /// goes in at <paramref name="fullRatePerSecond"/> times the source's
+    /// <see cref="IPourSource.FlowRate"/>, so a fully tipped vessel pours exactly as fast as every
+    /// pour did before the tilt mattered, and a gentle tilt trickles.
+    /// </summary>
+    public void UpdatePour(string substanceName, float fullRatePerSecond, IPourSource source)
+    {
+        bool live = PourTilt.IsLive(source);
+        bool pouring = live && source.IsPouring;
+        float flow = pouring ? source.FlowRate : 0.0f;
+
+        if (targetQuantities.ContainsKey(substanceName))
+        {
+            flowFractions[substanceName] = flow;
+        }
+
+        UpdatePouringQuantity(substanceName, fullRatePerSecond * flow, pouring);
+    }
+
+    /// <summary>
+    /// How hard a reagent was last being poured, 0..1 of its full rate. False for inputs that are
+    /// not fed through <see cref="UpdatePour"/>, such as heating time.
+    /// </summary>
+    public bool TryGetFlowFraction(string substanceName, out float flow)
+    {
+        return flowFractions.TryGetValue(substanceName, out flow);
+    }
+
+    /// <summary>
+    /// Changes what a reagent is judged against - used by the stoichiometry challenge, and to put
+    /// the recipe's own amount back afterwards.
+    /// </summary>
+    public void SetTarget(string substanceName, float target)
+    {
+        if (targetQuantities.ContainsKey(substanceName))
+        {
+            targetQuantities[substanceName] = target;
         }
     }
 
@@ -340,10 +408,35 @@ public class FreeHandReactionEngine
         return false;
     }
 
+    /// <summary>The tolerance this experiment is being judged by, in percent - the level applied.</summary>
     public float ToleranceFor(string substanceName)
+    {
+        return ScoringToleranceFor(substanceName) * Mathf.Max(0.01f, toleranceScale);
+    }
+
+    /// <summary>
+    /// The recipe's own tolerance, in percent, before any difficulty level. Stars are always
+    /// measured against this so they mean the same thing at every level.
+    /// </summary>
+    public float ScoringToleranceFor(string substanceName)
     {
         float value;
         return perSubstanceTolerance.TryGetValue(substanceName, out value) ? value : tolerancePercent;
+    }
+
+    /// <summary>The experiment-wide tolerance with the level applied, for display.</summary>
+    public float EffectiveTolerancePercent
+    {
+        get { return tolerancePercent * Mathf.Max(0.01f, toleranceScale); }
+    }
+
+    /// <summary>
+    /// 0..100 - how close to target the least accurate reagent is, against the recipe's own
+    /// tolerance. -1 when nothing can be scored. See <see cref="ExperimentScoring"/>.
+    /// </summary>
+    public float ComputeAccuracyPercent()
+    {
+        return ExperimentScoring.Accuracy(currentQuantities, targetQuantities, ScoringToleranceFor);
     }
 
     public float MinAllowed(string substanceName)
@@ -446,12 +539,14 @@ public class FreeHandReactionEngine
         scratch.Length = 0;
         scratch.Append(trackerTitle).Append('\n');
 
+        bool showTargets = ShowTargetsNow;
+
         for (int i = 0; i < registrationOrder.Count; i++)
         {
             string substance = registrationOrder[i];
-            AppendReading(scratch, substance, !hideTargets);
+            AppendReading(scratch, substance, showTargets);
 
-            if (!hideTargets)
+            if (showTargets)
             {
                 scratch.Append("  (accept ").Append(MinAllowed(substance).ToString("F1"))
                        .Append('-').Append(MaxAllowed(substance).ToString("F1")).Append(')');
@@ -465,7 +560,7 @@ public class FreeHandReactionEngine
             foreach (string substance in pouringSubstances)
             {
                 scratch.Append("\nAdding ").Append(substance).Append("...");
-                if (!hideTargets)
+                if (showTargets)
                 {
                     scratch.Append(" stop between ").Append(MinAllowed(substance).ToString("F1"))
                            .Append(" and ").Append(MaxAllowed(substance).ToString("F1"))
@@ -488,6 +583,7 @@ public class FreeHandReactionEngine
     public string GetTooltipText()
     {
         scratch.Length = 0;
+        bool showTargets = ShowTargetsNow;
 
         for (int i = 0; i < registrationOrder.Count; i++)
         {
@@ -496,7 +592,7 @@ public class FreeHandReactionEngine
                 scratch.Append('\n');
             }
 
-            AppendReading(scratch, registrationOrder[i], !hideTargets);
+            AppendReading(scratch, registrationOrder[i], showTargets);
         }
 
         return scratch.ToString();
@@ -508,17 +604,21 @@ public class FreeHandReactionEngine
     ///
     /// This is what lets the floating label be turned off entirely - the numbers move to the edge
     /// of the screen instead of disappearing. Honours <see cref="hideTargets"/>, so the testing
-    /// scene never shows an answer here either.
+    /// scene never shows an answer here either - including the green "OK", which used to light up
+    /// the moment a hidden amount was right and so gave the answer away by colour alone.
     /// </summary>
     public string GetHudText(string reactionName)
     {
         System.Text.StringBuilder builder = scratch;
         builder.Length = 0;
 
-        if (!string.IsNullOrEmpty(reactionName))
+        string caption = string.IsNullOrEmpty(hudCaption) ? reactionName : hudCaption;
+        if (!string.IsNullOrEmpty(caption))
         {
-            builder.Append("<color=#9FB4CC>").Append(reactionName).Append("</color>   ");
+            builder.Append("<color=#9FB4CC>").Append(caption).Append("</color>   ");
         }
+
+        bool showTargets = ShowTargetsNow;
 
         for (int i = 0; i < registrationOrder.Count; i++)
         {
@@ -529,14 +629,14 @@ public class FreeHandReactionEngine
                 builder.Append("    ");
             }
 
-            bool inRange = IsWithinTolerance(substance);
+            bool inRange = showTargets && IsWithinTolerance(substance);
 
             builder.Append("<color=").Append(inRange ? "#86F7A0" : "#7AECFF").Append('>');
             builder.Append(substance).Append(' ')
                    .Append(currentQuantities[substance].ToString("F1")).Append(' ')
                    .Append(UnitFor(substance));
 
-            if (!hideTargets)
+            if (showTargets)
             {
                 builder.Append(" / ").Append(targetQuantities[substance].ToString("F1"));
             }
@@ -593,12 +693,19 @@ public class FreeHandReactionEngine
             }
         }
 
-        // 2. Otherwise the first reagent that is not yet in range.
+        // 2. Otherwise the first reagent that is not yet in range. With the targets hidden, "in
+        //    range" is itself the answer, so it falls back to the first reagent not yet added -
+        //    otherwise the label moving on would tell the student they had got one right.
+        bool showTargets = ShowTargetsNow;
         if (string.IsNullOrEmpty(focus))
         {
             for (int i = 0; i < registrationOrder.Count; i++)
             {
-                if (!IsWithinTolerance(registrationOrder[i]))
+                bool stillNeeded = showTargets
+                    ? !IsWithinTolerance(registrationOrder[i])
+                    : currentQuantities[registrationOrder[i]] <= 0.0f;
+
+                if (stillNeeded)
                 {
                     focus = registrationOrder[i];
                     break;
@@ -612,7 +719,7 @@ public class FreeHandReactionEngine
             focus = registrationOrder[registrationOrder.Count - 1];
         }
 
-        return hideTargets
+        return !showTargets
             ? string.Format("{0}: {1:F1} {2}", focus, currentQuantities[focus], UnitFor(focus))
             : string.Format("{0}: {1:F1} / {2:F1} {3}",
                 focus, currentQuantities[focus], targetQuantities[focus], UnitFor(focus));
@@ -629,14 +736,14 @@ public class FreeHandReactionEngine
         switch (lastResult)
         {
             case ReactionResult.FailOverdose:
-                return hideTargets
+                return !ShowTargetsNow
                     ? string.Format("FAILED: Too much {0}\n{1:F1} {2} used",
                         offendingSubstance, GetCurrent(offendingSubstance), UnitFor(offendingSubstance))
                     : string.Format("FAILED: Too much {0}\n{1:F1} {2} (max {3:F1})",
                         offendingSubstance, GetCurrent(offendingSubstance),
                         UnitFor(offendingSubstance), MaxAllowed(offendingSubstance));
             case ReactionResult.FailUnderdose:
-                return hideTargets
+                return !ShowTargetsNow
                     ? string.Format("FAILED: Not enough {0}\n{1:F1} {2} used",
                         offendingSubstance, GetCurrent(offendingSubstance), UnitFor(offendingSubstance))
                     : string.Format("FAILED: Not enough {0}\n{1:F1} {2} (min {3:F1})",
@@ -657,11 +764,12 @@ public class FreeHandReactionEngine
             return string.Empty;
         }
 
+        bool showTargets = ShowTargetsNow;
         string measurements = string.Empty;
         for (int i = 0; i < registrationOrder.Count; i++)
         {
             string substance = registrationOrder[i];
-            measurements += hideTargets
+            measurements += !showTargets
                 ? string.Format("{0}: {1:F1} {2} used\n",
                     substance, currentQuantities[substance], UnitFor(substance))
                 : ComposeMeasurementLine(substance, currentQuantities[substance],
@@ -687,8 +795,14 @@ public class FreeHandReactionEngine
                 break;
         }
 
-        return ComposeFailureExplanation(headline, measurements, failureReason,
-            hideTargets ? ExamClosingLine : AssistantClosingLine);
+        string reason = string.IsNullOrEmpty(failureAppendix)
+            ? failureReason
+            : failureReason + "\n\n" + failureAppendix;
+
+        // Targets still hidden after a verdict means the testing scene, where there is no
+        // assistant to ask and the lab is the place to go and learn the amounts.
+        return ComposeFailureExplanation(headline, measurements, reason,
+            showTargets ? AssistantClosingLine : ExamClosingLine);
     }
 
     /// <summary>Closing line for the lab, where the AI assistant is available to ask.</summary>
@@ -710,9 +824,8 @@ public class FreeHandReactionEngine
         "Revisit this experiment in the Lab to see the correct quantities.";
 
     /// <summary>
-    /// The shared failure-text layout. Reaction 1 tracks its quantities inline rather than through
-    /// this engine, so it calls this directly - that way all eight experiments show the student
-    /// exactly the same shape of message instead of two near-miss variants.
+    /// The shared failure-text layout, so every experiment shows the student exactly the same
+    /// shape of message instead of near-miss variants.
     /// </summary>
     public static string ComposeFailureExplanation(string headline, string measurements, string reason)
     {
@@ -755,6 +868,7 @@ public class FreeHandReactionEngine
         }
         additionOrder.Clear();
         pouringSubstances.Clear();
+        flowFractions.Clear();
         settleTimer = 0.0f;
         lastResult = ReactionResult.InProgress;
         offendingSubstance = string.Empty;

@@ -33,27 +33,24 @@ public class ReactionAlI3Test : MonoBehaviour
     [Header("Exam Mode (same rules as the Lab, quantities hidden)")]
     [Tooltip("Judged by the same FreeHandReactionEngine as ReactionAli3, but the student is never told the target or the accepted range.")]
     public bool enableExamMode = true;
-    public float targetAluminumGrams = 5.0f;
-    public float targetIodineGrams = 15.0f;
-    public float targetWaterMl = 2.0f;
-    public float tolerancePercent = 10.0f;
-    public float aluminumFlowGramsPerSecond = 1.25f;
-    public float iodineFlowGramsPerSecond = 3.75f;
-    public float pipetteFlowMlPerSecond = 0.7f;
     public float tooltipHeightOffset = 0.13f;
     public float tooltipFontSize = 0.55f;
     [Tooltip("Optional - played when the task is failed.")]
     public AudioSource audioSource_failure;
     public AudioClip clip_failure;
 
-    [Header("Experiment History")]
+    [Header("Recipe")]
     [Tooltip("Matches the Lab reaction number so test attempts group with lab attempts.")]
     public int reactionId = 5;
-    public string reactionDisplayName = "2Al + 3I2 -> 2AlI3 [Test]";
+    [Tooltip("Optional. Left empty, Resources/ReactionDefinitions is used - the same file the Lab reads.")]
+    public ReactionDefinition definition;
 
     private const string TaskPrompt = "Create aluminum iodide.";
 
     private ExamReactionRunner exam;
+    private float aluminiumFlow;
+    private float iodineFlow;
+    private float pipetteFlow;
 
     private DateTime timpInitial;
     private bool explosionActive = false;
@@ -83,26 +80,23 @@ public class ReactionAlI3Test : MonoBehaviour
             return;
         }
 
+        if (definition == null)
+        {
+            definition = ReactionDefinition.Load(reactionId);
+        }
+        if (definition == null)
+        {
+            return;
+        }
+
+        // Aluminium and iodine share order group 0 in the definition - either powder may go first.
         exam = new ExamReactionRunner();
-        exam.Begin("ExamTooltip_AlI3", canvasText, tooltipFontSize,
-            reactionId, reactionDisplayName, countdown, randomizer, tolerancePercent);
+        exam.Begin(definition, "ExamTooltip_AlI3", canvasText, tooltipFontSize, countdown, randomizer);
         exam.SetFailureAudio(audioSource_failure, clip_failure);
 
-        exam.engine.wrongOrderMessage =
-            "The water was added before both solids were in the dish. Water only acts as the catalyst once aluminium and iodine are already mixed as dry powders.";
-        // Aluminium and iodine share order group 0 - either powder may go in first.
-        exam.engine.AddSubstance("Aluminium", targetAluminumGrams, "g",
-            overdose: "Incorrect Al:I2 ratio prevents stoichiometric completion - the surplus aluminium stays as grey metal in the dish.",
-            underdose: "Incorrect Al:I2 ratio prevents stoichiometric completion - too little aluminium leaves unreacted violet iodine behind.",
-            orderGroup: 0);
-        exam.engine.AddSubstance("Iodine", targetIodineGrams, "g",
-            overdose: "Incorrect Al:I2 ratio prevents stoichiometric completion - excess iodine sublimes off as violet vapour instead of forming AlI3.",
-            underdose: "Incorrect Al:I2 ratio prevents stoichiometric completion - 2Al needs 3I2, so a shortage of iodine caps the yield.",
-            orderGroup: 0);
-        exam.engine.AddSubstance("Water drops", targetWaterMl, "ml",
-            overdose: "Too much water floods the mixture and carries the heat away, so the catalysed reaction never reaches ignition.",
-            underdose: "Too few drops of catalyst - without enough water the aluminium oxide layer is never broken and the mixture stays inert.",
-            orderGroup: 1);
+        aluminiumFlow = definition.FlowFor("Aluminium");
+        iodineFlow = definition.FlowFor("Iodine");
+        pipetteFlow = definition.FlowFor("Water drops");
     }
 
     void OnEnable()
@@ -141,9 +135,9 @@ public class ReactionAlI3Test : MonoBehaviour
 
         if (exam != null)
         {
-            exam.Pour("Aluminium", aluminumFlowGramsPerSecond, aluminum != null && aluminum.IsPouring);
-            exam.Pour("Iodine", iodineFlowGramsPerSecond, iodine != null && iodine.IsPouring);
-            exam.Pour("Water drops", pipetteFlowMlPerSecond, pipette != null && pipette.IsPouring);
+            exam.PourFrom("Aluminium", aluminiumFlow, aluminum);
+            exam.PourFrom("Iodine", iodineFlow, iodine);
+            exam.PourFrom("Water drops", pipetteFlow, pipette);
             examResult = exam.Tick();
             exam.UpdateTooltip(transform, tooltipHeightOffset, "Task finished!");
 

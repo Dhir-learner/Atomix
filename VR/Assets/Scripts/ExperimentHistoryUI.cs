@@ -464,18 +464,42 @@ public class ExperimentHistoryUI : MonoBehaviour
         rowFitter.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
         rowFitter.horizontalFit = ContentSizeFitter.FitMode.Unconstrained;
 
-        TMP_Text title = CreateText("Title", row.transform, Vector2.zero,
+        // Title on the left, the star rating in a fixed-width column on the right.
+        GameObject titleLine = new GameObject("TitleLine", typeof(RectTransform));
+        titleLine.transform.SetParent(row.transform, false);
+        HorizontalLayoutGroup titleLayout = titleLine.AddComponent<HorizontalLayoutGroup>();
+        titleLayout.spacing = 12.0f;
+        titleLayout.childAlignment = TextAnchor.MiddleLeft;
+        titleLayout.childControlWidth = true;
+        titleLayout.childControlHeight = true;
+        titleLayout.childForceExpandWidth = false;
+        titleLayout.childForceExpandHeight = true;
+        AddLayoutHeight(titleLine, 32.0f);
+
+        TMP_Text title = CreateText("Title", titleLine.transform, Vector2.zero,
             new Vector2(1020.0f, 34.0f), 24.0f, FontStyles.Bold, TextAlignmentOptions.Left);
         title.text = string.Format("#{0}  {1}   -   {2}", displayNumber, attempt.reactionName, attempt.OutcomeLabel);
         title.color = attempt.outcome == ExperimentOutcome.Success ? SuccessColor
                     : attempt.IsFailure ? FailColor
                     : NeutralColor;
-        AddLayoutHeight(title.gameObject, 32.0f);
+        title.textWrappingMode = TextWrappingModes.NoWrap;
+        title.overflowMode = TextOverflowModes.Ellipsis;
+        LayoutElement titleElement = title.gameObject.AddComponent<LayoutElement>();
+        titleElement.minWidth = 0.0f;
+        titleElement.preferredWidth = 1.0f;     // take whatever the stars leave, never push them out
+        titleElement.flexibleWidth = 1.0f;
+
+        float accuracy;
+        int stars;
+        bool rated = ExperimentScoring.TryGetScore(attempt, out accuracy, out stars);
+        CreateStarColumn(titleLine.transform, rated, stars);
 
         TMP_Text summary = CreateText("Summary", row.transform, Vector2.zero,
             new Vector2(1020.0f, 28.0f), 19.0f, FontStyles.Normal, TextAlignmentOptions.Left);
         summary.text = BuildSummaryLine(attempt);
         summary.color = NeutralColor;
+        summary.textWrappingMode = TextWrappingModes.NoWrap;
+        summary.overflowMode = TextOverflowModes.Ellipsis;
         AddLayoutHeight(summary.gameObject, 26.0f);
 
         if (!expanded)
@@ -494,10 +518,73 @@ public class ExperimentHistoryUI : MonoBehaviour
         AddLayoutHeight(detail.gameObject, preferredHeight);
     }
 
+    // =========================================================
+    // STARS
+    // =========================================================
+
+    private const float StarSize = 26.0f;
+    private const float StarSpacing = 4.0f;
+    private static readonly Color EarnedStarColor = new Color(1.0f, 0.84f, 0.30f, 1.0f);
+    private static readonly Color EmptyStarColor = new Color(1.0f, 1.0f, 1.0f, 0.16f);
+
+    /// <summary>
+    /// Three stars, gold for each one earned. The column is always the same width - empty for an
+    /// attempt with no verdict to rate - so the ratings line up down the whole list.
+    /// </summary>
+    private void CreateStarColumn(Transform parent, bool rated, int stars)
+    {
+        GameObject column = new GameObject("Stars", typeof(RectTransform));
+        column.transform.SetParent(parent, false);
+
+        LayoutElement columnElement = column.AddComponent<LayoutElement>();
+        float width = ExperimentScoring.MaxStars * StarSize + (ExperimentScoring.MaxStars - 1) * StarSpacing;
+        columnElement.minWidth = width;
+        columnElement.preferredWidth = width;
+        columnElement.flexibleWidth = 0.0f;
+
+        HorizontalLayoutGroup layout = column.AddComponent<HorizontalLayoutGroup>();
+        layout.spacing = StarSpacing;
+        layout.childAlignment = TextAnchor.MiddleRight;
+        layout.childControlWidth = false;
+        layout.childControlHeight = false;
+        layout.childForceExpandWidth = false;
+        layout.childForceExpandHeight = false;
+
+        if (!rated)
+        {
+            return;
+        }
+
+        Sprite sprite = StarSprite.Get();
+        for (int i = 0; i < ExperimentScoring.MaxStars; i++)
+        {
+            GameObject star = new GameObject("Star" + (i + 1), typeof(RectTransform), typeof(Image));
+            star.transform.SetParent(column.transform, false);
+            star.GetComponent<RectTransform>().sizeDelta = new Vector2(StarSize, StarSize);
+
+            Image image = star.GetComponent<Image>();
+            image.sprite = sprite;
+            image.preserveAspect = true;
+            image.color = i < stars ? EarnedStarColor : EmptyStarColor;
+            image.raycastTarget = false;     // the row behind it is the button
+        }
+    }
+
     private string BuildSummaryLine(ExperimentAttempt attempt)
     {
         StringBuilder builder = new StringBuilder();
         builder.Append(attempt.Timestamp.ToString("dd MMM yyyy HH:mm"));
+        builder.Append("   |   ");
+        builder.Append(attempt.ModeLabel);
+
+        float accuracy;
+        int stars;
+        if (attempt.outcome == ExperimentOutcome.Success &&
+            ExperimentScoring.TryGetScore(attempt, out accuracy, out stars))
+        {
+            builder.AppendFormat("   |   accuracy {0:0}%", accuracy);
+        }
+
         builder.Append("   |   ");
         builder.AppendFormat("{0:F1}s", attempt.durationSeconds);
         builder.Append("   |   ");
@@ -515,6 +602,17 @@ public class ExperimentHistoryUI : MonoBehaviour
     private string BuildDetailText(ExperimentAttempt attempt)
     {
         StringBuilder builder = new StringBuilder();
+
+        float accuracy;
+        int stars;
+        if (ExperimentScoring.TryGetScore(attempt, out accuracy, out stars))
+        {
+            builder.AppendLine("<b>Score</b>");
+            builder.AppendFormat("   {0} of {1} stars   -   accuracy {2:0}%   -   {3}\n",
+                stars, ExperimentScoring.MaxStars, Mathf.Max(0.0f, accuracy), attempt.ModeLabel);
+            builder.AppendLine("   Accuracy is your least precise reagent, against the Standard margin for error.");
+            builder.AppendLine();
+        }
 
         if (attempt.quantitiesUsed.Count > 0)
         {

@@ -86,6 +86,7 @@ public static class LabReportExporter
         text.AppendLine("| Distinct experiments attempted | " + summary.distinctAttempted + " of 8 |");
         text.AppendLine("| Distinct experiments completed | " + summary.distinctSucceeded + " of 8 |");
         text.AppendLine("| Success rate | " + summary.SuccessRatePercent.ToString("0.#") + "% |");
+        text.AppendLine("| Experiments with three stars | " + CountThreeStarred(attempts) + " of 8 |");
         text.AppendLine("| Overall grade | **" + summary.Grade + "** |");
         text.AppendLine();
 
@@ -116,6 +117,16 @@ public static class LabReportExporter
             text.AppendLine("### " + attempt.reactionName);
             text.AppendLine();
             text.AppendLine("- **Outcome:** " + Describe(attempt.outcome));
+            text.AppendLine("- **Set as:** " + attempt.ModeLabel);
+
+            float accuracy;
+            int stars;
+            if (ExperimentScoring.TryGetScore(attempt, out accuracy, out stars))
+            {
+                text.AppendLine("- **Score:** " + stars + " of " + ExperimentScoring.MaxStars +
+                                " stars (accuracy " + Mathf.Max(0.0f, accuracy).ToString("0") + "%)");
+            }
+
             text.AppendLine("- **When:** " +
                 attempt.Timestamp.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture));
             text.AppendLine("- **Duration:** " + attempt.durationSeconds.ToString("0.0") + " s");
@@ -177,7 +188,10 @@ public static class LabReportExporter
     private static string BuildCsv(List<ExperimentAttempt> attempts)
     {
         StringBuilder text = new StringBuilder();
-        text.AppendLine("timestamp,reaction_id,reaction_name,outcome,duration_seconds,steps,mistakes,questions_asked");
+        // The level and score columns go on the end, so anything already reading the first eight
+        // by position keeps working.
+        text.AppendLine("timestamp,reaction_id,reaction_name,outcome,duration_seconds,steps,mistakes,questions_asked," +
+                        "set_as,stars,accuracy_percent");
 
         for (int i = 0; i < attempts.Count; i++)
         {
@@ -199,6 +213,10 @@ public static class LabReportExporter
                 }
             }
 
+            float accuracy;
+            int stars;
+            bool rated = ExperimentScoring.TryGetScore(attempt, out accuracy, out stars);
+
             text.AppendLine(string.Join(",", new[]
             {
                 Escape(attempt.Timestamp.ToString("s", CultureInfo.InvariantCulture)),
@@ -209,11 +227,32 @@ public static class LabReportExporter
                 (attempt.steps != null ? attempt.steps.Count : 0).ToString(CultureInfo.InvariantCulture),
                 mistakes.ToString(CultureInfo.InvariantCulture),
                 (attempt.aiInteractions != null ? attempt.aiInteractions.Count : 0)
-                    .ToString(CultureInfo.InvariantCulture)
+                    .ToString(CultureInfo.InvariantCulture),
+                Escape(attempt.ModeLabel),
+                rated ? stars.ToString(CultureInfo.InvariantCulture) : string.Empty,
+                rated && accuracy >= 0.0f ? accuracy.ToString("0.0", CultureInfo.InvariantCulture) : string.Empty
             }));
         }
 
         return text.ToString();
+    }
+
+    /// <summary>How many of the eight experiments have at least one three-star result.</summary>
+    private static int CountThreeStarred(List<ExperimentAttempt> attempts)
+    {
+        HashSet<int> reactions = new HashSet<int>();
+        for (int i = 0; i < attempts.Count; i++)
+        {
+            float accuracy;
+            int stars;
+            if (attempts[i] != null && attempts[i].outcome == ExperimentOutcome.Success &&
+                ExperimentScoring.TryGetScore(attempts[i], out accuracy, out stars) &&
+                stars >= ExperimentScoring.MaxStars)
+            {
+                reactions.Add(attempts[i].reactionId);
+            }
+        }
+        return reactions.Count;
     }
 
     /// <summary>Quotes a CSV field only when it needs it, and doubles any embedded quote.</summary>

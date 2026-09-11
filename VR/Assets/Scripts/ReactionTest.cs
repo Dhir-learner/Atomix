@@ -21,25 +21,23 @@ public class ReactionTest : MonoBehaviour
     [Header("Exam Mode (same rules as the Lab, quantities hidden)")]
     [Tooltip("Uses the shared FreeHandReactionEngine with Reaction.cs's own numbers, but the student is never told the target or the accepted range.")]
     public bool enableExamMode = true;
-    public float targetWaterMl = 50.0f;
-    public float targetSodiumGrams = 5.0f;
-    public float tolerancePercent = 5.0f;
-    public float waterFlowMlPerSecond = 10.0f;
     public float tooltipHeightOffset = 0.20f;
     public float tooltipFontSize = 0.55f;
     [Tooltip("Optional - played when the task is failed.")]
     public AudioSource audioSource_failure;
     public AudioClip clip_failure;
 
-    [Header("Experiment History")]
+    [Header("Recipe")]
     [Tooltip("Matches the Lab reaction number so test attempts group with lab attempts.")]
     public int reactionId = 1;
-    public string reactionDisplayName = "Na + H2O -> NaOH + H2 [Test]";
+    [Tooltip("Optional. Left empty, Resources/ReactionDefinitions is used - the same file the Lab reads.")]
+    public ReactionDefinition definition;
 
     private const string TaskPrompt = "Create NaOH and check the acidity.";
 
     private ExamReactionRunner exam;
     private bool sodiumRecorded = false;
+    private float waterFlow;
 
     private DateTime timpInitial;
     private bool explosionActive = false;
@@ -58,20 +56,20 @@ public class ReactionTest : MonoBehaviour
             return;
         }
 
+        if (definition == null)
+        {
+            definition = ReactionDefinition.Load(reactionId);
+        }
+        if (definition == null)
+        {
+            return;
+        }
+
         exam = new ExamReactionRunner();
-        exam.Begin("ExamTooltip_Na_H2O", canvasText, tooltipFontSize,
-            reactionId, reactionDisplayName, countdown, randomizer, tolerancePercent);
+        exam.Begin(definition, "ExamTooltip_Na_H2O", canvasText, tooltipFontSize, countdown, randomizer);
         exam.SetFailureAudio(audioSource_failure, clip_failure);
 
-        exam.engine.wrongOrderMessage =
-            "Sodium was dropped in before the water was measured out. Alkali metals must meet a known volume of water, never a dry or half-filled vessel.";
-        exam.engine.AddSubstance("Water", targetWaterMl, "ml",
-            overdose: "Excess water dilutes the reaction - the NaOH produced is too dilute to show a clear basic result.",
-            underdose: "Too little water cannot dissolve the NaOH that forms, so the reaction stalls and heats dangerously.");
-        // Sodium arrives as one measured block, exactly as it does in the Lab's Reaction.cs.
-        exam.engine.AddSubstance("Sodium", targetSodiumGrams, "g",
-            overdose: "Too much sodium causes a dangerous explosion - the hydrogen released ignites from the reaction heat.",
-            underdose: "Too little sodium leaves most of the water unreacted, so hardly any NaOH is formed.");
+        waterFlow = definition.FlowFor("Water");
     }
 
     void OnEnable()
@@ -111,7 +109,7 @@ public class ReactionTest : MonoBehaviour
 
         if (exam != null)
         {
-            exam.Pour("Water", waterFlowMlPerSecond, water != null && water.IsPouring);
+            exam.PourFrom("Water", waterFlow, water);
             TrackSodium();
             examResult = exam.Tick();
             exam.UpdateTooltip(transform, tooltipHeightOffset, "Task finished!");
@@ -181,7 +179,7 @@ public class ReactionTest : MonoBehaviour
 
     /// <summary>
     /// Sodium is a solid block, not a pour: it arrives in one measured lump the moment it meets
-    /// the water. Mirrors how the Lab's Reaction.cs credits the full 5 g in one go.
+    /// the water. Mirrors how the Lab's Reaction.cs credits the full dose in one go.
     /// </summary>
     void TrackSodium()
     {
@@ -193,7 +191,7 @@ public class ReactionTest : MonoBehaviour
         if (metal.containsNatrium)
         {
             sodiumRecorded = true;
-            exam.engine.SetQuantity("Sodium", targetSodiumGrams);
+            exam.engine.SetQuantity("Sodium", definition.TargetFor("Sodium"));
         }
     }
 }

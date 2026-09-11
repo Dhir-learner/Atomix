@@ -126,7 +126,7 @@ public static class ExperimentContextProvider
         FreeHandReactionEngine engine = active.Engine;
         if (engine == null)
         {
-            // Reaction 1 tracks its quantities inline rather than through the engine.
+            // Only a reaction run with its free-hand judging switched off has no engine.
             ExperimentAttempt attempt = manager.FindAttempt(active.AttemptId);
             if (attempt != null)
             {
@@ -140,9 +140,47 @@ public static class ExperimentContextProvider
 
         AppendLiveQuantities(builder, engine);
         AppendLiveStatus(builder, engine);
+        AppendRunMode(builder, active, engine);
         AppendAttemptTally(builder, manager, active.ReactionId);
         AppendClosingInstruction(builder);
         return builder.ToString();
+    }
+
+    /// <summary>
+    /// Tells the assistant how this run is set, and - while the targets are hidden - that it must
+    /// not hand them over. A cloud model that is simply told the answer will say it if asked.
+    /// </summary>
+    private static void AppendRunMode(StringBuilder builder, ReactionHistoryRecorder active,
+                                      FreeHandReactionEngine engine)
+    {
+        StoichiometryChallenge challenge = active.Challenge;
+        if (challenge != null)
+        {
+            builder.Append("This is a stoichiometry challenge. The student's brief: ")
+                   .Append(challenge.Brief.Replace('\n', ' ')).Append(' ');
+
+            if (engine.IsResolved)
+            {
+                builder.Append("It has been judged, so walk them through the calculation: ")
+                       .Append(challenge.WorkedSolution.Replace('\n', ' ')).Append(' ');
+            }
+            else
+            {
+                builder.Append("Do NOT tell them the amounts of any reagent; coach them through the " +
+                               "method (moles of product, mole ratio, then mass or volume) instead. ");
+            }
+            return;
+        }
+
+        if (active.Difficulty == LabDifficulty.Expert && !engine.IsResolved)
+        {
+            builder.Append("The student chose the Expert level, where the target amounts are hidden. " +
+                           "Do NOT tell them the target amounts or the accepted range. ");
+        }
+        else if (active.Difficulty == LabDifficulty.Guided)
+        {
+            builder.Append("The student is on the Guided level, which allows a wider margin for error. ");
+        }
     }
 
     /// <summary>
@@ -216,6 +254,10 @@ public static class ExperimentContextProvider
             return;
         }
 
+        // With the targets hidden, neither the target nor the verdict on each amount goes in:
+        // "TOO MUCH" gives the answer away as surely as the number does.
+        bool showTargets = engine.ShowTargetsNow;
+
         builder.Append("Measured so far: ");
         for (int i = 0; i < substances.Count; i++)
         {
@@ -227,6 +269,19 @@ public static class ExperimentContextProvider
             if (i > 0)
             {
                 builder.Append("; ");
+            }
+
+            if (!showTargets)
+            {
+                if (current <= 0.0f)
+                {
+                    builder.AppendFormat("{0} not added yet", substance);
+                }
+                else
+                {
+                    builder.AppendFormat("{0} {1:F1} {2}", substance, current, unit);
+                }
+                continue;
             }
 
             if (current <= 0.0f)

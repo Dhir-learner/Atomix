@@ -256,12 +256,16 @@ public class FlipPages : MonoBehaviour
     bool TryOpenReactionLearningFlow(int reactionId)
     {
         ReactionLearningController learningController = ReactionLearningController.GetOrCreate(this);
-        if (learningController == null)
+        bool opened = learningController != null && learningController.TryRequestReaction(reactionId);
+
+        // Without the LEARN/PERFORM page the experiment starts straight away, as a normal run -
+        // a challenge is only ever set on purpose, from that page.
+        if (!opened)
         {
-            return false;
+            LabRunOptions.ClearChallenge();
         }
 
-        return learningController.TryRequestReaction(reactionId);
+        return opened;
     }
 
     public void StartReactionExperiment(int reactionId)

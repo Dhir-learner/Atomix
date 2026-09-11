@@ -47,6 +47,7 @@ public class LabRetryController : MonoBehaviour
     /// </summary>
     private static int pendingReactionId = -1;
     private static string pendingReactionName = string.Empty;
+    private static string pendingToast = string.Empty;
 
     void OnEnable()
     {
@@ -136,6 +137,45 @@ public class LabRetryController : MonoBehaviour
         SceneTransition.Reload();
     }
 
+    /// <summary>
+    /// Resets the bench and selects a given experiment - used by the book when the student picks
+    /// the experiment already on the bench with a different level or a challenge. Selecting an
+    /// experiment whose equipment is already out resets nothing, so without this the new
+    /// settings could never reach it.
+    /// </summary>
+    /// <returns>False outside the Lab, where the caller should start the experiment as usual.</returns>
+    public bool RestartWithReaction(int reactionId, string toast)
+    {
+        if (!IsEnabledScene() || reactionId < 1 || reactionId > 8)
+        {
+            return false;
+        }
+
+        AtomixAudio.ResetBench();
+
+        // Close the open attempt on the bench, if it has one. As with F5, a finished attempt
+        // ignores this and stays on the record exactly as it ended.
+        ReactionHistoryRecorder recorder = CurrentRecorder();
+        if (recorder != null && recorder.ReactionId == reactionId)
+        {
+            recorder.Abandon();
+        }
+
+        ExperimentHistoryManager manager = ExperimentHistoryManager.Instance;
+        if (manager != null)
+        {
+            manager.SaveToJson();
+        }
+
+        ReactionDefinition definition = ReactionDefinition.Load(reactionId);
+        pendingReactionId = reactionId;
+        pendingReactionName = definition != null ? definition.displayName : string.Empty;
+        pendingToast = toast ?? string.Empty;
+
+        SceneTransition.Reload();
+        return true;
+    }
+
     private void HandleSceneLoaded(Scene scene, LoadSceneMode mode)
     {
         if (pendingReactionId < 1 || pendingReactionId > 8)
@@ -144,16 +184,17 @@ public class LabRetryController : MonoBehaviour
             return;
         }
 
-        StartCoroutine(ReselectAfterLoad(pendingReactionId, pendingReactionName));
+        StartCoroutine(ReselectAfterLoad(pendingReactionId, pendingReactionName, pendingToast));
         pendingReactionId = -1;
         pendingReactionName = string.Empty;
+        pendingToast = string.Empty;
     }
 
     /// <summary>
     /// ControlReactions.Start() switches every recipient off, so the selection has to happen after
     /// it has run - and it may take a frame or two for the scene to finish building.
     /// </summary>
-    private IEnumerator ReselectAfterLoad(int reactionId, string reactionName)
+    private IEnumerator ReselectAfterLoad(int reactionId, string reactionName, string toast)
     {
         ControlReactions controls = null;
 
@@ -177,10 +218,21 @@ public class LabRetryController : MonoBehaviour
 
         Select(controls, reactionId);
 
+        if (!string.IsNullOrEmpty(toast))
+        {
+            LabHudController.Toast(toast);
+            yield break;
+        }
+
         string label = string.IsNullOrEmpty(reactionName)
             ? "Experiment"
             : reactionName.Replace(" [Test]", string.Empty);
-        LabHudController.Toast("Bench reset\n" + label + " - ready to try again");
+
+        // A challenge survives the reload (LabRunOptions is static), so say which one is back.
+        StoichiometryChallenge challenge = LabRunOptions.ChallengeFor(reactionId);
+        LabHudController.Toast(challenge != null
+            ? "Bench reset\nChallenge: " + challenge.Headline + " - ready to try again"
+            : "Bench reset\n" + label + " - ready to try again");
     }
 
     /// <summary>

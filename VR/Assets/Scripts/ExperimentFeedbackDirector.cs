@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -52,6 +53,13 @@ public class ExperimentFeedbackDirector : MonoBehaviour
     [Tooltip("Peak opacity of the edge flash.")]
     public float flashStrength = 0.42f;
 
+    [Header("Result card")]
+    [Tooltip("Show the one-to-three star rating and accuracy when an experiment succeeds.")]
+    public bool showStars = true;
+
+    [Tooltip("Seconds the result card stays up, including its fade.")]
+    public float starCardSeconds = 3.6f;
+
     [Header("Explosions")]
     [Tooltip("Camera shake when a reaction's explosion effect fires.")]
     public float explosionShake = 1.6f;
@@ -103,6 +111,18 @@ public class ExperimentFeedbackDirector : MonoBehaviour
             AtomixAudio.Success();
             CameraJuice.Shake(successShake);
             Flash(AtomixSettings.SuccessColour);
+
+            // Set by the recorder just before this event, so it is the attempt that just closed.
+            ExperimentAttempt attempt = ReactionHistoryRecorder.LastResolvedAttempt;
+            if (showStars && attempt != null && attempt.reactionId == reactionId)
+            {
+                float accuracy;
+                int stars;
+                if (ExperimentScoring.TryGetScore(attempt, out accuracy, out stars) && stars > 0)
+                {
+                    ShowStars(stars, accuracy, attempt.ModeLabel);
+                }
+            }
         }
         else
         {
@@ -150,7 +170,192 @@ public class ExperimentFeedbackDirector : MonoBehaviour
     void Update()
     {
         UpdateFlash();
+        UpdateStarCard();
         UpdateExplosionWatch();
+    }
+
+    // =========================================================
+    // STARS
+    // =========================================================
+    //
+    // A pass used to be a pass: the titration that landed on the mark and the one that scraped in
+    // at the edge of the tolerance got the same green word. The card says how good it was - one
+    // to three stars from ExperimentScoring, the accuracy behind them, and the level it was
+    // played at - and it pops the earned stars in one at a time, each with a rising chime.
+
+    private RectTransform starCard;
+    private CanvasGroup starCardGroup;
+    private readonly Image[] starImages = new Image[ExperimentScoring.MaxStars];
+    private TMP_Text starCaption;
+    private float starCardElapsed = -1.0f;
+    private int starsToShow;
+    private int starsPopped;
+
+    private const float FirstStarDelay = 0.35f;
+    private const float StarInterval = 0.22f;
+    private const float StarPopSeconds = 0.25f;
+
+    private static readonly Color EarnedStarColour = new Color(1.0f, 0.84f, 0.30f, 1.0f);
+    private static readonly Color EmptyStarColour = new Color(1.0f, 1.0f, 1.0f, 0.16f);
+
+    /// <summary>Puts the result card up. Public so a future results screen can reuse it.</summary>
+    public void ShowStars(int stars, float accuracyPercent, string modeLabel)
+    {
+        EnsureStarCardBuilt();
+        if (starCard == null)
+        {
+            return;
+        }
+
+        starsToShow = Mathf.Clamp(stars, 0, ExperimentScoring.MaxStars);
+        starsPopped = 0;
+        starCardElapsed = 0.0f;
+
+        for (int i = 0; i < starImages.Length; i++)
+        {
+            starImages[i].color = EmptyStarColour;
+            starImages[i].rectTransform.localScale = Vector3.one;
+        }
+
+        starCaption.text = string.Format("Accuracy {0:0}%   -   {1}", Mathf.Max(0.0f, accuracyPercent), modeLabel);
+        starCardGroup.alpha = 1.0f;
+        starCard.gameObject.SetActive(true);
+    }
+
+    private void UpdateStarCard()
+    {
+        if (starCard == null || starCardElapsed < 0.0f)
+        {
+            return;
+        }
+
+        // Unscaled: the verdict's hit-stop slows time for a moment, and the card must not stall.
+        starCardElapsed += Time.unscaledDeltaTime;
+
+        for (int i = 0; i < starsToShow; i++)
+        {
+            float popStart = FirstStarDelay + i * StarInterval;
+            float t = (starCardElapsed - popStart) / StarPopSeconds;
+            if (t < 0.0f)
+            {
+                continue;
+            }
+
+            if (i >= starsPopped)
+            {
+                starsPopped = i + 1;
+                starImages[i].color = EarnedStarColour;
+                AtomixAudio.Play(AtomixAudio.Cue.Coin, 0.7f, 1.0f + 0.12f * i);
+            }
+
+            // Grow past full size to 1.3, then settle back to 1.
+            float scale;
+            if (t >= 1.0f)
+            {
+                scale = 1.0f;
+            }
+            else if (t < 0.6f)
+            {
+                scale = Mathf.Lerp(0.2f, 1.3f, t / 0.6f);
+            }
+            else
+            {
+                scale = Mathf.Lerp(1.3f, 1.0f, (t - 0.6f) / 0.4f);
+            }
+            starImages[i].rectTransform.localScale = Vector3.one * scale;
+        }
+
+        float fadeStart = Mathf.Max(0.1f, starCardSeconds - 0.6f);
+        if (starCardElapsed > fadeStart)
+        {
+            starCardGroup.alpha = Mathf.Clamp01(1.0f - (starCardElapsed - fadeStart) / 0.6f);
+        }
+
+        if (starCardElapsed >= starCardSeconds)
+        {
+            starCardElapsed = -1.0f;
+            starCard.gameObject.SetActive(false);
+        }
+    }
+
+    private void EnsureStarCardBuilt()
+    {
+        if (starCard != null)
+        {
+            return;
+        }
+
+        GameObject canvasObject = new GameObject("AtomixResultCanvas",
+            typeof(RectTransform), typeof(Canvas), typeof(CanvasScaler));
+        canvasObject.transform.SetParent(transform, false);
+
+        Canvas canvas = canvasObject.GetComponent<Canvas>();
+        canvas.renderMode = RenderMode.ScreenSpaceOverlay;
+        canvas.sortingOrder = 550;      // over the edge flash (540), under the HUD strip (560)
+
+        CanvasScaler scaler = canvasObject.GetComponent<CanvasScaler>();
+        scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
+        scaler.referenceResolution = new Vector2(1920.0f, 1080.0f);
+
+        GameObject card = new GameObject("StarCard", typeof(RectTransform), typeof(Image), typeof(CanvasGroup));
+        card.transform.SetParent(canvasObject.transform, false);
+
+        starCard = card.GetComponent<RectTransform>();
+        starCard.anchorMin = new Vector2(0.5f, 1.0f);
+        starCard.anchorMax = new Vector2(0.5f, 1.0f);
+        starCard.pivot = new Vector2(0.5f, 1.0f);
+        starCard.anchoredPosition = new Vector2(0.0f, -80.0f);   // just under the measurement strip
+        starCard.sizeDelta = new Vector2(440.0f, 118.0f);
+
+        Image plate = card.GetComponent<Image>();
+        plate.color = new Color(0.04f, 0.05f, 0.08f, 0.86f);
+        plate.raycastTarget = false;
+
+        starCardGroup = card.GetComponent<CanvasGroup>();
+        starCardGroup.interactable = false;
+        starCardGroup.blocksRaycasts = false;
+
+        Sprite starSprite = StarSprite.Get();
+        const float starSize = 54.0f;
+        const float spacing = 70.0f;
+        for (int i = 0; i < starImages.Length; i++)
+        {
+            GameObject starObject = new GameObject("Star" + (i + 1), typeof(RectTransform), typeof(Image));
+            starObject.transform.SetParent(card.transform, false);
+
+            RectTransform rect = starObject.GetComponent<RectTransform>();
+            rect.anchorMin = new Vector2(0.5f, 1.0f);
+            rect.anchorMax = new Vector2(0.5f, 1.0f);
+            rect.pivot = new Vector2(0.5f, 0.5f);
+            rect.anchoredPosition = new Vector2((i - 1) * spacing, -40.0f);
+            rect.sizeDelta = new Vector2(starSize, starSize);
+
+            Image image = starObject.GetComponent<Image>();
+            image.sprite = starSprite;
+            image.preserveAspect = true;
+            image.raycastTarget = false;
+            starImages[i] = image;
+        }
+
+        GameObject captionObject = new GameObject("Caption", typeof(RectTransform), typeof(TextMeshProUGUI));
+        captionObject.transform.SetParent(card.transform, false);
+
+        RectTransform captionRect = captionObject.GetComponent<RectTransform>();
+        captionRect.anchorMin = new Vector2(0.0f, 0.0f);
+        captionRect.anchorMax = new Vector2(1.0f, 0.0f);
+        captionRect.pivot = new Vector2(0.5f, 0.0f);
+        captionRect.anchoredPosition = new Vector2(0.0f, 10.0f);
+        captionRect.sizeDelta = new Vector2(-24.0f, 32.0f);
+
+        starCaption = captionObject.GetComponent<TextMeshProUGUI>();
+        starCaption.fontSize = 22.0f;
+        starCaption.alignment = TextAlignmentOptions.Center;
+        starCaption.color = new Color(0.85f, 0.90f, 0.97f, 1.0f);
+        starCaption.textWrappingMode = TextWrappingModes.NoWrap;
+        starCaption.overflowMode = TextOverflowModes.Ellipsis;
+        starCaption.raycastTarget = false;
+
+        card.SetActive(false);
     }
 
     private void UpdateFlash()

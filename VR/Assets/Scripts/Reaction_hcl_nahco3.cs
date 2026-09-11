@@ -25,11 +25,6 @@ public class Reaction_hcl_nahco3 : MonoBehaviour
 
     [Header("Free-Hand Mode (quantity + order matter)")]
     public bool enableFreeHandMode = true;
-    public float targetHClMl = 15.0f;
-    public float targetNaHCO3Grams = 12.0f;
-    public float tolerancePercent = 10.0f;
-    public float hclFlowMlPerSecond = 5.0f;
-    public float nahco3FlowGramsPerSecond = 3.0f;
     public float tooltipHeightOffset = 0.20f;
     [Tooltip("World-space font size for the floating tracker. TMP renders roughly (fontSize x 0.12) metres per line, so keep this small.")]
     public float tooltipFontSize = 0.55f;
@@ -37,10 +32,11 @@ public class Reaction_hcl_nahco3 : MonoBehaviour
     public AudioSource audioSource_failure;
     public AudioClip clip_failure;
 
-    [Header("Experiment History")]
+    [Header("Recipe and History")]
     [Tooltip("Matches the book / StartReaction number, 1-8.")]
     public int reactionId = 3;
-    public string reactionDisplayName = "HCl + NaHCO3 -> NaCl + H2O + CO2";
+    [Tooltip("Optional. Left empty, Resources/ReactionDefinitions supplies the targets, tolerance and messages.")]
+    public ReactionDefinition definition;
     [Tooltip("Re-selecting this experiment from the book logs a fresh attempt.")]
     public bool restartAttemptOnReSelect = true;
 
@@ -48,6 +44,8 @@ public class Reaction_hcl_nahco3 : MonoBehaviour
     private FreeHandTooltip tooltip;
     private bool failureReported = false;
     private ReactionHistoryRecorder recorder;
+    private float hclFlow;
+    private float nahco3Flow;
 
     private DateTime timpInitial;
     private bool isPlaying = false;
@@ -68,20 +66,23 @@ public class Reaction_hcl_nahco3 : MonoBehaviour
             return;
         }
 
+        if (definition == null)
+        {
+            definition = ReactionDefinition.Load(reactionId);
+        }
+        if (definition == null)
+        {
+            return;
+        }
+
         engine = new FreeHandReactionEngine();
-        engine.tolerancePercent = tolerancePercent;
-        engine.settleTimeRequired = 1.5f;
-        engine.wrongOrderMessage =
-            "Sodium bicarbonate was tipped in before the acid, so the CO2 escaped from a dry powder instead of a controlled neutralisation.";
-        engine.AddSubstance("HCl", targetHClMl, "ml",
-            overdose: "Too much acid produces excessive CO2 gas violently - the froth overflows and the leftover HCl stays in the beaker.",
-            underdose: "Too little acid leaves most of the bicarbonate unreacted, so effervescence stops almost immediately.");
-        engine.AddSubstance("NaHCO3", targetNaHCO3Grams, "g",
-            overdose: "Excess bicarbonate cannot react - only the HCl present can be neutralised, so solid NaHCO3 is left behind.",
-            underdose: "Insufficient bicarbonate leaves an acidic solution, so the neutralisation to NaCl is incomplete.");
+        definition.Configure(engine);
+        hclFlow = definition.FlowFor("HCl");
+        nahco3Flow = definition.FlowFor("NaHCO3");
 
         tooltip = new FreeHandTooltip();
-        recorder = new ReactionHistoryRecorder(reactionId, reactionDisplayName, engine);
+        recorder = new ReactionHistoryRecorder(reactionId, definition.displayName, engine);
+        LabRunOptions.Apply(reactionId, definition, engine, recorder);
 
         tooltip.Create("BeakerFloatingTooltip_HCl_NaHCO3", canvasText, tooltipFontSize);
         tooltip.Show(FreeHandTooltip.ProgressColor, engine.GetTooltipText());
@@ -106,6 +107,7 @@ public class Reaction_hcl_nahco3 : MonoBehaviour
         {
             recorder.Abandon(); // switching experiments away mid-run
         }
+        LabRunOptions.NoteBenchCleared(reactionId);
     }
 
     void OnDestroy()
@@ -125,8 +127,8 @@ public class Reaction_hcl_nahco3 : MonoBehaviour
         {
             if (!engine.IsResolved)
             {
-                engine.UpdatePouringQuantity("HCl", hclFlowMlPerSecond, hcl != null && hcl.IsPouring);
-                engine.UpdatePouringQuantity("NaHCO3", nahco3FlowGramsPerSecond, salt != null && salt.IsPouring);
+                engine.UpdatePour("HCl", hclFlow, hcl);
+                engine.UpdatePour("NaHCO3", nahco3Flow, salt);
             }
 
             ReactionResult result = engine.CheckReactionOutcome();
@@ -287,6 +289,7 @@ public class Reaction_hcl_nahco3 : MonoBehaviour
         }
 
         engine.Reset();
+        LabRunOptions.Apply(reactionId, definition, engine, recorder);
         failureReported = false;
         oneExplosion = false;
         explosionActive = false;

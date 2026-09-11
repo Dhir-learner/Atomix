@@ -36,14 +36,6 @@ public class ReactionAli3 : MonoBehaviour
 
     [Header("Free-Hand Mode (quantity + order matter)")]
     public bool enableFreeHandMode = true;
-    public float targetAluminumGrams = 5.0f;
-    public float targetIodineGrams = 15.0f;
-    public float targetWaterMl = 2.0f;
-    public float tolerancePercent = 10.0f;
-    public float aluminumFlowGramsPerSecond = 1.25f;
-    public float iodineFlowGramsPerSecond = 3.75f;
-    [Tooltip("A full pipette empties in about 3 seconds, so this rate sets how many ml those drops are worth.")]
-    public float pipetteFlowMlPerSecond = 0.7f;
     public float tooltipHeightOffset = 0.13f;
     [Tooltip("World-space font size for the floating tracker. TMP renders roughly (fontSize x 0.12) metres per line, so keep this small.")]
     public float tooltipFontSize = 0.55f;
@@ -52,10 +44,12 @@ public class ReactionAli3 : MonoBehaviour
     public AudioSource audioSource_failure;
     public AudioClip clip_failure;
 
-    [Header("Experiment History")]
+    [Header("Recipe and History")]
     [Tooltip("Matches the book / StartReaction number, 1-8.")]
     public int reactionId = 5;
-    public string reactionDisplayName = "2Al + 3I2 -> 2AlI3";
+    [Tooltip("Optional. Left empty, Resources/ReactionDefinitions supplies the targets, tolerance and messages. " +
+             "A full pipette empties in about 3 seconds, so its flow rate sets how many ml those drops are worth.")]
+    public ReactionDefinition definition;
     [Tooltip("Re-selecting this experiment from the book logs a fresh attempt.")]
     public bool restartAttemptOnReSelect = true;
 
@@ -63,6 +57,9 @@ public class ReactionAli3 : MonoBehaviour
     private FreeHandTooltip tooltip;
     private bool failureReported = false;
     private ReactionHistoryRecorder recorder;
+    private float aluminiumFlow;
+    private float iodineFlow;
+    private float pipetteFlow;
 
     private DateTime timpInitial;
     private bool explosionActive = false;
@@ -97,27 +94,25 @@ public class ReactionAli3 : MonoBehaviour
             return;
         }
 
+        if (definition == null)
+        {
+            definition = ReactionDefinition.Load(reactionId);
+        }
+        if (definition == null)
+        {
+            return;
+        }
+
+        // Aluminium and iodine share order group 0 in the definition - either powder may go first.
         engine = new FreeHandReactionEngine();
-        engine.tolerancePercent = tolerancePercent;
-        engine.settleTimeRequired = 1.5f;
-        engine.wrongOrderMessage =
-            "The water was added before both solids were in the dish. Water only acts as the catalyst once aluminium and iodine are already mixed as dry powders.";
-        // Aluminium and iodine share order group 0 - either powder may go in first.
-        engine.AddSubstance("Aluminium", targetAluminumGrams, "g",
-            overdose: "Incorrect Al:I2 ratio prevents stoichiometric completion - the surplus aluminium stays as grey metal in the dish.",
-            underdose: "Incorrect Al:I2 ratio prevents stoichiometric completion - too little aluminium leaves unreacted violet iodine behind.",
-            orderGroup: 0);
-        engine.AddSubstance("Iodine", targetIodineGrams, "g",
-            overdose: "Incorrect Al:I2 ratio prevents stoichiometric completion - excess iodine sublimes off as violet vapour instead of forming AlI3.",
-            underdose: "Incorrect Al:I2 ratio prevents stoichiometric completion - 2Al needs 3I2, so a shortage of iodine caps the yield.",
-            orderGroup: 0);
-        engine.AddSubstance("Water drops", targetWaterMl, "ml",
-            overdose: "Too much water floods the mixture and carries the heat away, so the catalysed reaction never reaches ignition.",
-            underdose: "Too few drops of catalyst - without enough water the aluminium oxide layer is never broken and the mixture stays inert.",
-            orderGroup: 1);
+        definition.Configure(engine);
+        aluminiumFlow = definition.FlowFor("Aluminium");
+        iodineFlow = definition.FlowFor("Iodine");
+        pipetteFlow = definition.FlowFor("Water drops");
 
         tooltip = new FreeHandTooltip();
-        recorder = new ReactionHistoryRecorder(reactionId, reactionDisplayName, engine);
+        recorder = new ReactionHistoryRecorder(reactionId, definition.displayName, engine);
+        LabRunOptions.Apply(reactionId, definition, engine, recorder);
 
         tooltip.Create("DishFloatingTooltip_AlI3", canvasText, tooltipFontSize);
         tooltip.Show(FreeHandTooltip.ProgressColor, engine.GetTooltipText());
@@ -142,6 +137,7 @@ public class ReactionAli3 : MonoBehaviour
         {
             recorder.Abandon(); // switching experiments away mid-run
         }
+        LabRunOptions.NoteBenchCleared(reactionId);
     }
 
     void OnDestroy()
@@ -161,12 +157,9 @@ public class ReactionAli3 : MonoBehaviour
         {
             if (!engine.IsResolved)
             {
-                engine.UpdatePouringQuantity("Aluminium", aluminumFlowGramsPerSecond,
-                    aluminum != null && aluminum.IsPouring);
-                engine.UpdatePouringQuantity("Iodine", iodineFlowGramsPerSecond,
-                    iodine != null && iodine.IsPouring);
-                engine.UpdatePouringQuantity("Water drops", pipetteFlowMlPerSecond,
-                    pipette != null && pipette.IsPouring);
+                engine.UpdatePour("Aluminium", aluminiumFlow, aluminum);
+                engine.UpdatePour("Iodine", iodineFlow, iodine);
+                engine.UpdatePour("Water drops", pipetteFlow, pipette);
             }
 
             ReactionResult result = engine.CheckReactionOutcome();
@@ -317,7 +310,9 @@ public class ReactionAli3 : MonoBehaviour
             return string.Empty;
         }
 
-        if (engine != null && engine.GetCurrent("Water drops") >= engine.MinAllowed("Water drops"))
+        // With the targets hidden the hint stays up: it going quiet would itself say "that is enough".
+        if (engine != null && engine.ShowTargetsNow &&
+            engine.GetCurrent("Water drops") >= engine.MinAllowed("Water drops"))
         {
             return string.Empty;
         }
@@ -376,6 +371,7 @@ public class ReactionAli3 : MonoBehaviour
         }
 
         engine.Reset();
+        LabRunOptions.Apply(reactionId, definition, engine, recorder);
         failureReported = false;
         soundStarted = false;
         explosionActive = false;

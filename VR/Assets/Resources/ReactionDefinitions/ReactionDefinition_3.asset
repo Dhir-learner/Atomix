@@ -1,0 +1,61 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 671463ce27fc4d8098bb74ffd73b5544, type: 3}
+  m_Name: ReactionDefinition_3
+  m_EditorClassIdentifier: 
+  reactionId: 3
+  displayName: "HCl + NaHCO3 -> NaCl + H2O + CO2"
+  examDisplayName: "HCl + NaHCO3 -> NaCl + H2O + CO2 [Test]"
+  equation: "HCl + NaHCO3 -> NaCl + H2O + CO2"
+  kind: 0
+  tolerancePercent: 10
+  settleSeconds: 1.5
+  enforceOrder: 1
+  wrongOrderMessage: "Sodium bicarbonate was tipped in before the acid, so the CO2 escaped from a dry powder instead of a controlled neutralisation."
+  procedureFailureReason: ""
+  procedureFailureHeadline: ""
+  reagents:
+  - name: "HCl"
+    unit: "ml"
+    target: 15
+    flowPerSecond: 5
+    tolerancePercentOverride: -1
+    orderMatters: 1
+    orderGroup: -1
+    addition: 0
+    overdoseMessage: "Too much acid produces excessive CO2 gas violently - the froth overflows and the leftover HCl stays in the beaker."
+    underdoseMessage: "Too little acid leaves most of the bicarbonate unreacted, so effervescence stops almost immediately."
+    lumpGraceSeconds: 0
+    lumpOverflowPerSecond: 0
+    formula: "HCl"
+    coefficient: 1
+    challengeRole: 1
+  - name: "NaHCO3"
+    unit: "g"
+    target: 12
+    flowPerSecond: 3
+    tolerancePercentOverride: -1
+    orderMatters: 1
+    orderGroup: -1
+    addition: 0
+    overdoseMessage: "Excess bicarbonate cannot react - only the HCl present can be neutralised, so solid NaHCO3 is left behind."
+    underdoseMessage: "Insufficient bicarbonate leaves an acidic solution, so the neutralisation to NaCl is incomplete."
+    lumpGraceSeconds: 0
+    lumpOverflowPerSecond: 0
+    formula: "NaHCO3"
+    coefficient: 1
+    challengeRole: 1
+  challengeEligible: 1
+  productName: "sodium chloride"
+  productFormula: "NaCl"
+  productCoefficient: 1
+  challengeBasisReagent: "NaHCO3"

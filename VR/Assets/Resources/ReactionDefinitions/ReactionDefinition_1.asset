@@ -1,0 +1,61 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 671463ce27fc4d8098bb74ffd73b5544, type: 3}
+  m_Name: ReactionDefinition_1
+  m_EditorClassIdentifier: 
+  reactionId: 1
+  displayName: "Na + H2O -> NaOH + H2"
+  examDisplayName: "Na + H2O -> NaOH + H2 [Test]"
+  equation: "2Na + 2H2O -> 2NaOH + H2"
+  kind: 0
+  tolerancePercent: 5
+  settleSeconds: 1.5
+  enforceOrder: 1
+  wrongOrderMessage: "Sodium was dropped in before the water was measured out. Alkali metals must meet a known volume of water, never a dry or half-filled vessel."
+  procedureFailureReason: ""
+  procedureFailureHeadline: ""
+  reagents:
+  - name: "Water"
+    unit: "ml"
+    target: 50
+    flowPerSecond: 10
+    tolerancePercentOverride: -1
+    orderMatters: 1
+    orderGroup: -1
+    addition: 0
+    overdoseMessage: "Excess water dilutes the reaction - the NaOH produced is too dilute to show a clear basic result."
+    underdoseMessage: "Too little water cannot dissolve the NaOH that forms, so the reaction stalls and heats dangerously."
+    lumpGraceSeconds: 0
+    lumpOverflowPerSecond: 0
+    formula: "H2O"
+    coefficient: 2
+    challengeRole: 0
+  - name: "Sodium"
+    unit: "g"
+    target: 5
+    flowPerSecond: 0
+    tolerancePercentOverride: -1
+    orderMatters: 1
+    orderGroup: -1
+    addition: 1
+    overdoseMessage: "Too much sodium causes a dangerous explosion - the hydrogen released ignites from the reaction heat."
+    underdoseMessage: "Too little sodium leaves most of the water unreacted, so hardly any NaOH is formed."
+    lumpGraceSeconds: 0
+    lumpOverflowPerSecond: 0
+    formula: "Na"
+    coefficient: 2
+    challengeRole: 0
+  challengeEligible: 0
+  productName: "sodium hydroxide"
+  productFormula: "NaOH"
+  productCoefficient: 2
+  challengeBasisReagent: ""

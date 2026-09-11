@@ -3,7 +3,7 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
-public class PourFromPipette : MonoBehaviour
+public class PourFromPipette : MonoBehaviour, IPourSource
 {
     public GameObject pipette;
     public GameObject crystallizing_dish;
@@ -14,6 +14,12 @@ public class PourFromPipette : MonoBehaviour
     public bool containsWater = false;
     // Exposed for FreeHandReactionEngine quantity tracking (containsWater behaviour unchanged).
     public bool IsPouring { get { return play; } }
+
+    /// <summary>
+    /// A dropper is not tipped - it releases drops at one rate whenever the tip is over the dish -
+    /// so it is always at its full rate while it is dispensing.
+    /// </summary>
+    public float FlowRate { get { return play ? 1.0f : 0.0f; } }
 
     public GameObject waterInPipette;
     [SerializeField] FillPipette filledPipette;

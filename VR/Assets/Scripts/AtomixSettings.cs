@@ -449,6 +449,33 @@ public static class AtomixSettings
 #endif
     }
 
+    // --- lab difficulty ------------------------------------------------------------
+    //
+    // One level per experiment, chosen on the book's LEARN/PERFORM page. Kept out of Commit() and
+    // ResetToDefaults() on purpose: it is a choice about the student's own progress, not a display
+    // or comfort preference, and "Reset to defaults" in the pause menu should not quietly drop
+    // every experiment back to Standard.
+
+    private static string DifficultyKey(int reactionId)
+    {
+        return Prefix + "level." + reactionId;
+    }
+
+    /// <summary>The level saved for an experiment. Standard until the student picks another.</summary>
+    public static LabDifficulty GetLabDifficulty(int reactionId)
+    {
+        int stored = PlayerPrefs.GetInt(DifficultyKey(reactionId), (int)LabDifficulty.Standard);
+        return Enum.IsDefined(typeof(LabDifficulty), stored)
+            ? (LabDifficulty)stored
+            : LabDifficulty.Standard;
+    }
+
+    public static void SetLabDifficulty(int reactionId, LabDifficulty level)
+    {
+        PlayerPrefs.SetInt(DifficultyKey(reactionId), (int)level);
+        PlayerPrefs.Save();
+    }
+
     /// <summary>
     /// The player's chosen field of view, before any transient effect.
     /// <see cref="CameraJuice"/> animates around this value rather than replacing it.

@@ -1,0 +1,46 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 671463ce27fc4d8098bb74ffd73b5544, type: 3}
+  m_Name: ReactionDefinition_7
+  m_EditorClassIdentifier: 
+  reactionId: 7
+  displayName: "CaCO3 -> CaO + CO2 (thermal decomposition)"
+  examDisplayName: "CaCO3 -> CaO + CO2 [Test]"
+  equation: "CaCO3 -> CaO + CO2"
+  kind: 1
+  tolerancePercent: 15
+  settleSeconds: 1.5
+  enforceOrder: 1
+  wrongOrderMessage: ""
+  procedureFailureReason: "The CaCO3 was heated before the balloon was fitted, so the carbon dioxide escaped into the room instead of being collected."
+  procedureFailureHeadline: "FAILED: CO2 escaped\nBalloon was not fitted before heating"
+  reagents:
+  - name: "Heating"
+    unit: "s"
+    target: 10
+    flowPerSecond: 1
+    tolerancePercentOverride: -1
+    orderMatters: 1
+    orderGroup: -1
+    addition: 2
+    overdoseMessage: "The tube was held in the flame far too long - the CaO sinters and the trapped CO2 over-pressurises the balloon."
+    underdoseMessage: "Insufficient heating leaves undissociated CaCO3 - thermal decomposition needs sustained heat above 800 C to drive the CO2 off."
+    lumpGraceSeconds: 0
+    lumpOverflowPerSecond: 0
+    formula: ""
+    coefficient: 0
+    challengeRole: 0
+  challengeEligible: 0
+  productName: "calcium oxide"
+  productFormula: "CaO"
+  productCoefficient: 1
+  challengeBasisReagent: ""

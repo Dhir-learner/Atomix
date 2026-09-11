@@ -36,17 +36,17 @@ public class FeSO4ReactionTest : MonoBehaviour
     [Header("Exam Mode (same rules as the Lab, quantities hidden)")]
     [Tooltip("Judged by the same FreeHandReactionEngine as Feso4Reaction, but the student is never told how long to heat for.")]
     public bool enableExamMode = true;
-    public float tolerancePercent = 15.0f;
     public float tooltipHeightOffset = 0.22f;
     public float tooltipFontSize = 0.55f;
     [Tooltip("Optional - played when the task is failed.")]
     public AudioSource audioSource_failure;
     public AudioClip clip_failure;
 
-    [Header("Experiment History")]
+    [Header("Recipe")]
     [Tooltip("Matches the Lab reaction number so test attempts group with lab attempts.")]
     public int reactionId = 8;
-    public string reactionDisplayName = "2FeSO4 -> Fe2O3 + SO2 + SO3 [Test]";
+    [Tooltip("Optional. Left empty, Resources/ReactionDefinitions is used - the same file the Lab reads.")]
+    public ReactionDefinition definition;
 
     private const string TaskPrompt = "Decompose FeSO4 and observe the color change.";
 
@@ -70,15 +70,18 @@ public class FeSO4ReactionTest : MonoBehaviour
             return;
         }
 
-        exam = new ExamReactionRunner();
-        exam.Begin("ExamTooltip_FeSO4", canvasText, tooltipFontSize,
-            reactionId, reactionDisplayName, countdown, randomizer, tolerancePercent,
-            "[Heating Time Used]");
-        exam.SetFailureAudio(audioSource_failure, clip_failure);
+        if (definition == null)
+        {
+            definition = ReactionDefinition.Load(reactionId);
+        }
+        if (definition == null)
+        {
+            return;
+        }
 
-        exam.engine.AddSubstance("Heating", Mathf.Max(0.1f, heatingDuration), "s",
-            overdose: "The tube was left in the flame long past full decomposition - the Fe2O3 bakes onto the glass and the SO2/SO3 fumes build up dangerously.",
-            underdose: "Insufficient heating produces incomplete decomposition - some FeSO4 never breaks down, so the solid stays green instead of turning reddish brown.");
+        exam = new ExamReactionRunner();
+        exam.Begin(definition, "ExamTooltip_FeSO4", canvasText, tooltipFontSize, countdown, randomizer);
+        exam.SetFailureAudio(audioSource_failure, clip_failure);
     }
 
     void OnEnable()
@@ -156,11 +159,12 @@ public class FeSO4ReactionTest : MonoBehaviour
             return;
         }
 
-        exam.Pour("Heating", 1.0f, overFlame);
+        exam.Pour("Heating", definition.FlowFor("Heating"), overFlame);
         ReactionResult result = exam.Tick();
         SetFumeActive(overFlame && !exam.IsResolved);
 
-        float duration = Mathf.Max(0.1f, heatingDuration);
+        // The colour follows the heating the engine is judging, so the two always agree.
+        float duration = Mathf.Max(0.1f, definition.TargetFor("Heating"));
         heatingProgress = Mathf.Clamp01(exam.engine.GetCurrent("Heating") / duration);
         ApplySubstanceColor(EvaluateGradientColor(heatingProgress));
 

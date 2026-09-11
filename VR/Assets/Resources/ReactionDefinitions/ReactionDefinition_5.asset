@@ -1,0 +1,76 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 671463ce27fc4d8098bb74ffd73b5544, type: 3}
+  m_Name: ReactionDefinition_5
+  m_EditorClassIdentifier: 
+  reactionId: 5
+  displayName: "2Al + 3I2 -> 2AlI3"
+  examDisplayName: "2Al + 3I2 -> 2AlI3 [Test]"
+  equation: "2Al + 3I2 -> 2AlI3"
+  kind: 0
+  tolerancePercent: 10
+  settleSeconds: 1.5
+  enforceOrder: 1
+  wrongOrderMessage: "The water was added before both solids were in the dish. Water only acts as the catalyst once aluminium and iodine are already mixed as dry powders."
+  procedureFailureReason: ""
+  procedureFailureHeadline: ""
+  reagents:
+  - name: "Aluminium"
+    unit: "g"
+    target: 5
+    flowPerSecond: 1.25
+    tolerancePercentOverride: -1
+    orderMatters: 1
+    orderGroup: 0
+    addition: 0
+    overdoseMessage: "Incorrect Al:I2 ratio prevents stoichiometric completion - the surplus aluminium stays as grey metal in the dish."
+    underdoseMessage: "Incorrect Al:I2 ratio prevents stoichiometric completion - too little aluminium leaves unreacted violet iodine behind."
+    lumpGraceSeconds: 0
+    lumpOverflowPerSecond: 0
+    formula: "Al"
+    coefficient: 2
+    challengeRole: 1
+  - name: "Iodine"
+    unit: "g"
+    target: 15
+    flowPerSecond: 3.75
+    tolerancePercentOverride: -1
+    orderMatters: 1
+    orderGroup: 0
+    addition: 0
+    overdoseMessage: "Incorrect Al:I2 ratio prevents stoichiometric completion - excess iodine sublimes off as violet vapour instead of forming AlI3."
+    underdoseMessage: "Incorrect Al:I2 ratio prevents stoichiometric completion - 2Al needs 3I2, so a shortage of iodine caps the yield."
+    lumpGraceSeconds: 0
+    lumpOverflowPerSecond: 0
+    formula: "I2"
+    coefficient: 3
+    challengeRole: 1
+  - name: "Water drops"
+    unit: "ml"
+    target: 2
+    flowPerSecond: 0.7
+    tolerancePercentOverride: -1
+    orderMatters: 1
+    orderGroup: 1
+    addition: 3
+    overdoseMessage: "Too much water floods the mixture and carries the heat away, so the catalysed reaction never reaches ignition."
+    underdoseMessage: "Too few drops of catalyst - without enough water the aluminium oxide layer is never broken and the mixture stays inert."
+    lumpGraceSeconds: 0
+    lumpOverflowPerSecond: 0
+    formula: "H2O"
+    coefficient: 0
+    challengeRole: 0
+  challengeEligible: 1
+  productName: "aluminium iodide"
+  productFormula: "AlI3"
+  productCoefficient: 2
+  challengeBasisReagent: "Iodine"

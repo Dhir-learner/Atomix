@@ -39,8 +39,6 @@ public class CaCO3ReactionTest : MonoBehaviour
     [Header("Exam Mode (same rules as the Lab, quantities hidden)")]
     [Tooltip("Judged by the same FreeHandReactionEngine as CaCO3Reaction, but the student is never told how long to heat for.")]
     public bool enableExamMode = true;
-    public float targetHeatingSeconds = 10.0f;
-    public float tolerancePercent = 15.0f;
     [Tooltip("Heating before the balloon is fitted lets the CO2 escape, and fails the task.")]
     public bool requireBalloonBeforeHeating = true;
     public float tooltipHeightOffset = 0.22f;
@@ -49,15 +47,17 @@ public class CaCO3ReactionTest : MonoBehaviour
     public AudioSource audioSource_failure;
     public AudioClip clip_failure;
 
-    [Header("Experiment History")]
+    [Header("Recipe")]
     [Tooltip("Matches the Lab reaction number so test attempts group with lab attempts.")]
     public int reactionId = 7;
-    public string reactionDisplayName = "CaCO3 -> CaO + CO2 [Test]";
+    [Tooltip("Optional. Left empty, Resources/ReactionDefinitions is used - the same file the Lab reads.")]
+    public ReactionDefinition definition;
 
     private const string TaskPrompt = "Decompose CaCO3 and inflate the balloon.";
 
     private ExamReactionRunner exam;
     private bool balloonLogged = false;
+    private float targetHeatingSeconds = 10.0f;
 
     void Start()
     {
@@ -70,15 +70,20 @@ public class CaCO3ReactionTest : MonoBehaviour
             return;
         }
 
+        if (definition == null)
+        {
+            definition = ReactionDefinition.Load(reactionId);
+        }
+        if (definition == null)
+        {
+            return;
+        }
+
         exam = new ExamReactionRunner();
-        exam.Begin("ExamTooltip_CaCO3", canvasText, tooltipFontSize,
-            reactionId, reactionDisplayName, countdown, randomizer, tolerancePercent,
-            "[Heating Time Used]");
+        exam.Begin(definition, "ExamTooltip_CaCO3", canvasText, tooltipFontSize, countdown, randomizer);
         exam.SetFailureAudio(audioSource_failure, clip_failure);
 
-        exam.engine.AddSubstance("Heating", targetHeatingSeconds, "s",
-            overdose: "The tube was held in the flame far too long - the CaO sinters and the trapped CO2 over-pressurises the balloon.",
-            underdose: "Insufficient heating leaves undissociated CaCO3 - thermal decomposition needs sustained heat above 800 C to drive the CO2 off.");
+        targetHeatingSeconds = definition.TargetFor("Heating");
     }
 
     void OnEnable()
@@ -198,10 +203,7 @@ public class CaCO3ReactionTest : MonoBehaviour
 
         if (overFlame && requireBalloonBeforeHeating && !balon_ok && !exam.engine.HasSucceeded)
         {
-            exam.engine.ForceFailure("Heating",
-                "The CaCO3 was heated before the balloon was fitted, so the carbon dioxide escaped into the room instead of being collected.",
-                ReactionResult.FailWrongOrder,
-                "FAILED: CO2 escaped\nBalloon was not fitted before heating");
+            definition.ForceProcedureFailure(exam.engine, "Heating");
             fume.SetActive(false);
             exam.Tick();
             exam.UpdateTooltip(transform, tooltipHeightOffset, "Task finished!");

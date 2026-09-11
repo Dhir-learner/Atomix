@@ -26,9 +26,6 @@ public class CaCO3Reaction : MonoBehaviour
 
     [Header("Free-Hand Mode (heating time + procedure matter)")]
     public bool enableFreeHandMode = true;
-    [Tooltip("Seconds the test tube must stay over the flame.")]
-    public float targetHeatingSeconds = 10.0f;
-    public float tolerancePercent = 15.0f;
     public float tooltipHeightOffset = 0.22f;
     [Tooltip("World-space font size for the floating tracker. TMP renders roughly (fontSize x 0.12) metres per line, so keep this small.")]
     public float tooltipFontSize = 0.55f;
@@ -38,10 +35,11 @@ public class CaCO3Reaction : MonoBehaviour
     public AudioSource audioSource_failure;
     public AudioClip clip_failure;
 
-    [Header("Experiment History")]
+    [Header("Recipe and History")]
     [Tooltip("Matches the book / StartReaction number, 1-8.")]
     public int reactionId = 7;
-    public string reactionDisplayName = "CaCO3 -> CaO + CO2 (thermal decomposition)";
+    [Tooltip("Optional. Left empty, Resources/ReactionDefinitions supplies the heating time, tolerance and messages.")]
+    public ReactionDefinition definition;
     [Tooltip("Re-selecting this experiment from the book logs a fresh attempt.")]
     public bool restartAttemptOnReSelect = true;
 
@@ -49,6 +47,9 @@ public class CaCO3Reaction : MonoBehaviour
     private FreeHandTooltip tooltip;
     private bool failureReported = false;
     private ReactionHistoryRecorder recorder;
+
+    /// <summary>Seconds the tube must stay over the flame; drives the balloon's inflation too.</summary>
+    private float targetHeatingSeconds = 10.0f;
 
     private float targetPoint;
     private Vector3 initialScale;
@@ -79,15 +80,21 @@ public class CaCO3Reaction : MonoBehaviour
             return;
         }
 
-        engine = new FreeHandReactionEngine();
-        engine.tolerancePercent = tolerancePercent;
-        engine.settleTimeRequired = 1.5f;
-        engine.trackerTitle = "[Lab Heating Tracker]";
-        engine.AddSubstance("Heating", targetHeatingSeconds, "s",
-            overdose: "The tube was held in the flame far too long - the CaO sinters and the trapped CO2 over-pressurises the balloon.",
-            underdose: "Insufficient heating leaves undissociated CaCO3 - thermal decomposition needs sustained heat above 800 C to drive the CO2 off.");
+        if (definition == null)
+        {
+            definition = ReactionDefinition.Load(reactionId);
+        }
+        if (definition == null)
+        {
+            return;
+        }
 
-        recorder = new ReactionHistoryRecorder(reactionId, reactionDisplayName, engine);
+        engine = new FreeHandReactionEngine();
+        definition.Configure(engine);
+        targetHeatingSeconds = definition.TargetFor("Heating");
+
+        recorder = new ReactionHistoryRecorder(reactionId, definition.displayName, engine);
+        LabRunOptions.Apply(reactionId, definition, engine, recorder);
 
         tooltip = new FreeHandTooltip();
         tooltip.Create("TubeFloatingTooltip_CaCO3", canvasText, tooltipFontSize);
@@ -113,6 +120,7 @@ public class CaCO3Reaction : MonoBehaviour
         {
             recorder.Abandon(); // switching experiments away mid-run
         }
+        LabRunOptions.NoteBenchCleared(reactionId);
     }
 
     void OnDestroy()
@@ -231,10 +239,7 @@ public class CaCO3Reaction : MonoBehaviour
 
         if (overFlame && requireBalloonBeforeHeating && !balon_ok && !engine.HasSucceeded)
         {
-            engine.ForceFailure("Heating",
-                "The CaCO3 was heated before the balloon was fitted, so the carbon dioxide escaped into the room instead of being collected.",
-                ReactionResult.FailWrongOrder,
-                "FAILED: CO2 escaped\nBalloon was not fitted before heating");
+            definition.ForceProcedureFailure(engine, "Heating");
             ReportFreeHandFailure();
             UpdateTooltip();
             return;
@@ -242,7 +247,7 @@ public class CaCO3Reaction : MonoBehaviour
 
         if (!engine.IsResolved)
         {
-            engine.UpdatePouringQuantity("Heating", 1.0f, overFlame);
+            engine.UpdatePouringQuantity("Heating", definition.FlowFor("Heating"), overFlame);
         }
 
         ReactionResult result = engine.CheckReactionOutcome();
@@ -497,6 +502,7 @@ public class CaCO3Reaction : MonoBehaviour
         }
 
         engine.Reset();
+        LabRunOptions.Apply(reactionId, definition, engine, recorder);
         failureReported = false;
         reactionCompleted = false;
         audioSource3Started = false;

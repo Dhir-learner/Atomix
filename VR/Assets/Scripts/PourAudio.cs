@@ -41,7 +41,7 @@ public class PourAudio : MonoBehaviour
     private class Voice
     {
         public MonoBehaviour Owner;
-        public System.Func<bool> IsPouring;
+        public IPourSource Pour;
         public AudioSource Source;
     }
 
@@ -86,11 +86,12 @@ public class PourAudio : MonoBehaviour
                 continue;
             }
 
-            bool pouring = voice.Owner.isActiveAndEnabled && voice.IsPouring();
+            bool pouring = voice.Owner.isActiveAndEnabled && voice.Pour.IsPouring;
 
             // Ramped rather than switched. A pour that starts and stops on a frame boundary
             // clicks, and the student taps the tilt keys constantly while fine-tuning an amount.
-            float target = pouring ? bus : 0.0f;
+            // A gentle tilt trickles, so it is quieter than a vessel tipped right over.
+            float target = pouring ? bus * PourTilt.AudioScale(voice.Pour.FlowRate) : 0.0f;
             voice.Source.volume = Mathf.MoveTowards(
                 voice.Source.volume, target, Time.deltaTime * 4.0f);
 
@@ -115,22 +116,22 @@ public class PourAudio : MonoBehaviour
     {
         foreach (PourNahco3 pour in FindAll<PourNahco3>())
         {
-            Register(pour, () => pour.IsPouring, pour.substanceLeak, granular: true);
+            Register(pour, pour, pour.substanceLeak, granular: true);
         }
 
         foreach (PourMetalSubstance pour in FindAll<PourMetalSubstance>())
         {
-            Register(pour, () => pour.IsPouring, pour.substanceLeak, granular: true);
+            Register(pour, pour, pour.substanceLeak, granular: true);
         }
 
         foreach (PourFromPipette pour in FindAll<PourFromPipette>())
         {
             // A dropper is discrete drips, not a stream.
-            Register(pour, () => pour.IsPouring, pour.substanceLeak, granular: false);
+            Register(pour, pour, pour.substanceLeak, granular: false);
         }
     }
 
-    private void Register(MonoBehaviour owner, System.Func<bool> isPouring,
+    private void Register(MonoBehaviour owner, IPourSource pourSource,
                           ParticleSystem leak, bool granular)
     {
         if (owner == null)
@@ -169,7 +170,7 @@ public class PourAudio : MonoBehaviour
         voices.Add(new Voice
         {
             Owner = owner,
-            IsPouring = isPouring,
+            Pour = pourSource,
             Source = source
         });
     }

@@ -23,29 +23,25 @@ public class KOHReactionTest : MonoBehaviour
     [Header("Exam Mode (same rules as the Lab, quantities hidden)")]
     [Tooltip("Judged by the same FreeHandReactionEngine as KOHReaction, but the student is never told the target or the accepted range.")]
     public bool enableExamMode = true;
-    public float targetWaterMl = 50.0f;
-    public float targetPotassiumGrams = 3.0f;
-    public float tolerancePercent = 5.0f;
-    public float waterFlowMlPerSecond = 10.0f;
-    [Tooltip("Keeping the container tipped past this many seconds keeps metal falling in.")]
-    public float potassiumPourGraceSeconds = 2.0f;
-    public float potassiumExtraFlowGramsPerSecond = 1.0f;
     public float tooltipHeightOffset = 0.20f;
     public float tooltipFontSize = 0.55f;
     [Tooltip("Optional - played when the task is failed.")]
     public AudioSource audioSource_failure;
     public AudioClip clip_failure;
 
-    [Header("Experiment History")]
+    [Header("Recipe")]
     [Tooltip("Matches the Lab reaction number so test attempts group with lab attempts.")]
     public int reactionId = 4;
-    public string reactionDisplayName = "K + H2O -> KOH + H2 [Test]";
+    [Tooltip("Optional. Left empty, Resources/ReactionDefinitions is used - the same file the Lab reads.")]
+    public ReactionDefinition definition;
 
     private const string TaskPrompt = "Create KOH and check the acidity.";
 
     private ExamReactionRunner exam;
     private bool potassiumDropped = false;
     private float potassiumContactTimer = 0.0f;
+    private float waterFlow;
+    private ReagentDefinition potassium;
 
     private DateTime timpInitial;
     private bool explosionActive = false;
@@ -65,19 +61,21 @@ public class KOHReactionTest : MonoBehaviour
             return;
         }
 
+        if (definition == null)
+        {
+            definition = ReactionDefinition.Load(reactionId);
+        }
+        if (definition == null)
+        {
+            return;
+        }
+
         exam = new ExamReactionRunner();
-        exam.Begin("ExamTooltip_K_H2O", canvasText, tooltipFontSize,
-            reactionId, reactionDisplayName, countdown, randomizer, tolerancePercent);
+        exam.Begin(definition, "ExamTooltip_K_H2O", canvasText, tooltipFontSize, countdown, randomizer);
         exam.SetFailureAudio(audioSource_failure, clip_failure);
 
-        exam.engine.wrongOrderMessage =
-            "Potassium was dropped in before the water was measured out. Alkali metals must meet a known volume of water, never a dry or half-filled vessel.";
-        exam.engine.AddSubstance("Water", targetWaterMl, "ml",
-            overdose: "Excess water dilutes the reaction - the KOH produced is too dilute to show a clear basic result.",
-            underdose: "Too little water cannot dissolve the KOH that forms, so the reaction stalls and heats dangerously.");
-        exam.engine.AddSubstance("Potassium", targetPotassiumGrams, "g",
-            overdose: "Too much potassium causes a dangerous explosion - the hydrogen released ignites from the reaction heat.",
-            underdose: "Too little potassium leaves most of the water unreacted, so hardly any KOH is formed.");
+        waterFlow = definition.FlowFor("Water");
+        potassium = definition.Reagent("Potassium");
     }
 
     void OnEnable()
@@ -118,7 +116,7 @@ public class KOHReactionTest : MonoBehaviour
 
         if (exam != null)
         {
-            exam.Pour("Water", waterFlowMlPerSecond, water != null && water.IsPouring);
+            exam.PourFrom("Water", waterFlow, water);
             TrackPotassium();
             examResult = exam.Tick();
             exam.UpdateTooltip(transform, tooltipHeightOffset, "Task finished!");
@@ -196,7 +194,7 @@ public class KOHReactionTest : MonoBehaviour
     /// </summary>
     void TrackPotassium()
     {
-        if (metal == null)
+        if (metal == null || potassium == null)
         {
             return;
         }
@@ -207,7 +205,7 @@ public class KOHReactionTest : MonoBehaviour
             {
                 potassiumDropped = true;
                 potassiumContactTimer = 0.0f;
-                exam.engine.SetQuantity("Potassium", targetPotassiumGrams);
+                exam.engine.SetQuantity("Potassium", potassium.target);
             }
             return;
         }
@@ -216,9 +214,11 @@ public class KOHReactionTest : MonoBehaviour
         if (stillTipped)
         {
             potassiumContactTimer += Time.deltaTime;
-            if (potassiumContactTimer > potassiumPourGraceSeconds)
+            if (potassiumContactTimer > potassium.lumpGraceSeconds)
             {
-                exam.engine.AddDiscreteQuantity("Potassium", potassiumExtraFlowGramsPerSecond * Time.deltaTime);
+                // Tipped harder, the extra metal falls in faster - the same tilt rule as a pour.
+                exam.engine.AddDiscreteQuantity("Potassium",
+                    potassium.lumpOverflowPerSecond * metal.FlowRate * Time.deltaTime);
             }
             // Keep the settle timer honest while the container is still being emptied.
             exam.engine.UpdatePouringQuantity("Potassium", 0.0f, true);

@@ -2,7 +2,7 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
-public class PourCuO : MonoBehaviour
+public class PourCuO : MonoBehaviour, IPourSource
 {
     public GameObject Container;
     public GameObject SecondGlass;
@@ -13,8 +13,12 @@ public class PourCuO : MonoBehaviour
     // Exposed for FreeHandReactionEngine quantity tracking (containsCuO behaviour unchanged).
     public bool IsPouring { get { return play; } }
 
+    /// <summary>How hard the vessel is pouring, 0..1 of its full rate. See <see cref="PourTilt"/>.</summary>
+    public float FlowRate { get { return play ? flow : 0.0f; } }
+
     private bool play = false;
     private bool isPlaying = false;
+    private float flow = 0.0f;
     private GameObject StartForSubstanceLeak;
 
     void Start()
@@ -29,15 +33,11 @@ public class PourCuO : MonoBehaviour
 
     void Update()
     {
-        Quaternion firstGlassRotation = Container.transform.rotation;
         Vector3 firstGlassPosition = Container.transform.position;
         Vector3 secondGlassPosition = SecondGlass.transform.position;
         Vector3 pivotPosition = StartForSubstanceLeak.transform.position;
-        if ((
-            firstGlassRotation.eulerAngles.x >= 45.0f && firstGlassRotation.eulerAngles.x < 90.0f ||
-            firstGlassRotation.eulerAngles.x <= 315.0f && firstGlassRotation.eulerAngles.x >= 270.0f ||
-            firstGlassRotation.eulerAngles.y >= 45.0f && firstGlassRotation.eulerAngles.y < 90.0f ||
-            firstGlassRotation.eulerAngles.y <= 315.0f && firstGlassRotation.eulerAngles.y >= 270.0f)
+        float tilt = PourTilt.TiltAngle(Container.transform);
+        if (PourTilt.IsTipped(tilt)
             && (
                 firstGlassPosition.y > secondGlassPosition.y &&
                 pivotPosition.x <= secondGlassPosition.x + 0.15 && pivotPosition.x >= secondGlassPosition.x - 0.15 &&
@@ -45,6 +45,7 @@ public class PourCuO : MonoBehaviour
                 )
             )
         {
+            flow = PourTilt.FlowFactor(tilt);
             substanceLeak.transform.position = pivotPosition;
             if (!play)
             {
@@ -57,6 +58,8 @@ public class PourCuO : MonoBehaviour
                     StartCoroutine(PlaySoundRepeatedly());
                 }
             }
+            PourTilt.ScaleEmission(substanceLeak, flow);
+            PourTilt.ScaleVolume(audioSource, flow);
         }
         else
         {
@@ -64,6 +67,8 @@ public class PourCuO : MonoBehaviour
             {
                 substanceLeak.Stop();
                 substanceLeak.Clear(); // Clear existing particles when stopping
+                PourTilt.RestoreEmission(substanceLeak);
+                PourTilt.RestoreVolume(audioSource);
                 play = false;
                 isPlaying = false;
                 audioSource.Stop();

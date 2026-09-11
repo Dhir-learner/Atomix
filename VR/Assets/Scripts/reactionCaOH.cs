@@ -29,11 +29,6 @@ public class reactionCaOH : MonoBehaviour
 
     [Header("Free-Hand Mode (quantity + order matter)")]
     public bool enableFreeHandMode = true;
-    public float targetWaterMl = 30.0f;
-    public float targetCaOGrams = 15.0f;
-    public float tolerancePercent = 8.0f;
-    public float waterFlowMlPerSecond = 5.0f;
-    public float caoFlowGramsPerSecond = 3.0f;
     public float tooltipHeightOffset = 0.20f;
     [Tooltip("World-space font size for the floating tracker. TMP renders roughly (fontSize x 0.12) metres per line, so keep this small.")]
     public float tooltipFontSize = 0.55f;
@@ -41,10 +36,11 @@ public class reactionCaOH : MonoBehaviour
     public AudioSource audioSource_failure;
     public AudioClip clip_failure;
 
-    [Header("Experiment History")]
+    [Header("Recipe and History")]
     [Tooltip("Matches the book / StartReaction number, 1-8.")]
     public int reactionId = 6;
-    public string reactionDisplayName = "CaO + H2O -> Ca(OH)2";
+    [Tooltip("Optional. Left empty, Resources/ReactionDefinitions supplies the targets, tolerance and messages.")]
+    public ReactionDefinition definition;
     [Tooltip("Re-selecting this experiment from the book logs a fresh attempt.")]
     public bool restartAttemptOnReSelect = true;
 
@@ -52,6 +48,8 @@ public class reactionCaOH : MonoBehaviour
     private FreeHandTooltip tooltip;
     private bool failureReported = false;
     private ReactionHistoryRecorder recorder;
+    private float waterFlow;
+    private float caoFlow;
 
     private DateTime timpInitial;
     private bool isPlaying = false;
@@ -74,20 +72,23 @@ public class reactionCaOH : MonoBehaviour
             return;
         }
 
+        if (definition == null)
+        {
+            definition = ReactionDefinition.Load(reactionId);
+        }
+        if (definition == null)
+        {
+            return;
+        }
+
         engine = new FreeHandReactionEngine();
-        engine.tolerancePercent = tolerancePercent;
-        engine.settleTimeRequired = 1.5f;
-        engine.wrongOrderMessage =
-            "The quicklime went into a dry beaker. CaO must be slaked into a measured volume of water, otherwise the heat released has nothing to absorb it.";
-        engine.AddSubstance("Water", targetWaterMl, "ml",
-            overdose: "Excess water produces dilute Ca(OH)2 - limewater so weak that the litmus test barely changes colour.",
-            underdose: "Insufficient water leaves unreacted quicklime, so part of the CaO never slakes into calcium hydroxide.");
-        engine.AddSubstance("CaO", targetCaOGrams, "g",
-            overdose: "Too much quicklime for this volume of water - the surplus CaO stays as a dry lump and the mixture boils dangerously.",
-            underdose: "Too little quicklime leaves mostly water in the beaker, so hardly any Ca(OH)2 forms.");
+        definition.Configure(engine);
+        waterFlow = definition.FlowFor("Water");
+        caoFlow = definition.FlowFor("CaO");
 
         tooltip = new FreeHandTooltip();
-        recorder = new ReactionHistoryRecorder(reactionId, reactionDisplayName, engine);
+        recorder = new ReactionHistoryRecorder(reactionId, definition.displayName, engine);
+        LabRunOptions.Apply(reactionId, definition, engine, recorder);
 
         tooltip.Create("BeakerFloatingTooltip_CaOH", canvasText, tooltipFontSize);
         tooltip.Show(FreeHandTooltip.ProgressColor, engine.GetTooltipText());
@@ -112,6 +113,7 @@ public class reactionCaOH : MonoBehaviour
         {
             recorder.Abandon(); // switching experiments away mid-run
         }
+        LabRunOptions.NoteBenchCleared(reactionId);
     }
 
     void OnDestroy()
@@ -131,8 +133,8 @@ public class reactionCaOH : MonoBehaviour
         {
             if (!engine.IsResolved)
             {
-                engine.UpdatePouringQuantity("Water", waterFlowMlPerSecond, h2o != null && h2o.IsPouring);
-                engine.UpdatePouringQuantity("CaO", caoFlowGramsPerSecond, salt != null && salt.IsPouring);
+                engine.UpdatePour("Water", waterFlow, h2o);
+                engine.UpdatePour("CaO", caoFlow, salt);
             }
 
             ReactionResult result = engine.CheckReactionOutcome();
@@ -311,6 +313,7 @@ public class reactionCaOH : MonoBehaviour
         }
 
         engine.Reset();
+        LabRunOptions.Apply(reactionId, definition, engine, recorder);
         failureReported = false;
         oneExplosion = false;
         explosionActive = false;

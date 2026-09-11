@@ -26,31 +26,30 @@ public class Reaction : MonoBehaviour
     public AudioSource audioSource_failure;
     public AudioClip clip_failure;
 
-    [Header("Intelligent Proportions (Zero-Collision Math)")]
+    [Header("Intelligent Proportions (quantity matters)")]
     public bool enableIntelligentMode = true;
-    public float targetWaterMl = 50.0f;
-    public float targetSodiumG = 5.0f;
-    public float tolerance = 0.05f; // 5% deviation
     public float tooltipHeightOffset = 0.20f;
     [Tooltip("World-space font size for the floating tracker. TMP renders roughly (fontSize x 0.12) metres per line, so keep this small.")]
     public float tooltipFontSize = 0.55f;
 
-    [Header("Experiment History")]
+    [Header("Recipe and History")]
     [Tooltip("Matches the book / StartReaction number, 1-8.")]
     public int reactionId = 1;
-    public string reactionDisplayName = "Na + H2O -> NaOH + H2";
+    [Tooltip("Optional. Left empty, Resources/ReactionDefinitions supplies the targets, tolerance and messages.")]
+    public ReactionDefinition definition;
     [Tooltip("Re-selecting this experiment from the book logs a fresh attempt.")]
     public bool restartAttemptOnReSelect = true;
 
-    private float currentWaterMl = 0.0f;
-    private float currentSodiumG = 0.0f;
-    private bool reactionFailed = false;
-    private float settleTimer = 0.0f;
-
+    // This experiment used to track its water and sodium inline, with its own copy of the
+    // tolerance arithmetic and its own failure wording. It now runs on FreeHandReactionEngine like
+    // the other seven, which is what gives it the top-of-screen readout, the pour gauge, levels,
+    // stars and a lab assistant that can read its numbers - none of which could see it before.
+    private FreeHandReactionEngine engine;
     private FreeHandTooltip tooltip;
     private ReactionHistoryRecorder recorder;
-    private bool waterWasPouring = false;
-    private bool sodiumLogged = false;
+    private bool failureReported = false;
+    private bool sodiumAdded = false;
+    private float waterFlow;
 
     private DateTime timpInitial;
     private bool explosionActive = false;
@@ -61,25 +60,44 @@ public class Reaction : MonoBehaviour
     private bool audioSource2Started = false;
     private bool audioSource3Started = false;
 
+    private bool Judged { get { return enableIntelligentMode && engine != null; } }
+
     void Start()
     {
         natriumMetal.SetActive(false);
         explosion.Stop();
         explosion.Clear();
 
-        if (recorder == null)
+        if (definition == null)
         {
-            // No FreeHandReactionEngine here - this reaction tracks its quantities inline,
-            // so the recorder is fed by hand rather than by ReactionHistoryRecorder.Tick().
-            recorder = new ReactionHistoryRecorder(reactionId, reactionDisplayName, null);
+            definition = ReactionDefinition.Load(reactionId);
         }
 
-        if (enableIntelligentMode && tooltip == null)
+        if (enableIntelligentMode && definition != null)
         {
+            engine = new FreeHandReactionEngine();
+            definition.Configure(engine);
+
+            // This reaction has never enforced an addition order in the Lab: sodium put in first
+            // simply waits for the water. Kept that way - the testing scene's copy does enforce
+            // it, and still does.
+            engine.enforceOrder = false;
+            waterFlow = definition.FlowFor("Water");
+        }
+
+        if (recorder == null)
+        {
+            recorder = new ReactionHistoryRecorder(reactionId,
+                definition != null ? definition.displayName : "Na + H2O -> NaOH + H2", engine);
+        }
+
+        if (engine != null)
+        {
+            LabRunOptions.Apply(reactionId, definition, engine, recorder);
+
             tooltip = new FreeHandTooltip();
             tooltip.Create("BeakerFloatingTooltip_Reaction", canvasText, tooltipFontSize);
-            tooltip.Show(FreeHandTooltip.ProgressColor,
-                $"Water: 0.0 / {targetWaterMl} ml\nSodium: 0.0 / {targetSodiumG} g");
+            tooltip.Show(FreeHandTooltip.ProgressColor, engine.GetTooltipText());
         }
     }
 
@@ -102,6 +120,7 @@ public class Reaction : MonoBehaviour
         {
             recorder.Abandon(); // switching experiments away mid-run
         }
+        LabRunOptions.NoteBenchCleared(reactionId);
     }
 
     void OnDestroy()
@@ -117,143 +136,78 @@ public class Reaction : MonoBehaviour
         if (metal.containsNatrium == true)
         {
             natriumMetal.SetActive(true);
-            currentSodiumG = targetSodiumG; // Discrete solid block added successfully!
-            if (!sodiumLogged && recorder != null)
+
+            // Sodium is one measured block: the full dose arrives the moment it lands.
+            if (!sodiumAdded)
             {
-                sodiumLogged = true;
-                recorder.LogAction(string.Format("Added {0:F1} g of Sodium", currentSodiumG),
-                    currentSodiumG, true);
+                sodiumAdded = true;
+                if (Judged)
+                {
+                    engine.SetQuantity("Sodium", definition.TargetFor("Sodium"));
+                }
             }
         }
 
-        string trackerText = "";
-        if (enableIntelligentMode && !oneExplosion && !reactionFailed)
+        string trackerText = string.Empty;
+        bool judgedSuccess = false;
+
+        if (Judged)
         {
-            bool isCurrentlyPouring = false;
-            if (water != null && water.IsPouring)
+            if (!engine.IsResolved)
             {
-                currentWaterMl += 10.0f * Time.deltaTime; // Smooth 10 ml/sec pouring flow rate
-                isCurrentlyPouring = true;
+                engine.UpdatePour("Water", waterFlow, water);
             }
 
-            if (isCurrentlyPouring && !waterWasPouring)
+            ReactionResult result = engine.CheckReactionOutcome();
+            trackerText = engine.GetTrackerText() + "\n\n";
+
+            if (recorder != null)
             {
-                waterWasPouring = true;
-                if (recorder != null)
-                {
-                    recorder.LogAction("Started pouring Water", currentWaterMl, true);
-                }
-            }
-            else if (!isCurrentlyPouring && waterWasPouring)
-            {
-                waterWasPouring = false;
-                if (recorder != null)
-                {
-                    bool inRange = currentWaterMl >= targetWaterMl * (1.0f - tolerance) &&
-                                   currentWaterMl <= targetWaterMl * (1.0f + tolerance);
-                    recorder.LogAction(string.Format("Added {0:F1} ml of Water (target {1:F1})",
-                        currentWaterMl, targetWaterMl), currentWaterMl, inRange);
-                }
+                recorder.Tick();
             }
 
-            trackerText = $"[Lab Measurement Tracker]\nWater: {currentWaterMl:F1} ml / {targetWaterMl} ml (Target: ~50 ml)\nSodium: {currentSodiumG:F1} g / {targetSodiumG} g\n\n";
-            if (isCurrentlyPouring && canvasText != null)
+            if (result == ReactionResult.Success)
             {
-                canvasText.text = trackerText + "Pouring water... Stop between 47.5 ml and 52.5 ml for correct chemical equilibrium!";
+                judgedSuccess = true;
             }
-
-            // Check Overdose during pouring
-            float maxWater = targetWaterMl * (1.0f + tolerance);
-            if (currentWaterMl > maxWater)
+            else if (engine.HasFailed)
             {
-                reactionFailed = true;
-                showPopup = true;
-                timpInitial = DateTime.Now;
-                string overdoseReason =
-                    "Excess water alters the concentration and disrupts the controlled reaction.";
-                if (canvasText != null)
+                if (!failureReported)
                 {
-                    canvasText.text = BuildFailureText(
-                        ReactionResult.FailOverdose, "Water", overdoseReason);
-                }
-                PlayFailureSound();
-                CompleteAttempt(ExperimentOutcome.FailOverdose, overdoseReason);
-                return;
-            }
-
-            // Settle timer check after pouring pauses
-            if (currentWaterMl > 0f && currentSodiumG > 0f && !isCurrentlyPouring)
-            {
-                settleTimer += Time.deltaTime;
-                if (settleTimer >= 1.5f && !oneExplosion)
-                {
-                    float minWater = targetWaterMl * (1.0f - tolerance);
-                    if (currentWaterMl < minWater)
+                    failureReported = true;
+                    showPopup = true;
+                    timpInitial = DateTime.Now;
+                    if (recorder != null)
                     {
-                        reactionFailed = true;
-                        showPopup = true;
-                        timpInitial = DateTime.Now;
-                        string underdoseReason =
-                            "Insufficient solvent prevents proper ion dissociation.";
-                        if (canvasText != null)
-                        {
-                            canvasText.text = BuildFailureText(
-                                ReactionResult.FailUnderdose, "Water", underdoseReason);
-                        }
-                        PlayFailureSound();
-                        CompleteAttempt(ExperimentOutcome.FailUnderdose, underdoseReason);
-                        return;
+                        recorder.Complete(engine.LastResult);
                     }
+                    if (canvasText != null)
+                    {
+                        canvasText.text = engine.GetFailureExplanation();
+                    }
+                    PlayFailureSound();
                 }
             }
-            else if (!isCurrentlyPouring)
+            else if (engine.IsAnyPouring && canvasText != null)
             {
-                settleTimer = 0f;
-            }
-        }
-
-        // Update floating tooltip position above target beaker with billboard camera facing
-        if (tooltip != null && tooltip.Exists)
-        {
-            Transform anchor = null;
-            if (water != null && water.SecondGlass != null)
-            {
-                anchor = water.SecondGlass.transform;
-            }
-            else if (explosion != null)
-            {
-                anchor = explosion.transform;
+                canvasText.text = trackerText.TrimEnd();
             }
 
-            tooltip.UpdatePose(anchor, tooltipHeightOffset);
+            UpdateTooltip();
 
-            if (!oneExplosion && !reactionFailed)
+            if (engine.HasFailed)
             {
-                tooltip.Show(FreeHandTooltip.ProgressColor,
-                    $"Water: {currentWaterMl:F1} / {targetWaterMl} ml\nSodium: {currentSodiumG:F1} / {targetSodiumG} g");
-            }
-            else if (oneExplosion)
-            {
-                tooltip.Show(FreeHandTooltip.SuccessColor, "Reaction Success!\n2H2O + 2Na = 2NaOH + H2");
-            }
-            else if (reactionFailed)
-            {
-                if (currentWaterMl > targetWaterMl * (1.0f + tolerance))
-                {
-                    tooltip.Show(FreeHandTooltip.FailureColor,
-                        $"FAILED: Overdose!\nWater: {currentWaterMl:F1} ml (Max {targetWaterMl * (1.0f + tolerance):F1} ml)");
-                }
-                else
-                {
-                    tooltip.Show(FreeHandTooltip.FailureColor,
-                        $"FAILED: Incorrect Ratios\nWater: {currentWaterMl:F1} ml | Na: {currentSodiumG:F1} g");
-                }
+                // The failure explanation stays on the canvas. The guidance below used to
+                // overwrite it with "Now you can add Sodium" the moment the student stopped
+                // pouring, which is how an overdose before the sodium went unexplained.
+                ClosePopupWhenDue();
+                return;
             }
         }
 
         if (water.containsWater == true && metal.containsNatrium == false)
         {
-            if (canvasText && (!enableIntelligentMode || !water.IsPouring))
+            if (canvasText && (!Judged || !water.IsPouring))
             {
                 canvasText.text = trackerText + "Now you can add Sodium. For this, press twice on the lid with the grep button, and when the lid has disappeared you can grab the glass.";
             }
@@ -268,15 +222,9 @@ public class Reaction : MonoBehaviour
             }
         }
 
-        bool canTriggerSuccess = false;
-        if (!enableIntelligentMode)
-        {
-            canTriggerSuccess = (metal.containsNatrium == true && water.containsWater == true);
-        }
-        else if (!reactionFailed && currentWaterMl > 0f && currentSodiumG > 0f && settleTimer >= 1.5f)
-        {
-            canTriggerSuccess = true;
-        }
+        bool canTriggerSuccess = Judged
+            ? judgedSuccess
+            : (metal.containsNatrium == true && water.containsWater == true);
 
         if (oneExplosion == false && canTriggerSuccess)
         {
@@ -287,7 +235,10 @@ public class Reaction : MonoBehaviour
                 canvasText.text = "Chemical reaction equation: 2H2O + 2Na = 2NaOH + H2. Now, you can highlight the basicity of the solution by adding phenolphthalein.";
             }
             oneExplosion = true;
-            CompleteAttempt(ExperimentOutcome.Success, null);
+            if (recorder != null)
+            {
+                recorder.Complete(ReactionResult.Success);
+            }
             timpInitial = DateTime.Now;
             explosion.Clear();
             explosion.Play();
@@ -302,13 +253,9 @@ public class Reaction : MonoBehaviour
                 audioSource2Started = true;
             }
         }
-        if ((!enableIntelligentMode || oneExplosion) && phenolphthalein.containsPhenolphthalein == true && !phenolphthaleinAdded)
+        if ((!Judged || oneExplosion) && phenolphthalein.containsPhenolphthalein == true && !phenolphthaleinAdded)
         {
             phenolphthaleinAdded = true;
-            if (recorder != null)
-            {
-                recorder.LogAction("Added phenolphthalein indicator", 0.0f, true);
-            }
             showPopup = true;
             if (canvasText)
             {
@@ -334,6 +281,11 @@ public class Reaction : MonoBehaviour
             explosion.Clear();
             audioSource.Stop();
         }
+        ClosePopupWhenDue();
+    }
+
+    void ClosePopupWhenDue()
+    {
         if (showPopup == true && (DateTime.Now - timpInitial).TotalSeconds >= 10)
         {
             showPopup = false;
@@ -341,20 +293,25 @@ public class Reaction : MonoBehaviour
         }
     }
 
-    /// <summary>
-    /// Builds the failure message in the shared layout used by reactions 2-8, so this experiment
-    /// does not read differently just because it tracks its quantities inline.
-    /// </summary>
-    string BuildFailureText(ReactionResult result, string offendingSubstance, string reason)
+    void UpdateTooltip()
     {
-        string measurements =
-            FreeHandReactionEngine.ComposeMeasurementLine("Water", currentWaterMl, "ml", targetWaterMl) +
-            FreeHandReactionEngine.ComposeMeasurementLine("Sodium", currentSodiumG, "g", targetSodiumG);
+        if (tooltip == null || !tooltip.Exists)
+        {
+            return;
+        }
 
-        return FreeHandReactionEngine.ComposeFailureExplanation(
-            FreeHandReactionEngine.ComposeFailureHeadline(result, offendingSubstance),
-            measurements,
-            reason);
+        Transform anchor = null;
+        if (water != null && water.SecondGlass != null)
+        {
+            anchor = water.SecondGlass.transform;
+        }
+        else if (explosion != null)
+        {
+            anchor = explosion.transform;
+        }
+
+        tooltip.UpdatePose(anchor, tooltipHeightOffset);
+        tooltip.RenderEngineState(engine, "Reaction Success!\n2H2O + 2Na = 2NaOH + H2");
     }
 
     /// <summary>
@@ -376,34 +333,6 @@ public class Reaction : MonoBehaviour
         }
     }
 
-    /// <summary>Writes the final quantities and closes the history attempt.</summary>
-    void CompleteAttempt(ExperimentOutcome outcome, string reason)
-    {
-        if (recorder == null)
-        {
-            return;
-        }
-
-        recorder.BeginIfNeeded();
-
-        Dictionary<string, float> used = new Dictionary<string, float>();
-        used["Water"] = currentWaterMl;
-        used["Sodium"] = currentSodiumG;
-
-        Dictionary<string, float> targets = new Dictionary<string, float>();
-        targets["Water"] = targetWaterMl;
-        targets["Sodium"] = targetSodiumG;
-
-        ExperimentHistoryManager.Instance.RecordQuantities(recorder.AttemptId, used, targets);
-
-        if (!string.IsNullOrEmpty(reason))
-        {
-            recorder.LogAction("Why it failed: " + reason, 0.0f, false);
-        }
-
-        recorder.Complete(outcome);
-    }
-
     /// <summary>
     /// Called when the experiment is (re)selected from the book so a retry is logged as its
     /// own attempt.
@@ -418,21 +347,21 @@ public class Reaction : MonoBehaviour
         recorder.Abandon();
         recorder.ResetForNewAttempt();
 
-        currentWaterMl = 0.0f;
-        currentSodiumG = 0.0f;
-        settleTimer = 0.0f;
-        reactionFailed = false;
+        if (engine != null)
+        {
+            engine.Reset();
+            LabRunOptions.Apply(reactionId, definition, engine, recorder);
+        }
+
+        failureReported = false;
+        sodiumAdded = false;
         oneExplosion = false;
         explosionActive = false;
         phenolphthaleinAdded = false;
         showPopup = false;
-        waterWasPouring = false;
-        sodiumLogged = false;
         audioSource1Started = false;
         audioSource2Started = false;
         audioSource3Started = false;
     }
 
 }
-
-
