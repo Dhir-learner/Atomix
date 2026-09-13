@@ -648,6 +648,9 @@ public class PauseMenuUI : MonoBehaviour
 
     private void BuildControlsTab()
     {
+        LabAssistantSettings assistant = LabAssistantSettings.Load();
+        bool voiceQuestions = assistant != null && assistant.ResolvedProvider == LabAssistantProvider.Convai;
+
         string[,] rows =
         {
             { "W A S D", "Move" },
@@ -668,7 +671,7 @@ public class PauseMenuUI : MonoBehaviour
             { "F", "Scientific graphs" },
             { "P", "Periodic table" },
             { "L", "Cycle the measurement label" },
-            { "V", "Hold to talk to the lab assistant" },
+            { "V", voiceQuestions ? "Hold to talk to the lab assistant" : "Voice questions - not in this build, use Enter" },
             { "Enter", "Type a question - no microphone needed" },
             { "Y", "Ask why the last experiment failed" },
             { "M", "Minimise the assistant panel" },

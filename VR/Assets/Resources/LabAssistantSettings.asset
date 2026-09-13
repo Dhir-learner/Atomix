@@ -12,8 +12,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 38fc9c443185418299132097b3fdf8b8, type: 3}
   m_Name: LabAssistantSettings
   m_EditorClassIdentifier: 
-  provider: 0
-  convaiApiKey: 76ca45c75d4e35c5709ad484b42e0479
+  provider: 2
+  convaiApiKey:
   convaiCharacterId: 1a6a75f2-25e5-4ad4-ba27-47779e0efd98
   convaiVoiceResponse: 1
   maxRecordingSeconds: 15

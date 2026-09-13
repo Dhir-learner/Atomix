@@ -12,8 +12,8 @@ PlayerSettings:
   targetDevice: 2
   useOnDemandResources: 0
   accelerometerFrequency: 60
-  companyName: AlinaInc
-  productName: UnityLab
+  companyName: Team Atomix
+  productName: Atomix
   defaultCursor: {fileID: 0}
   cursorHotspot: {x: 0, y: 0}
   m_SplashScreenBackgroundColor: {r: 0.13725491, g: 0.12156863, b: 0.1254902, a: 1}
@@ -143,12 +143,8 @@ PlayerSettings:
   loadStoreDebugModeEnabled: 0
   visionOSBundleVersion: 1.0
   tvOSBundleVersion: 1.0
-  bundleVersion: 0.1
-  preloadedAssets:
-  - {fileID: 11400000, guid: 27c423207fe95184fbe3050a6141239c, type: 2}
-  - {fileID: 7032394494857669390, guid: d09928c84e86f224ebb3911924e69718, type: 2}
-  - {fileID: 11400000, guid: 9042397e103b5b943898fa390557c6e7, type: 2}
-  - {fileID: -4345732533778310329, guid: 1cfe6911015c3184f918c4957b82e955, type: 2}
+  bundleVersion: 1.0.0
+  preloadedAssets: []
   metroInputSource: 0
   wsaTransparentSwapchain: 0
   m_HolographicPauseOnTrackingLoss: 1
@@ -171,7 +167,7 @@ PlayerSettings:
   androidMinAspectRatio: 1
   applicationIdentifier:
     Android: com.AlinaInc.UnityLab
-    Standalone: com.DefaultCompany.UnityLab
+    Standalone: com.TeamAtomix.Atomix
   buildNumber:
     Standalone: 0
     VisionOS: 0

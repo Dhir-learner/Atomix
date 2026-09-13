@@ -154,10 +154,10 @@ The assistant runs in both `LabScene` and `LabAssistantScene`.
 
 In `LabScene`, the assistant is intentionally **voice + panel only** so it does not obstruct the main laboratory. In `LabAssistantScene`, the system can additionally display the assistant character.
 
-> **⚠️ Security note:** `Assets/Resources/LabAssistantSettings.asset` **currently has a real Convai
-> API key committed to it**, and it is present in the git history. Rotate the key before sharing this
-> repository, and keep future keys out of version control. Without credentials the assistant still
-> works offline.
+> **⚠️ Security note:** `Assets/Resources/LabAssistantSettings.asset` now ships with **no API key**
+> and `provider: Offline`, which is what the public Windows build uses. An earlier real Convai key is
+> still in the git history — revoke it in the Convai dashboard. The `Atomix → Build Windows (itch.io)`
+> build refuses to run if a key is put back into the asset.
 
 ### 🧠 7. Context-Aware AI Assistance
 
@@ -725,11 +725,10 @@ The code compiles clean against the real Unity 6000.3.7f1 assemblies (0 errors, 
 - A complete end-to-end Play-mode regression pass is still recommended. The molecular animation's
   *geometry* is tested; its *framing on screen* is not, and neither is the colour grade, the head
   bob amplitude or the reflection probe's framing.
-- **The application still identifies itself as `UnityLab` by `AlinaInc`**, so that is what the
-  window title says. It was left alone deliberately: on Windows both PlayerPrefs and
-  `persistentDataPath` are keyed on the company and product name, so renaming would silently
-  discard every player's coins, achievements, settings and experiment history. It should be done
-  as a rename *plus* a migration, in one deliberate change.
+- The application identifies itself as **`Atomix` by `Team Atomix`** (it was `UnityLab` by
+  `AlinaInc`). On Windows both PlayerPrefs and `persistentDataPath` are keyed on those names, so a
+  machine that ran a pre-rename build starts with fresh coins, achievements, settings and history.
+  No migration was written because the rename happened before any public release.
 - Ambient light in all four scenes is set to Skybox mode while the interior-tuned trilight colours
   authored beneath it go unused — very likely a latent authoring bug, but correcting it changes how
   bright the room looks and wants an eyes-on pass rather than a guess.
@@ -745,8 +744,9 @@ The code compiles clean against the real Unity 6000.3.7f1 assemblies (0 errors, 
 - Some glassware is authored above the bench. `DesktopBootstrap.settleFloatingObjectsOnLoad` lowers
   anything left hanging onto the surface below it; if a floating item has no collider beneath it,
   the raycast finds nothing and it stays where it is.
-- **The Convai API key is committed to `Assets/Resources/LabAssistantSettings.asset`** and is in the
-  git history. Rotate it before sharing this repository publicly.
+- The public Windows build runs the assistant **offline only** (`provider: Offline`): typed questions
+  and the Y shortcut work, voice questions and the `LabAssistantScene` character do not. An earlier
+  Convai key remains in the git history and must be revoked in the Convai dashboard.
 
 ---
 

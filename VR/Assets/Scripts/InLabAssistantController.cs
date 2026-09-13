@@ -309,6 +309,14 @@ public class InLabAssistantController : MonoBehaviour
             return;
         }
 
+        if (activeProvider == LabAssistantProvider.Offline)
+        {
+            AppendSystemLine("Lab assistant ready - I answer from this lab's own chemistry data. " +
+                             "Press [" + KeyLabel(typeKey) + "] to type a question.");
+            AppendSystemLine("[" + KeyLabel(whyKey) + "] asks why your last experiment went wrong.");
+            return;
+        }
+
         if (convai != null)
         {
             return;
@@ -586,6 +594,13 @@ public class InLabAssistantController : MonoBehaviour
 
     private void StartPushToTalk()
     {
+        if (activeProvider == LabAssistantProvider.Offline)
+        {
+            AppendSystemLine("Voice questions are not available in this version - press [" +
+                             KeyLabel(typeKey) + "] to type instead.");
+            return;
+        }
+
         if (pushToTalkHeld || convai == null || !convai.IsReady)
         {
             return;
@@ -917,8 +932,11 @@ public class InLabAssistantController : MonoBehaviour
             }
             else if (CanAsk)
             {
+                string talk = convai != null && convai.IsReady
+                    ? "Hold [" + pushToTalkKey + "] talk    "
+                    : string.Empty;
                 footerText.text =
-                    "Hold [" + pushToTalkKey + "] talk    [" + KeyLabel(typeKey) + "] type    [" +
+                    talk + "[" + KeyLabel(typeKey) + "] type    [" +
                     KeyLabel(whyKey) + "] why did it fail    [" + minimizeKey + "] minimise";
             }
             else

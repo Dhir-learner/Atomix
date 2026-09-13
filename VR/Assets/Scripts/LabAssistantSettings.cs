@@ -6,6 +6,8 @@ public enum LabAssistantProvider
     /// <summary>Use Convai when it is configured.</summary>
     Auto = 0,
     Convai = 1,
+    /// <summary>Built-in chemistry knowledge base only; never contacts Convai or the microphone.</summary>
+    Offline = 2,
     /// <summary>No assistant at all - the panel stays hidden.</summary>
     None = 3
 }
@@ -23,7 +25,8 @@ public class LabAssistantSettings : ScriptableObject
     public const string ResourceName = "LabAssistantSettings";
 
     [Header("Provider")]
-    [Tooltip("Auto uses Convai when an API key and character ID are filled in.")]
+    [Tooltip("Auto uses Convai when an API key and character ID are filled in. Offline answers from " +
+             "the built-in chemistry knowledge base only, and is what public builds ship with.")]
     public LabAssistantProvider provider = LabAssistantProvider.Auto;
 
     [Header("Convai")]
