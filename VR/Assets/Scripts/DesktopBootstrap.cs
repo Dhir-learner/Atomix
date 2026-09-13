@@ -88,7 +88,6 @@ public class DesktopBootstrap : MonoBehaviour
         FirstPersonController.SetCursorLock(true);
         SetupDesktopPlayer();
         SetupInteractables(scene);
-        SetupHelpUi(scene);
         SetupCrosshairUi(scene);
         SetupUiInput(false);
         SetupLabBoundary(scene);
@@ -368,21 +367,6 @@ public class DesktopBootstrap : MonoBehaviour
                 AttachBookInteractables(manager, scene);
             }
         }
-    }
-
-    void SetupHelpUi(Scene scene)
-    {
-        ControlsHelpUI[] existingHelp = FindObjectsByType<ControlsHelpUI>(FindObjectsInactive.Include, FindObjectsSortMode.None);
-        foreach (ControlsHelpUI help in existingHelp)
-        {
-            if (help != null && help.gameObject.scene == scene)
-            {
-                return;
-            }
-        }
-
-        GameObject helpObject = new GameObject("DesktopControlsHelpUI");
-        helpObject.AddComponent<ControlsHelpUI>();
     }
 
     void SetupCrosshairUi(Scene scene)

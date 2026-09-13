@@ -9,7 +9,7 @@ using UnityEngine.UI;
 /// WorldSpace canvas, matching how ReactionLearningController builds its UI, so it needs no scene
 /// or prefab edits and is clickable with the existing crosshair interaction.
 ///
-/// Toggle with Tab (H is already taken by the controls help overlay). Click a row to expand it
+/// Toggle with Tab. Click a row to expand it
 /// and read the steps, quantities and AI questions for that attempt.
 /// </summary>
 public class ExperimentHistoryUI : MonoBehaviour
@@ -18,10 +18,6 @@ public class ExperimentHistoryUI : MonoBehaviour
     public KeyCode toggleKey = KeyCode.Tab;
     public KeyCode closeKey = KeyCode.Escape;
     public float scrollSpeed = 900.0f;
-
-    [Header("Placement")]
-    [Tooltip("Metres in front of the camera the panel appears.")]
-    public float distanceFromCamera = 1.5f;
 
     [Header("Availability")]
     [Tooltip("Scenes where the panel cannot be opened. The testing scene is excluded because past " +
@@ -36,6 +32,9 @@ public class ExperimentHistoryUI : MonoBehaviour
     private RectTransform filterRow;
 
     private bool isOpen = false;
+
+    /// <summary>Mouse-wheel choice of panel size as a share of the view; 0 = reading distance.</summary>
+    private float chosenFill;
     private int filterReactionId = -1;         // -1 = show everything
     private string expandedAttemptId = string.Empty;
     private bool listDirty = true;
@@ -164,7 +163,17 @@ public class ExperimentHistoryUI : MonoBehaviour
         float scrollablePixels = Mathf.Max(1.0f, listContent.rect.height - scrollRect.viewport.rect.height);
         float pixels = 0.0f;
 
-        pixels += Input.mouseScrollDelta.y * 120.0f;   // one wheel notch
+        // The wheel scrolls whatever the crosshair is on, as a desktop mouse would: the list when
+        // it is aimed at and long enough to scroll, otherwise the panel's distance.
+        bool listScrolls = listContent.rect.height > scrollRect.viewport.rect.height + 1.0f;
+        if (listScrolls && IsAimingAtList())
+        {
+            pixels += Input.mouseScrollDelta.y * 120.0f;   // one wheel notch
+        }
+        else
+        {
+            LabPanelBuilder.ScrollPanelDistance(historyCanvas, ref chosenFill);
+        }
         if (Input.GetKey(KeyCode.UpArrow))
         {
             pixels += scrollSpeed * Time.unscaledDeltaTime;
@@ -181,6 +190,17 @@ public class ExperimentHistoryUI : MonoBehaviour
 
         scrollRect.verticalNormalizedPosition =
             Mathf.Clamp01(scrollRect.verticalNormalizedPosition + pixels / scrollablePixels);
+    }
+
+    /// <summary>True when the crosshair - the centre of the screen - is over the list.</summary>
+    private bool IsAimingAtList()
+    {
+        Camera camera = Camera.main;
+        return camera != null &&
+               RectTransformUtility.RectangleContainsScreenPoint(
+                   scrollRect.viewport,
+                   new Vector2(Screen.width * 0.5f, Screen.height * 0.5f),
+                   camera);
     }
 
     // =========================================================
@@ -243,8 +263,8 @@ public class ExperimentHistoryUI : MonoBehaviour
         TMP_Text hint = CreateText("Hint", panel.transform,
             new Vector2(0.0f, 292.0f), new Vector2(1100.0f, 34.0f),
             20.0f, FontStyles.Normal, TextAlignmentOptions.Left);
-        hint.text = "Click a row to expand it.  Mouse wheel / arrow keys scroll.  " +
-                    toggleKey + " or " + closeKey + " closes.";
+        hint.text = "Click a row to expand.  Wheel: on the list scrolls, off it moves the panel.  " +
+                    toggleKey + " / " + closeKey + " closes.";
         hint.color = NeutralColor;
 
         BuildFilterRow(panel.transform);
@@ -252,7 +272,7 @@ public class ExperimentHistoryUI : MonoBehaviour
 
         footerText = CreateText("Footer", panel.transform,
             new Vector2(0.0f, -338.0f), new Vector2(1100.0f, 34.0f),
-            17.0f, FontStyles.Normal, TextAlignmentOptions.Left);
+            18.0f, FontStyles.Normal, TextAlignmentOptions.Left);
         footerText.color = NeutralColor;
 
         CreateButton("CloseButton", panel.transform, "Close",
@@ -700,21 +720,7 @@ public class ExperimentHistoryUI : MonoBehaviour
 
     private void PositionInFrontOfCamera()
     {
-        if (historyCanvas == null)
-        {
-            return;
-        }
-
-        Camera camera = Camera.main;
-        if (camera == null)
-        {
-            return;
-        }
-
-        historyCanvas.worldCamera = camera;
-        historyCanvas.transform.position =
-            camera.transform.position + camera.transform.forward * distanceFromCamera;
-        historyCanvas.transform.rotation = camera.transform.rotation;
+        LabPanelBuilder.FaceCamera(historyCanvas, chosenFill);
     }
 
     private static void AddLayoutHeight(GameObject target, float height)

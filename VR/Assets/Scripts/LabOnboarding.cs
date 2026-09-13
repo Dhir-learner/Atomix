@@ -8,13 +8,12 @@ using UnityEngine.UI;
 /// The first thirty seconds in the laboratory.
 ///
 /// A student who pressed "Enter Laboratory" arrived standing in a room full of glassware with no
-/// statement of what they were supposed to do. <see cref="ControlsHelpUI"/> has always been there
-/// on <b>H</b>, and it is thorough - fifty key bindings across seven headings - but a reference
-/// card is not an introduction. Nothing said <i>open the book, pick an experiment, measure
-/// carefully, the amounts are what is being judged</i>, which is the entire game.
+/// statement of what they were supposed to do. The pause menu's Controls tab lists every key
+/// binding, but a reference card is not an introduction. Nothing said <i>open the book, pick an
+/// experiment, measure carefully, the amounts are what is being judged</i>, which is the entire game.
 ///
 /// So this is four sentences, once, on the first visit. It teaches the loop rather than the
-/// controls, points at <b>H</b> for the rest, and gets out of the way.
+/// controls, points at <b>F1</b> for the rest, and gets out of the way.
 ///
 /// <b>It never blocks.</b> The card does not pause the game, does not take the cursor, does not
 /// need dismissing before the student can move, and disappears on its own. Onboarding that has to
@@ -184,7 +183,7 @@ public class LabOnboarding : MonoBehaviour
         // Any deliberate action means the student has started playing and does not need this.
         // Movement keys are excluded on purpose - looking around while reading is normal.
         if (!LabTextInput.IsCapturing &&
-            (Input.GetKeyDown(KeyCode.B) || Input.GetKeyDown(KeyCode.H) ||
+            (Input.GetKeyDown(KeyCode.B) || Input.GetKeyDown(KeyCode.F1) ||
              Input.GetKeyDown(KeyCode.Escape) || Input.GetMouseButtonDown(0)))
         {
             remaining = Mathf.Min(remaining, fadeSeconds);
@@ -350,7 +349,7 @@ public class LabOnboarding : MonoBehaviour
 
         TMP_Text footer = MakeText(plate.transform, "Footer", new Vector2(0.0f, -146.0f),
             new Vector2(800.0f, 32.0f), 20.0f, LabPanelBuilder.MutedTextColour);
-        footer.text = "<b>H</b> for the full controls   -   <b>F1</b> for settings";
+        footer.text = "<b>F1</b> for settings and the full list of controls";
 
         plate.SetActive(false);
     }

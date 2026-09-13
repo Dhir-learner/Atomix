@@ -39,10 +39,10 @@ public class ReactionLearningController : MonoBehaviour
     private TMP_Text playPauseLabel;
 
     // --- Live molecular animation -------------------------------------------------------
-    // Reactions 1 and 8 never had an MP4 (videoClip: {fileID: 0} in the catalog asset), so the
-    // LEARN screen used to dead-end on "Molecular explanation video is unavailable." Every
-    // reaction now has an in-engine ball-and-stick animation instead, and the six that do have
-    // an MP4 can switch to it as a second view.
+    // Reaction 1 has no MP4 (videoClip: {fileID: 0} in the catalog asset), so the LEARN screen
+    // used to dead-end on "Molecular explanation video is unavailable." Every reaction now has an
+    // in-engine ball-and-stick animation instead, and the seven that do have an MP4 can switch to
+    // it as a second view.
     private MolecularAnimationRenderer molecular;
     private Button molecularButton;
     private TMP_Text molecularButtonLabel;
@@ -234,6 +234,8 @@ public class ReactionLearningController : MonoBehaviour
         {
             PositionUiInFrontOfCamera();
         }
+
+        LabPanelBuilder.ScrollPanelDistance(learningCanvas, ref panelFill);
     }
 
     void OnDestroy()
@@ -637,6 +639,27 @@ public class ReactionLearningController : MonoBehaviour
                 FontStyles.Normal,
                 TextAlignmentOptions.Center
             );
+
+        // -----------------------------------------------------
+        // Controls hint, under the button row
+        // -----------------------------------------------------
+
+        TMP_Text controlsHint =
+            CreateText(
+                "ControlsHint",
+                rootPanel.transform,
+                new Vector2(0f, -332f),
+                new Vector2(920f, 34f),
+                20f,
+                FontStyles.Italic,
+                TextAlignmentOptions.Center
+            );
+
+        controlsHint.text =
+            "Mouse wheel moves this panel closer or farther   -   O brings it back in front of you";
+
+        controlsHint.color =
+            new Color(0.72f, 0.78f, 0.86f, 1f);
 
         // -----------------------------------------------------
         // Video display
@@ -1447,7 +1470,7 @@ public class ReactionLearningController : MonoBehaviour
 
         if (clip == null)
         {
-            // No MP4 for this reaction - reactions 1 and 8 have never had one. Rather than
+            // No MP4 for this reaction - reaction 1 has never had one. Rather than
             // dead-ending, render the molecular animation into the same display.
             if (TryStartMolecularAnimation())
             {
@@ -2138,9 +2161,11 @@ public class ReactionLearningController : MonoBehaviour
     /// <summary>Key that brings the panel back in front of the player.</summary>
     const KeyCode RecentreKey = KeyCode.O;
 
-    const float PanelDistance = 1.5f;
-    const float MinPanelDistance = 0.6f;
-    const float PanelClearance = 0.05f;
+    /// <summary>
+    /// The student's mouse-wheel choice of panel size, as a share of the view; 0 until they
+    /// scroll, which means a comfortable reading distance. Kept for the next time it opens.
+    /// </summary>
+    float panelFill;
 
     /// <summary>
     /// Puts the panel upright, at eye level, in the direction the player is facing.
@@ -2152,8 +2177,8 @@ public class ReactionLearningController : MonoBehaviour
     /// again afterwards, so it stayed there.
     ///
     /// Only the horizontal part of the view direction is used now, so how far up or down the
-    /// player happens to be looking no longer matters. Walls and the bench are then checked for,
-    /// so the panel is never placed inside either.
+    /// player happens to be looking no longer matters. Walls, the bench and the room boundary are
+    /// then checked for, so the panel is never placed inside or outside any of them.
     /// </summary>
     void PositionUiInFrontOfCamera()
     {
@@ -2181,29 +2206,10 @@ public class ReactionLearningController : MonoBehaviour
         }
         facing.Normalize();
 
-        // Stop short of a wall rather than putting the panel through it.
-        float distance = PanelDistance;
-        RaycastHit hit;
-        if (Physics.Raycast(camTransform.position, facing, out hit, PanelDistance + PanelClearance,
-                            ~0, QueryTriggerInteraction.Ignore))
-        {
-            distance = Mathf.Max(MinPanelDistance, hit.distance - PanelClearance);
-        }
-
-        Vector3 centre = camTransform.position + facing * distance;
-
-        // Keep the bottom edge above the bench. At normal eye height it already is; this is for
-        // a player who has flown down low with Ctrl before the video opened.
-        float halfHeight = canvasRect.sizeDelta.y * canvasRect.localScale.y * 0.5f;
-        if (Physics.Raycast(centre + Vector3.up * halfHeight, Vector3.down, out hit,
-                            (halfHeight * 2.0f) + PanelClearance, ~0, QueryTriggerInteraction.Ignore) &&
-            hit.normal.y > 0.65f)
-        {
-            centre.y = Mathf.Max(centre.y, hit.point.y + halfHeight + PanelClearance);
-        }
-
-        learningCanvas.transform.position = centre;
         learningCanvas.transform.rotation = Quaternion.LookRotation(facing, Vector3.up);
+        learningCanvas.transform.position = camTransform.position +
+                                            facing * LabPanelBuilder.OpeningDistance(learningCanvas, panelFill);
+        LabPanelBuilder.KeepInsideLab(learningCanvas);
     }
 }
 

@@ -752,7 +752,7 @@ public class InLabAssistantController : MonoBehaviour
 
         chatText = CreateStretchText("ChatLog", expandedRoot.transform,
             new Vector2(16.0f, 66.0f), new Vector2(-16.0f, -118.0f),
-            17.0f, FontStyles.Normal, TextAlignmentOptions.BottomLeft, stretchVertically: true);
+            18.0f, FontStyles.Normal, TextAlignmentOptions.BottomLeft, stretchVertically: true);
         chatText.color = Color.white;
         chatText.overflowMode = TextOverflowModes.Truncate;
         chatText.text = string.Empty;
