@@ -156,7 +156,9 @@ public class FirstPersonController : MonoBehaviour
             return;
         }
 
-        if (Input.GetKeyDown(KeyCode.Escape))
+        // On phones Escape is the Back button. Toggling "cursor lock" there would hide the touch
+        // controls with no way to bring them back; panels still close on it themselves.
+        if (!LabInput.IsTouch && LabInput.GetKeyDown(KeyCode.Escape))
         {
             if (IsCursorLocked)
             {
@@ -181,8 +183,8 @@ public class FirstPersonController : MonoBehaviour
 
     void HandleMouseLook()
     {
-        float mouseX = Input.GetAxis("Mouse X") * mouseSensitivity;
-        float mouseY = Input.GetAxis("Mouse Y") * mouseSensitivity;
+        float mouseX = LabInput.GetAxis("Mouse X") * mouseSensitivity;
+        float mouseY = LabInput.GetAxis("Mouse Y") * mouseSensitivity;
         if (invertLook)
         {
             mouseY = -mouseY;
@@ -212,22 +214,22 @@ public class FirstPersonController : MonoBehaviour
         float horizontal = 0f;
         float vertical = 0f;
 
-        if (Input.GetKey(KeyCode.A))
+        if (LabInput.GetKey(KeyCode.A))
         {
             horizontal -= 1f;
         }
 
-        if (Input.GetKey(KeyCode.D))
+        if (LabInput.GetKey(KeyCode.D))
         {
             horizontal += 1f;
         }
 
-        if (Input.GetKey(KeyCode.S))
+        if (LabInput.GetKey(KeyCode.S))
         {
             vertical -= 1f;
         }
 
-        if (Input.GetKey(KeyCode.W))
+        if (LabInput.GetKey(KeyCode.W))
         {
             vertical += 1f;
         }
@@ -249,7 +251,7 @@ public class FirstPersonController : MonoBehaviour
         moveDirection = Vector3.ClampMagnitude(moveDirection, 1f);
 
         float currentSpeed = moveSpeed;
-        if (Input.GetKey(KeyCode.LeftShift))
+        if (LabInput.GetKey(KeyCode.LeftShift))
         {
             currentSpeed *= sprintMultiplier;
         }
@@ -276,12 +278,12 @@ public class FirstPersonController : MonoBehaviour
             float verticalAxis = 0f;
             if (enableVerticalFlyMovement)
             {
-                if (Input.GetKey(KeyCode.Space))
+                if (LabInput.GetKey(KeyCode.Space))
                 {
                     verticalAxis += 1f;
                 }
 
-                if (Input.GetKey(KeyCode.LeftControl) || Input.GetKey(KeyCode.RightControl))
+                if (LabInput.GetKey(KeyCode.LeftControl) || LabInput.GetKey(KeyCode.RightControl))
                 {
                     verticalAxis -= 1f;
                 }
@@ -401,10 +403,26 @@ public class FirstPersonController : MonoBehaviour
         SetCursorLock(false);
     }
 
-    public static bool IsCursorLocked => Cursor.lockState == CursorLockMode.Locked;
+    // Phones have no cursor. "Locked" keeps its meaning of "in the lab, no overlay panel open",
+    // which is what every caller actually tests for.
+    private static bool touchGameplayActive;
+
+    public static bool IsCursorLocked => LabInput.IsTouch
+        ? touchGameplayActive
+        : Cursor.lockState == CursorLockMode.Locked;
 
     public static void SetCursorLock(bool locked)
     {
+        if (LabInput.IsTouch)
+        {
+            touchGameplayActive = locked;
+            if (!locked)
+            {
+                LabInput.ReleaseAllVirtual();
+            }
+            return;
+        }
+
         Cursor.lockState = locked ? CursorLockMode.Locked : CursorLockMode.None;
         Cursor.visible = !locked;
     }

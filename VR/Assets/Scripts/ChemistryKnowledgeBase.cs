@@ -544,7 +544,8 @@ public static class ChemistryKnowledgeBase
 
         if (data == null)
         {
-            return "Finish an experiment and press F to open the graphs - then I can walk you " +
+            return "Finish an experiment and " + LabInput.Prompt("press F", "tap Graphs") +
+                   " to open the graphs - then I can walk you " +
                    "through the energy profile for it.";
         }
 
@@ -638,8 +639,8 @@ public static class ChemistryKnowledgeBase
 
         if (all == null || all.Count == 0)
         {
-            return "You have not recorded an attempt yet. Everything you do is logged - press Tab " +
-                   "at any time to see your history.";
+            return "You have not recorded an attempt yet. Everything you do is logged - " +
+                   LabInput.Prompt("press Tab", "tap History") + " at any time to see your history.";
         }
 
         int successes = 0;
@@ -673,7 +674,8 @@ public static class ChemistryKnowledgeBase
         b.Append(successes == 0
             ? "Nothing wrong with that - failing an experiment and finding out why is the whole " +
               "reason this bench lets you choose your own quantities."
-            : "Press Tab for the full history, including the exact quantities you used each time.");
+            : LabInput.Prompt("Press Tab", "Tap History") +
+              " for the full history, including the exact quantities you used each time.");
 
         return b.ToString();
     }

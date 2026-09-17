@@ -164,7 +164,7 @@ public class ObjectInteraction : MonoBehaviour
                 CheckForInteractableObject();
                 PulseHighlight();
 
-                if (Input.GetMouseButtonDown(0))
+                if (LabInput.GetMouseButtonDown(0))
                 {
                     TryPrimaryInteraction();
                 }
@@ -185,7 +185,7 @@ public class ObjectInteraction : MonoBehaviour
                 HandleHeldObjectShortcuts();
                 MoveHeldObject();
 
-                if (Input.GetMouseButtonDown(0) || Input.GetKeyDown(KeyCode.R))
+                if (LabInput.GetMouseButtonDown(0) || LabInput.GetKeyDown(KeyCode.R))
                 {
                     ReleaseObject();
                 }
@@ -194,7 +194,7 @@ public class ObjectInteraction : MonoBehaviour
             {
                 heldFollowSuspended = true;
 
-                if (Input.GetKeyDown(KeyCode.R))
+                if (LabInput.GetKeyDown(KeyCode.R))
                 {
                     ReleaseObject();
                 }
@@ -235,7 +235,7 @@ public class ObjectInteraction : MonoBehaviour
             return;
         }
 
-        if (Input.GetKeyDown(resetHeldPoseKey))
+        if (LabInput.GetKeyDown(resetHeldPoseKey))
         {
             ResetHeldObjectPose();
         }
@@ -772,7 +772,7 @@ public class ObjectInteraction : MonoBehaviour
             return;
         }
 
-        float scroll = Input.GetAxis("Mouse ScrollWheel");
+        float scroll = LabInput.GetAxis("Mouse ScrollWheel");
         if (scroll != 0)
         {
             targetRotation *= Quaternion.Euler(0f, scroll * rotationSpeed, 0f);
@@ -780,22 +780,22 @@ public class ObjectInteraction : MonoBehaviour
 
         float delta = rotationSpeed * Time.deltaTime;
 
-        if (Input.GetKey(yawLeftKey))
+        if (LabInput.GetKey(yawLeftKey))
         {
             targetRotation *= Quaternion.Euler(0f, -delta, 0f);
         }
 
-        if (Input.GetKey(yawRightKey))
+        if (LabInput.GetKey(yawRightKey))
         {
             targetRotation *= Quaternion.Euler(0f, delta, 0f);
         }
 
-        if (Input.GetKey(pitchUpKey))
+        if (LabInput.GetKey(pitchUpKey))
         {
             targetRotation *= Quaternion.Euler(delta, 0f, 0f);
         }
 
-        if (Input.GetKey(pitchDownKey))
+        if (LabInput.GetKey(pitchDownKey))
         {
             targetRotation *= Quaternion.Euler(-delta, 0f, 0f);
         }
@@ -803,9 +803,9 @@ public class ObjectInteraction : MonoBehaviour
         // Roll used to be C / V, but V is also the assistant's push-to-talk key - so asking the
         // assistant a question silently rolled whatever you were holding. Roll is now one key,
         // reversed with Shift, which leaves V free.
-        if (Input.GetKey(rollKey))
+        if (LabInput.GetKey(rollKey))
         {
-            bool reversed = Input.GetKey(KeyCode.LeftShift) || Input.GetKey(KeyCode.RightShift);
+            bool reversed = LabInput.GetKey(KeyCode.LeftShift) || LabInput.GetKey(KeyCode.RightShift);
             targetRotation *= Quaternion.Euler(0f, 0f, reversed ? -delta : delta);
         }
     }

@@ -36,12 +36,7 @@ SOFTWARE.
 Some interface icons by Icons8 - https://icons8.com
 
 
-3. Oculus Hands hand models
----------------------------
-Copyright (c) Meta Platform Technologies, LLC and its affiliates. All rights reserved.
-
-
-4. Unity packages and assets
+3. Unity packages and assets
 ----------------------------
 Built with Unity. Unity packages and Unity Asset Store content (including the
 Unity Particle Pack effects) are used under the Unity Companion License and the

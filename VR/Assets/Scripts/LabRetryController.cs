@@ -67,7 +67,7 @@ public class LabRetryController : MonoBehaviour
             return;
         }
 
-        if (Input.GetKeyDown(retryKey) && IsEnabledScene())
+        if (LabInput.GetKeyDown(retryKey) && IsEnabledScene())
         {
             RestartCurrentExperiment();
         }

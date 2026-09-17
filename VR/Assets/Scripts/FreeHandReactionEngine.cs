@@ -812,9 +812,14 @@ public class FreeHandReactionEngine
     /// restart the game. <see cref="LabRetryController"/> is the way out, so the failure message is
     /// where it has to be advertised.
     /// </summary>
-    public const string AssistantClosingLine =
-        "Ask your AI Lab Assistant what went wrong and how to correct it.\n" +
-        "Press F5 to reset the bench and try this experiment again.";
+    public static string AssistantClosingLine
+    {
+        get
+        {
+            return "Ask your AI Lab Assistant what went wrong and how to correct it.\n" +
+                   LabInput.Prompt("Press F5", "Tap Retry") + " to reset the bench and try this experiment again.";
+        }
+    }
 
     /// <summary>
     /// Closing line for the testing scene. The assistant does not run there, and pointing the

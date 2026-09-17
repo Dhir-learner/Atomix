@@ -45,6 +45,8 @@ public class ReactionGraphUI : MonoBehaviour
 
     private bool isOpen = false;
 
+    public bool IsOpen { get { return isOpen; } }
+
     /// <summary>Mouse-wheel choice of panel size as a share of the view; 0 = reading distance.</summary>
     private float chosenFill;
     private int currentReactionId = -1;
@@ -115,7 +117,7 @@ public class ReactionGraphUI : MonoBehaviour
             return;
         }
 
-        if (Input.GetKeyDown(toggleKey) && IsEnabledScene())
+        if (LabInput.GetKeyDown(toggleKey) && IsEnabledScene())
         {
             Toggle();
             return;
@@ -126,7 +128,7 @@ public class ReactionGraphUI : MonoBehaviour
             return;
         }
 
-        if (Input.GetKeyDown(closeKey))
+        if (LabInput.GetKeyDown(closeKey))
         {
             Close();
             return;
@@ -487,7 +489,7 @@ public class ReactionGraphUI : MonoBehaviour
             new Vector2(-90.0f, 378.0f), new Vector2(940.0f, 60.0f),
             30.0f, FontStyles.Bold, TextAlignmentOptions.Left);
 
-        CreateButton("CloseButton", panel.transform, "Close  [Esc]",
+        CreateButton("CloseButton", panel.transform, LabInput.Prompt("Close  [Esc]", "Close"),
             new Vector2(510.0f, 384.0f), new Vector2(180.0f, 46.0f), Close);
 
         // --- Tabs ----------------------------------------------------------------------
@@ -526,8 +528,10 @@ public class ReactionGraphUI : MonoBehaviour
         TMP_Text hint = CreateText("Hint", panel.transform,
             new Vector2(0.0f, -396.0f), new Vector2(1160.0f, 28.0f),
             18.0f, FontStyles.Italic, TextAlignmentOptions.Center);
-        hint.text = "Press [" + toggleKey + "] any time to bring these graphs back.   " +
-                    "Mouse wheel moves the panel closer or farther.";
+        hint.text = LabInput.Prompt(
+            "Press [" + toggleKey + "] any time to bring these graphs back.   " +
+            "Mouse wheel moves the panel closer or farther.",
+            "Tap Graphs any time to bring these graphs back.");
         hint.color = NeutralColor;
     }
 

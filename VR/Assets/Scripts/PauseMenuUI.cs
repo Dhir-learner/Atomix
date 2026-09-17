@@ -102,7 +102,7 @@ public class PauseMenuUI : MonoBehaviour
             return;
         }
 
-        if (Input.GetKeyDown(toggleKey))
+        if (LabInput.GetKeyDown(toggleKey))
         {
             Toggle();
         }
@@ -249,7 +249,7 @@ public class PauseMenuUI : MonoBehaviour
             new Vector2(900.0f, 56.0f), "Atomix", 42.0f, TextAlignmentOptions.Center, Color.white);
 
         LabPanelBuilder.CreateText("Subtitle", panel, new Vector2(0.0f, TitleY - 48.0f),
-            new Vector2(1200.0f, 28.0f), "Paused — press F1 or Resume to go back", 20.0f,
+            new Vector2(1200.0f, 28.0f), LabInput.Prompt("Paused — press F1 or Resume to go back", "Paused — tap Resume to go back"), 20.0f,
             TextAlignmentOptions.Center, LabPanelBuilder.MutedTextColour);
 
         tabButtons.Clear();
@@ -270,12 +270,12 @@ public class PauseMenuUI : MonoBehaviour
             new Vector2(1500.0f, 52.0f), string.Empty, 19.0f,
             TextAlignmentOptions.Center, LabPanelBuilder.MutedTextColour);
 
-        LabPanelBuilder.CreateButton("Resume", panel, "Resume  [F1]",
+        LabPanelBuilder.CreateButton("Resume", panel, LabInput.Prompt("Resume  [F1]", "Resume"),
             new Vector2(-660.0f, FooterY), new Vector2(280.0f, 58.0f), 22.0f, Close);
 
         // A failed experiment used to be a dead end. This is the same thing F5 does, put where
         // someone who does not know the key will still find it.
-        restartButton = LabPanelBuilder.CreateButton("RestartExperiment", panel, "Retry experiment  [F5]",
+        restartButton = LabPanelBuilder.CreateButton("RestartExperiment", panel, LabInput.Prompt("Retry experiment  [F5]", "Retry experiment"),
             new Vector2(-330.0f, FooterY), new Vector2(340.0f, 58.0f), 22.0f,
             () =>
             {
@@ -646,12 +646,36 @@ public class PauseMenuUI : MonoBehaviour
         }
     }
 
+    private static readonly string[,] TouchControlRows =
+    {
+        { "Joystick", "Walk" },
+        { "Drag", "Look around" },
+        { "Up / Down", "Move up or down" },
+        { "USE", "Grab, drop or activate what the dot points at" },
+        { "Tilt + / -", "Tilt held glassware - hold to pour" },
+        { "Roll L / R", "Roll held glassware - also pours" },
+        { "Turn L / R", "Turn held glassware" },
+        { "Reset", "Reset the held object's pose" },
+        { "Book", "Open or close the reaction book" },
+        { "Retry", "Reset the bench and retry the experiment" },
+        { "History", "Experiment history" },
+        { "Graphs", "Scientific graphs" },
+        { "Table", "Periodic table" },
+        { "Label", "Cycle the measurement label" },
+        { "Ask", "Type a question to the assistant" },
+        { "Why?", "Ask why the last experiment failed" },
+        { "Chat", "Show or hide the assistant panel" },
+        { "Hint / +30s / Skip", "Testing scene: spend coins on help" },
+        { "Menu", "This menu" },
+        { "Back", "Close a panel" }
+    };
+
     private void BuildControlsTab()
     {
         LabAssistantSettings assistant = LabAssistantSettings.Load();
         bool voiceQuestions = assistant != null && assistant.ResolvedProvider == LabAssistantProvider.Convai;
 
-        string[,] rows =
+        string[,] rows = LabInput.IsTouch ? TouchControlRows : new string[,]
         {
             { "W A S D", "Move" },
             { "Mouse", "Look around" },

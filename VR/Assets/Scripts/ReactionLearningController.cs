@@ -217,20 +217,20 @@ public class ReactionLearningController : MonoBehaviour
             return;
         }
 
-        if (Input.GetKeyDown(KeyCode.Escape))
+        if (LabInput.GetKeyDown(KeyCode.Escape))
         {
             HandleBackAction();
         }
 
         if (currentState == LearningUiState.Video &&
-            Input.GetKeyDown(KeyCode.Space))
+            LabInput.GetKeyDown(KeyCode.Space))
         {
             TogglePlayPause();
         }
 
         // The panel stays where it was opened while the player walks and looks around; this
         // brings it back in front of them.
-        if (Input.GetKeyDown(RecentreKey))
+        if (LabInput.GetKeyDown(RecentreKey))
         {
             PositionUiInFrontOfCamera();
         }
@@ -656,7 +656,9 @@ public class ReactionLearningController : MonoBehaviour
             );
 
         controlsHint.text =
-            "Mouse wheel moves this panel closer or farther   -   O brings it back in front of you";
+            LabInput.Prompt(
+                "Mouse wheel moves this panel closer or farther   -   O brings it back in front of you",
+                "Aim at a button and tap USE");
 
         controlsHint.color =
             new Color(0.72f, 0.78f, 0.86f, 1f);
@@ -2310,12 +2312,12 @@ public class ReactionLearningController : MonoBehaviour
 //             return;
 //         }
 
-//         if (Input.GetKeyDown(KeyCode.Escape))
+//         if (LabInput.GetKeyDown(KeyCode.Escape))
 //         {
 //             HandleBackAction();
 //         }
 
-//         if (currentState == LearningUiState.Video && Input.GetKeyDown(KeyCode.Space))
+//         if (currentState == LearningUiState.Video && LabInput.GetKeyDown(KeyCode.Space))
 //         {
 //             TogglePlayPause();
 //         }

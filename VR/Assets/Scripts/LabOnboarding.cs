@@ -183,8 +183,8 @@ public class LabOnboarding : MonoBehaviour
         // Any deliberate action means the student has started playing and does not need this.
         // Movement keys are excluded on purpose - looking around while reading is normal.
         if (!LabTextInput.IsCapturing &&
-            (Input.GetKeyDown(KeyCode.B) || Input.GetKeyDown(KeyCode.F1) ||
-             Input.GetKeyDown(KeyCode.Escape) || Input.GetMouseButtonDown(0)))
+            (LabInput.GetKeyDown(KeyCode.B) || LabInput.GetKeyDown(KeyCode.F1) ||
+             LabInput.GetKeyDown(KeyCode.Escape) || LabInput.GetMouseButtonDown(0)))
         {
             remaining = Mathf.Min(remaining, fadeSeconds);
         }
@@ -341,15 +341,21 @@ public class LabOnboarding : MonoBehaviour
         body.text =
             "You are a chemistry student, and this bench is yours.\n" +
             "\n" +
-            "<b>1.</b>  Press <b>B</b> to open the reaction book and choose one of eight experiments.\n" +
-            "<b>2.</b>  Pick up the glassware with <b>left click</b>, tilt it with <b>Z</b> and <b>X</b> to pour.\n" +
+            LabInput.Prompt(
+                "<b>1.</b>  Press <b>B</b> to open the reaction book and choose one of eight experiments.\n" +
+                "<b>2.</b>  Pick up the glassware with <b>left click</b>, tilt it with <b>Z</b> and <b>X</b> to pour.\n",
+                "<b>1.</b>  Tap <b>Book</b> to open the reaction book and choose one of eight experiments.\n" +
+                "<b>2.</b>  Aim at glassware and tap <b>USE</b> to pick it up, then hold <b>Tilt</b> to pour.\n") +
             "<b>3.</b>  <b>The amount is what is being judged.</b> Too much fails as surely as too little - " +
             "watch the readout at the top of the screen.\n" +
-            "<b>4.</b>  When it goes wrong, press <b>Y</b> and the lab assistant will explain the chemistry.";
+            LabInput.Prompt(
+                "<b>4.</b>  When it goes wrong, press <b>Y</b> and the lab assistant will explain the chemistry.",
+                "<b>4.</b>  When it goes wrong, tap <b>Why?</b> and the lab assistant will explain the chemistry.");
 
         TMP_Text footer = MakeText(plate.transform, "Footer", new Vector2(0.0f, -146.0f),
             new Vector2(800.0f, 32.0f), 20.0f, LabPanelBuilder.MutedTextColour);
-        footer.text = "<b>F1</b> for settings and the full list of controls";
+        footer.text = LabInput.Prompt("<b>F1</b> for settings and the full list of controls",
+            "<b>Menu</b> for settings and the full list of controls");
 
         plate.SetActive(false);
     }

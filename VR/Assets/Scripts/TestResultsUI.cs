@@ -84,7 +84,7 @@ public class TestResultsUI : MonoBehaviour
 
         if (isOpen)
         {
-            if (Input.GetKeyDown(closeKey))
+            if (LabInput.GetKeyDown(closeKey))
             {
                 Close();
             }
@@ -437,7 +437,8 @@ public class TestResultsUI : MonoBehaviour
         if (timedOut > 0 && timedOut >= theoryWrong)
         {
             return timedOut + (timedOut == 1 ? " task ran out of time." : " tasks ran out of time.") +
-                   "\nPress [F3] during a task to buy 30 more seconds with your coins.";
+                   LabInput.Prompt("\nPress [F3] during a task to buy 30 more seconds with your coins.",
+                                   "\nTap +30s during a task to buy 30 more seconds with your coins.");
         }
 
         return theoryWrong + (theoryWrong == 1 ? " theory question was" : " theory questions were") +

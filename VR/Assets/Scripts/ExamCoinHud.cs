@@ -150,15 +150,15 @@ public class ExamCoinHud : MonoBehaviour
 
     private void HandlePurchaseInput()
     {
-        if (Input.GetKeyDown(hintKey))
+        if (LabInput.GetKeyDown(hintKey))
         {
             BuyHint();
         }
-        else if (Input.GetKeyDown(extraTimeKey))
+        else if (LabInput.GetKeyDown(extraTimeKey))
         {
             BuyExtraTime();
         }
-        else if (Input.GetKeyDown(skipKey))
+        else if (LabInput.GetKeyDown(skipKey))
         {
             BuySkip();
         }

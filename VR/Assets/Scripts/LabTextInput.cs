@@ -44,7 +44,17 @@ public static class LabTextInput
 
         owner = newOwner;
         Buffer = string.Empty;
+
+        if (LabInput.IsTouch)
+        {
+            keyboard = TouchScreenKeyboard.Open(string.Empty, TouchScreenKeyboardType.Default,
+                autocorrection: true, multiline: false, secure: false, alert: false,
+                textPlaceholder: "Ask the lab assistant", characterLimit: MaxLength);
+        }
     }
+
+    // Phones have no physical keyboard; the OS keyboard owns the text until it is dismissed.
+    private static TouchScreenKeyboard keyboard;
 
     public static void End(object callingOwner)
     {
@@ -57,6 +67,12 @@ public static class LabTextInput
 
         owner = null;
         Buffer = string.Empty;
+
+        if (keyboard != null)
+        {
+            keyboard.active = false;
+            keyboard = null;
+        }
     }
 
     public enum Result
@@ -76,17 +92,22 @@ public static class LabTextInput
             return Result.Cancelled;
         }
 
-        if (Input.GetKeyDown(KeyCode.Escape))
+        if (LabInput.IsTouch)
+        {
+            return ConsumeTouchKeyboard();
+        }
+
+        if (LabInput.GetKeyDown(KeyCode.Escape))
         {
             return Result.Cancelled;
         }
 
-        if (Input.GetKeyDown(KeyCode.Return) || Input.GetKeyDown(KeyCode.KeypadEnter))
+        if (LabInput.GetKeyDown(KeyCode.Return) || LabInput.GetKeyDown(KeyCode.KeypadEnter))
         {
             return Result.Submitted;
         }
 
-        string typed = Input.inputString;
+        string typed = LabInput.InputString;
 
         for (int i = 0; i < typed.Length; i++)
         {
@@ -115,6 +136,28 @@ public static class LabTextInput
         }
 
         return Result.Editing;
+    }
+
+    private static Result ConsumeTouchKeyboard()
+    {
+        if (keyboard == null)
+        {
+            return Result.Cancelled;
+        }
+
+        string text = keyboard.text ?? string.Empty;
+        Buffer = text.Length > MaxLength ? text.Substring(0, MaxLength) : text;
+
+        switch (keyboard.status)
+        {
+            case TouchScreenKeyboard.Status.Done:
+                return Result.Submitted;
+            case TouchScreenKeyboard.Status.Canceled:
+            case TouchScreenKeyboard.Status.LostFocus:
+                return Result.Cancelled;
+            default:
+                return Result.Editing;
+        }
     }
 
     /// <summary>The buffer with a blinking caret, for display.</summary>

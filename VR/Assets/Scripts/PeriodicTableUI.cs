@@ -68,7 +68,7 @@ public class PeriodicTableUI : MonoBehaviour
             return;
         }
 
-        if (Input.GetKeyDown(toggleKey))
+        if (LabInput.GetKeyDown(toggleKey))
         {
             Toggle();
             return;
@@ -79,7 +79,7 @@ public class PeriodicTableUI : MonoBehaviour
             return;
         }
 
-        if (Input.GetKeyDown(closeKey))
+        if (LabInput.GetKeyDown(closeKey))
         {
             Close();
             return;
@@ -177,7 +177,7 @@ public class PeriodicTableUI : MonoBehaviour
             new Vector2(900.0f, 46.0f), "Periodic Table of the Elements", 34.0f,
             TextAlignmentOptions.Center, Color.white);
 
-        LabPanelBuilder.CreateButton("Close", panel, "Close  [Esc]",
+        LabPanelBuilder.CreateButton("Close", panel, LabInput.Prompt("Close  [Esc]", "Close"),
             new Vector2(CanvasWidth * 0.5f - 130.0f, CanvasHeight * 0.5f - 56.0f),
             new Vector2(190.0f, 46.0f), 22.0f, Close);
 

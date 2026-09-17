@@ -284,7 +284,7 @@ public class ExamSetupUI : MonoBehaviour
 
         summaryText.text =
             "<b>" + count + "</b> task" + (count == 1 ? "" : "s") + "   -   " + mode +
-            "\n60 seconds each   -   spend coins on help with [F2] [F3] [F4]" +
+            "\n60 seconds each   -   spend coins on help with " + LabInput.Prompt("[F2] [F3] [F4]", "Hint, +30s and Skip") +
             "\n<size=19>Change the task mix in Settings from the main menu.</size>";
     }
 

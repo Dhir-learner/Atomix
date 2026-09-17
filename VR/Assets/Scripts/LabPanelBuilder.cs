@@ -273,7 +273,7 @@ public static class LabPanelBuilder
     /// <returns>True when the wheel moved the panel.</returns>
     public static bool ScrollPanelDistance(Canvas canvas, ref float chosenFill)
     {
-        float wheel = Input.mouseScrollDelta.y;
+        float wheel = LabInput.MouseScrollDelta.y;
         if (wheel == 0.0f || canvas == null || !canvas.gameObject.activeInHierarchy)
         {
             return false;

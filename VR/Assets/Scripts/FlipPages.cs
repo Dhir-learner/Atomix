@@ -58,12 +58,12 @@ public class FlipPages : MonoBehaviour
             return;
         }
 
-        if (Input.GetKeyDown(KeyCode.RightArrow) && forwardButton.activeInHierarchy)
+        if (LabInput.GetKeyDown(KeyCode.RightArrow) && forwardButton.activeInHierarchy)
         {
             RotateForward();
         }
 
-        if (Input.GetKeyDown(KeyCode.LeftArrow) && backButton.activeInHierarchy)
+        if (LabInput.GetKeyDown(KeyCode.LeftArrow) && backButton.activeInHierarchy)
         {
             RotateBack();
         }
@@ -89,14 +89,14 @@ public class FlipPages : MonoBehaviour
     {
         switch (shortcut)
         {
-            case 1: return Input.GetKeyDown(KeyCode.Alpha1) || Input.GetKeyDown(KeyCode.Keypad1);
-            case 2: return Input.GetKeyDown(KeyCode.Alpha2) || Input.GetKeyDown(KeyCode.Keypad2);
-            case 3: return Input.GetKeyDown(KeyCode.Alpha3) || Input.GetKeyDown(KeyCode.Keypad3);
-            case 4: return Input.GetKeyDown(KeyCode.Alpha4) || Input.GetKeyDown(KeyCode.Keypad4);
-            case 5: return Input.GetKeyDown(KeyCode.Alpha5) || Input.GetKeyDown(KeyCode.Keypad5);
-            case 6: return Input.GetKeyDown(KeyCode.Alpha6) || Input.GetKeyDown(KeyCode.Keypad6);
-            case 7: return Input.GetKeyDown(KeyCode.Alpha7) || Input.GetKeyDown(KeyCode.Keypad7);
-            case 8: return Input.GetKeyDown(KeyCode.Alpha8) || Input.GetKeyDown(KeyCode.Keypad8);
+            case 1: return LabInput.GetKeyDown(KeyCode.Alpha1) || LabInput.GetKeyDown(KeyCode.Keypad1);
+            case 2: return LabInput.GetKeyDown(KeyCode.Alpha2) || LabInput.GetKeyDown(KeyCode.Keypad2);
+            case 3: return LabInput.GetKeyDown(KeyCode.Alpha3) || LabInput.GetKeyDown(KeyCode.Keypad3);
+            case 4: return LabInput.GetKeyDown(KeyCode.Alpha4) || LabInput.GetKeyDown(KeyCode.Keypad4);
+            case 5: return LabInput.GetKeyDown(KeyCode.Alpha5) || LabInput.GetKeyDown(KeyCode.Keypad5);
+            case 6: return LabInput.GetKeyDown(KeyCode.Alpha6) || LabInput.GetKeyDown(KeyCode.Keypad6);
+            case 7: return LabInput.GetKeyDown(KeyCode.Alpha7) || LabInput.GetKeyDown(KeyCode.Keypad7);
+            case 8: return LabInput.GetKeyDown(KeyCode.Alpha8) || LabInput.GetKeyDown(KeyCode.Keypad8);
             default: return false;
         }
     }

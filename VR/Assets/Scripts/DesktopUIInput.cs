@@ -110,7 +110,7 @@ public class DesktopUIInput : MonoBehaviour
             SelectFirstControl();
         }
 
-        if (Input.GetKeyDown(closePanelKey))
+        if (LabInput.GetKeyDown(closePanelKey))
         {
             TryCloseOpenPanel();
         }

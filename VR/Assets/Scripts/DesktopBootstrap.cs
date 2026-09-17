@@ -48,7 +48,7 @@ public class DesktopBootstrap : MonoBehaviour
             return;
         }
 
-        if (Input.GetKeyDown(KeyCode.B))
+        if (LabInput.GetKeyDown(KeyCode.B))
         {
             ToggleBook();
         }
@@ -90,6 +90,7 @@ public class DesktopBootstrap : MonoBehaviour
         SetupInteractables(scene);
         SetupCrosshairUi(scene);
         SetupUiInput(false);
+        MobileControlsUI.Ensure();
         SetupLabBoundary(scene);
 
         // This pass runs before Start(), so any script that resolves its object references there

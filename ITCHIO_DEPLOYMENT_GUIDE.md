@@ -43,8 +43,10 @@ The old key is still in your **public** git history. Removing it from the file d
 ### B2. Decide whether the GitHub repo stays public
 `github.com/Dhir-learner/Atomix` is public and contains the full game. Anyone can clone it and build Atomix for free instead of paying $4.99. Before selling, the team should decide: **make the repo private** (GitHub → Settings → General → Danger Zone → Change visibility), or accept that the paid build is essentially a convenience/support purchase.
 
-### B3. Oculus Hands license — ⚠️ likely conflict
-`VR/Assets/Oculus Hands/` (hand models + animations) is referenced by **all 4 scenes**, so it ships in the Windows build. Meta's SDK license states: *"You may only use the SDK to develop Applications in connection with MPT approved hardware and software products"* — i.e. Meta headsets. A Windows desktop game sold on itch.io is very likely outside that. Options:
+### B3. Oculus Hands license — ✅ resolved on the `mobile` branch (2026-09-16)
+The hand models and `HandAnimationController` were removed from all 4 scenes and the project, because Meta's SDK license limits them to Meta headsets. Build the Windows release from a branch that includes this change. The original analysis is kept below for reference.
+
+`VR/Assets/Oculus Hands/` (hand models + animations) was referenced by **all 4 scenes**, so it shipped in the Windows build. Meta's SDK license states: *"You may only use the SDK to develop Applications in connection with MPT approved hardware and software products"* — i.e. Meta headsets. A Windows desktop game sold on itch.io is very likely outside that. Options were:
 - **(Recommended)** Replace the hand models with ones whose license allows PC distribution, or remove the hand-model references from the scenes (desktop mode doesn't use hands). This is a scene change — ask Claude to do it with you in the Editor.
 - Confirm where your copy came from and that its license allows this use.
 
@@ -175,7 +177,6 @@ itch.io → avatar menu → **Upload new project**:
    ```text
    Based on UnityLab by Alina Duca (MIT License) — https://github.com/alinaduca/BachelorsThesis-UnityLab
    Icons by Icons8 — https://icons8.com
-   Hand models © Meta Platform Technologies, LLC   (remove this line if you replace them — see B3)
    Made with Unity
    ```
 
@@ -258,7 +259,7 @@ Processing: PayPal/Stripe charge **$0.30 + 2.9%** ≈ $0.45 on a $4.99 sale. Wit
 **Blockers (Part B)**
 - [ ] Old Convai key revoked
 - [ ] Repo visibility decided
-- [ ] Oculus Hands replaced/removed or license confirmed
+- [x] Oculus Hands removed (`mobile` branch)
 - [ ] Every texture, sound and video accounted for
 - [ ] Revenue split agreed
 

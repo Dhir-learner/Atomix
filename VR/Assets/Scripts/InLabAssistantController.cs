@@ -275,17 +275,17 @@ public class InLabAssistantController : MonoBehaviour
             return;
         }
 
-        if (Input.GetKeyDown(minimizeKey))
+        if (LabInput.GetKeyDown(minimizeKey))
         {
             SetMinimized(!minimized);
         }
 
-        if (Input.GetKeyDown(typeKey))
+        if (LabInput.GetKeyDown(typeKey))
         {
             BeginTyping();
         }
 
-        if (Input.GetKeyDown(whyKey))
+        if (LabInput.GetKeyDown(whyKey))
         {
             AskWhyItWentWrong();
         }
@@ -343,6 +343,21 @@ public class InLabAssistantController : MonoBehaviour
     /// <summary>KeyCode.Return prints as "Return"; every player calls that key Enter.</summary>
     private static string KeyLabel(KeyCode key)
     {
+        // On a phone, name the on-screen button that presses this key.
+        if (LabInput.IsTouch)
+        {
+            switch (key)
+            {
+                case KeyCode.Return:
+                case KeyCode.KeypadEnter:
+                    return "Ask";
+                case KeyCode.Y:
+                    return "Why?";
+                case KeyCode.M:
+                    return "Chat";
+            }
+        }
+
         if (key == KeyCode.Return || key == KeyCode.KeypadEnter)
         {
             return "Enter";
@@ -582,11 +597,11 @@ public class InLabAssistantController : MonoBehaviour
 
     private void HandlePushToTalkInput()
     {
-        if (Input.GetKeyDown(pushToTalkKey))
+        if (LabInput.GetKeyDown(pushToTalkKey))
         {
             StartPushToTalk();
         }
-        else if (Input.GetKeyUp(pushToTalkKey))
+        else if (LabInput.GetKeyUp(pushToTalkKey))
         {
             StopPushToTalk();
         }
@@ -732,7 +747,9 @@ public class InLabAssistantController : MonoBehaviour
 
         BuildExpandedPanel(canvasObject.transform);
         BuildCollapsedTab(canvasObject.transform);
-        SetMinimized(false);
+
+        // On a phone the expanded panel would cover the right-hand touch controls.
+        SetMinimized(LabInput.IsTouch);
     }
 
     private void BuildExpandedPanel(Transform parent)
@@ -791,7 +808,7 @@ public class InLabAssistantController : MonoBehaviour
         TMP_Text label = CreateStretchText("TabLabel", collapsedRoot.transform,
             new Vector2(10.0f, 8.0f), new Vector2(-10.0f, -8.0f),
             17.0f, FontStyles.Bold, TextAlignmentOptions.Center, stretchVertically: true);
-        label.text = "Lab Assistant  [" + minimizeKey + "]";
+        label.text = "Lab Assistant  [" + KeyLabel(minimizeKey) + "]";
         label.color = AccentColor;
     }
 
@@ -928,7 +945,7 @@ public class InLabAssistantController : MonoBehaviour
             if (typing)
             {
                 footerText.text = "<color=#7ADFFF>Ask: </color>" + LabTextInput.Display +
-                                  "\n[Enter] send    [Esc] cancel";
+                                  LabInput.Prompt("\n[Enter] send    [Esc] cancel", "\nType, then tap Done on the keyboard");
             }
             else if (CanAsk)
             {
@@ -937,11 +954,11 @@ public class InLabAssistantController : MonoBehaviour
                     : string.Empty;
                 footerText.text =
                     talk + "[" + KeyLabel(typeKey) + "] type    [" +
-                    KeyLabel(whyKey) + "] why did it fail    [" + minimizeKey + "] minimise";
+                    KeyLabel(whyKey) + "] why did it fail    [" + KeyLabel(minimizeKey) + "] minimise";
             }
             else
             {
-                footerText.text = "Assistant not available    [" + minimizeKey + "] minimise";
+                footerText.text = "Assistant not available    [" + KeyLabel(minimizeKey) + "] minimise";
             }
         }
     }

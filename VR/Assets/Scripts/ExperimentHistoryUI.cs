@@ -33,6 +33,8 @@ public class ExperimentHistoryUI : MonoBehaviour
 
     private bool isOpen = false;
 
+    public bool IsOpen { get { return isOpen; } }
+
     /// <summary>Mouse-wheel choice of panel size as a share of the view; 0 = reading distance.</summary>
     private float chosenFill;
     private int filterReactionId = -1;         // -1 = show everything
@@ -65,7 +67,7 @@ public class ExperimentHistoryUI : MonoBehaviour
             return;
         }
 
-        if (Input.GetKeyDown(toggleKey))
+        if (LabInput.GetKeyDown(toggleKey))
         {
             Toggle();
             return;
@@ -76,7 +78,7 @@ public class ExperimentHistoryUI : MonoBehaviour
             return;
         }
 
-        if (Input.GetKeyDown(closeKey))
+        if (LabInput.GetKeyDown(closeKey))
         {
             Close();
             return;
@@ -168,17 +170,17 @@ public class ExperimentHistoryUI : MonoBehaviour
         bool listScrolls = listContent.rect.height > scrollRect.viewport.rect.height + 1.0f;
         if (listScrolls && IsAimingAtList())
         {
-            pixels += Input.mouseScrollDelta.y * 120.0f;   // one wheel notch
+            pixels += LabInput.MouseScrollDelta.y * 120.0f;   // one wheel notch
         }
         else
         {
             LabPanelBuilder.ScrollPanelDistance(historyCanvas, ref chosenFill);
         }
-        if (Input.GetKey(KeyCode.UpArrow))
+        if (LabInput.GetKey(KeyCode.UpArrow))
         {
             pixels += scrollSpeed * Time.unscaledDeltaTime;
         }
-        if (Input.GetKey(KeyCode.DownArrow))
+        if (LabInput.GetKey(KeyCode.DownArrow))
         {
             pixels -= scrollSpeed * Time.unscaledDeltaTime;
         }
@@ -263,8 +265,10 @@ public class ExperimentHistoryUI : MonoBehaviour
         TMP_Text hint = CreateText("Hint", panel.transform,
             new Vector2(0.0f, 292.0f), new Vector2(1100.0f, 34.0f),
             20.0f, FontStyles.Normal, TextAlignmentOptions.Left);
-        hint.text = "Click a row to expand.  Wheel: on the list scrolls, off it moves the panel.  " +
-                    toggleKey + " / " + closeKey + " closes.";
+        hint.text = LabInput.Prompt(
+            "Click a row to expand.  Wheel: on the list scrolls, off it moves the panel.  " +
+            toggleKey + " / " + closeKey + " closes.",
+            "Aim at a row and tap USE to expand it.  Tap History again to close.");
         hint.color = NeutralColor;
 
         BuildFilterRow(panel.transform);
