@@ -159,7 +159,12 @@ public class ObjectInteraction : MonoBehaviour
 
         if (currentlyHeldObject == null)
         {
-            if (CanProcessWorldInteraction())
+            if (CanProcessWorldInteraction() && AtomixInput.IsMobile)
+            {
+                // No crosshair on a phone: the student taps the thing itself.
+                HandleTouchTap();
+            }
+            else if (CanProcessWorldInteraction())
             {
                 CheckForInteractableObject();
                 PulseHighlight();
@@ -185,7 +190,7 @@ public class ObjectInteraction : MonoBehaviour
                 HandleHeldObjectShortcuts();
                 MoveHeldObject();
 
-                if (Input.GetMouseButtonDown(0) || Input.GetKeyDown(KeyCode.R))
+                if (Input.GetMouseButtonDown(0) || AtomixInput.GetDown(KeyCode.R, AtomixAction.Drop))
                 {
                     ReleaseObject();
                 }
@@ -194,7 +199,7 @@ public class ObjectInteraction : MonoBehaviour
             {
                 heldFollowSuspended = true;
 
-                if (Input.GetKeyDown(KeyCode.R))
+                if (AtomixInput.GetDown(KeyCode.R, AtomixAction.Drop))
                 {
                     ReleaseObject();
                 }
@@ -235,7 +240,7 @@ public class ObjectInteraction : MonoBehaviour
             return;
         }
 
-        if (Input.GetKeyDown(resetHeldPoseKey))
+        if (AtomixInput.GetDown(resetHeldPoseKey, AtomixAction.ResetHeldPose))
         {
             ResetHeldObjectPose();
         }
@@ -256,10 +261,9 @@ public class ObjectInteraction : MonoBehaviour
         }
 
         Ray ray = new Ray(transform.position, transform.forward);
-        if (Physics.Raycast(ray, out RaycastHit hit, interactionDistance, interactableLayer))
+        if (FindTarget(ray, out DesktopInteractable desktopInteractable, out ObjectGrabbable grabbable))
         {
-            DesktopInteractable desktopInteractable = hit.collider.GetComponentInParent<DesktopInteractable>();
-            if (desktopInteractable != null && desktopInteractable.CanInteract)
+            if (desktopInteractable != null)
             {
                 if (highlightedInteractable != desktopInteractable)
                 {
@@ -273,7 +277,6 @@ public class ObjectInteraction : MonoBehaviour
                 return;
             }
 
-            ObjectGrabbable grabbable = hit.collider.GetComponentInParent<ObjectGrabbable>();
             if (grabbable != null && grabbable.canGrab)
             {
                 if (highlightedGrabbable != grabbable)
@@ -304,6 +307,72 @@ public class ObjectInteraction : MonoBehaviour
         RemoveHighlight();
         blockedGrabbable = null;
         SetCrosshairGrabbableHover(false);
+    }
+
+    /// <summary>
+    /// What a ray from the camera lands on: an operable control first, otherwise a grabbable
+    /// (which may be locked for this task). Shared by the desktop crosshair and the phone's tap.
+    /// </summary>
+    bool FindTarget(Ray ray, out DesktopInteractable interactable, out ObjectGrabbable grabbable)
+    {
+        interactable = null;
+        grabbable = null;
+
+        if (!Physics.Raycast(ray, out RaycastHit hit, interactionDistance, interactableLayer))
+        {
+            return false;
+        }
+
+        DesktopInteractable control = hit.collider.GetComponentInParent<DesktopInteractable>();
+        if (control != null && control.CanInteract)
+        {
+            interactable = control;
+            return true;
+        }
+
+        grabbable = hit.collider.GetComponentInParent<ObjectGrabbable>();
+        return grabbable != null;
+    }
+
+    /// <summary>
+    /// The phone's version of a click: a short tap on the 3D view, aimed wherever the finger
+    /// landed. Buttons and panels never reach here - <see cref="MobileControls"/> only reports
+    /// taps that touched no UI, and the UI module handles those itself.
+    /// </summary>
+    void HandleTouchTap()
+    {
+        if (!AtomixInput.TryGetTap(out Vector2 screenPosition))
+        {
+            return;
+        }
+
+        Camera eye = GetComponent<Camera>();
+        if (eye == null)
+        {
+            eye = Camera.main;
+        }
+
+        if (eye == null)
+        {
+            return;
+        }
+
+        FindTarget(eye.ScreenPointToRay(screenPosition),
+            out DesktopInteractable interactable, out ObjectGrabbable grabbable);
+
+        if (interactable != null)
+        {
+            interactable.Interact(this);
+            return;
+        }
+
+        // TryGrabObject reads these, and answers a locked one with the "not part of this
+        // experiment" toast exactly as the crosshair click does.
+        highlightedGrabbable = grabbable != null && grabbable.canGrab ? grabbable : null;
+        blockedGrabbable = grabbable != null && !grabbable.canGrab ? grabbable : null;
+        TryGrabObject();
+        highlightedGrabbable = null;
+        blockedGrabbable = null;
     }
 
     void HighlightObject(Transform target)
@@ -779,6 +848,32 @@ public class ObjectInteraction : MonoBehaviour
         }
 
         float delta = rotationSpeed * Time.deltaTime;
+
+        if (AtomixInput.IsMobile)
+        {
+            // Relative to the screen rather than the object, so "tilt left" always tips the
+            // vessel towards the left of the view, however it happens to be turned.
+            if (AtomixInput.Held(AtomixAction.TurnLeft))
+            {
+                targetRotation = Quaternion.AngleAxis(-delta, Vector3.up) * targetRotation;
+            }
+
+            if (AtomixInput.Held(AtomixAction.TurnRight))
+            {
+                targetRotation = Quaternion.AngleAxis(delta, Vector3.up) * targetRotation;
+            }
+
+            // A positive turn about the view axis is anticlockwise as the camera sees it.
+            if (AtomixInput.Held(AtomixAction.TiltLeft))
+            {
+                targetRotation = Quaternion.AngleAxis(delta, transform.forward) * targetRotation;
+            }
+
+            if (AtomixInput.Held(AtomixAction.TiltRight))
+            {
+                targetRotation = Quaternion.AngleAxis(-delta, transform.forward) * targetRotation;
+            }
+        }
 
         if (Input.GetKey(yawLeftKey))
         {

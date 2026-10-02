@@ -17,10 +17,15 @@ using UnityEngine;
 ///
 /// Ownership is tracked so a stale End() from a destroyed panel cannot unlock a capture that a
 /// different panel has since started.
+///
+/// On a phone there are no keys to read, so the same capture opens the system's on-screen
+/// keyboard instead and mirrors its text into <see cref="Buffer"/>. The callers cannot tell the
+/// difference: they still see Editing, Submitted or Cancelled.
 /// </summary>
 public static class LabTextInput
 {
     private static object owner;
+    private static TouchScreenKeyboard keyboard;
 
     /// <summary>True while a text field is consuming keystrokes.</summary>
     public static bool IsCapturing { get { return owner != null; } }
@@ -44,6 +49,13 @@ public static class LabTextInput
 
         owner = newOwner;
         Buffer = string.Empty;
+
+        if (AtomixInput.IsMobile && TouchScreenKeyboard.isSupported)
+        {
+            CloseKeyboard();
+            keyboard = TouchScreenKeyboard.Open(string.Empty, TouchScreenKeyboardType.Default,
+                true, false, false, false, "Ask the lab assistant...", MaxLength);
+        }
     }
 
     public static void End(object callingOwner)
@@ -57,6 +69,50 @@ public static class LabTextInput
 
         owner = null;
         Buffer = string.Empty;
+        CloseKeyboard();
+    }
+
+    private static void CloseKeyboard()
+    {
+        if (keyboard == null)
+        {
+            return;
+        }
+
+        if (keyboard.active)
+        {
+            keyboard.active = false;
+        }
+        keyboard = null;
+    }
+
+    /// <summary>The phone's keyboard, reported in the same terms as typed keys.</summary>
+    private static Result ConsumeKeyboard()
+    {
+        if (keyboard == null)
+        {
+            return Result.Cancelled;
+        }
+
+        string text = keyboard.text ?? string.Empty;
+        Buffer = text.Length > MaxLength ? text.Substring(0, MaxLength) : text;
+
+        switch (keyboard.status)
+        {
+            case TouchScreenKeyboard.Status.Done:
+                return Result.Submitted;
+
+            case TouchScreenKeyboard.Status.Canceled:
+                return Result.Cancelled;
+
+            case TouchScreenKeyboard.Status.LostFocus:
+                // Tapping outside the keyboard on Android. Keep what was written rather than
+                // throwing a half-typed question away.
+                return Buffer.Trim().Length > 0 ? Result.Submitted : Result.Cancelled;
+
+            default:
+                return Result.Editing;
+        }
     }
 
     public enum Result
@@ -74,6 +130,11 @@ public static class LabTextInput
         if (!IsOwnedBy(callingOwner))
         {
             return Result.Cancelled;
+        }
+
+        if (keyboard != null)
+        {
+            return ConsumeKeyboard();
         }
 
         if (Input.GetKeyDown(KeyCode.Escape))

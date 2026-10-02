@@ -68,7 +68,7 @@ public class PeriodicTableUI : MonoBehaviour
             return;
         }
 
-        if (Input.GetKeyDown(toggleKey))
+        if (AtomixInput.GetDown(toggleKey, AtomixAction.PeriodicTable))
         {
             Toggle();
             return;

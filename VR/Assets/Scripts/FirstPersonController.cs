@@ -156,7 +156,9 @@ public class FirstPersonController : MonoBehaviour
             return;
         }
 
-        if (Input.GetKeyDown(KeyCode.Escape))
+        // On a phone the back button arrives as Escape. It closes panels there; there is no
+        // cursor to free, so it must not also switch the touch controls off.
+        if (Input.GetKeyDown(KeyCode.Escape) && !AtomixInput.IsMobile)
         {
             if (IsCursorLocked)
             {
@@ -181,8 +183,22 @@ public class FirstPersonController : MonoBehaviour
 
     void HandleMouseLook()
     {
-        float mouseX = Input.GetAxis("Mouse X") * mouseSensitivity;
-        float mouseY = Input.GetAxis("Mouse Y") * mouseSensitivity;
+        float mouseX = 0f;
+        float mouseY = 0f;
+
+        if (AtomixInput.IsMobile)
+        {
+            // Already in degrees, and already scaled by the touch sensitivity setting.
+            Vector2 touchLook = AtomixInput.LookDelta;
+            mouseX = touchLook.x;
+            mouseY = touchLook.y;
+        }
+        else
+        {
+            mouseX = Input.GetAxis("Mouse X") * mouseSensitivity;
+            mouseY = Input.GetAxis("Mouse Y") * mouseSensitivity;
+        }
+
         if (invertLook)
         {
             mouseY = -mouseY;
@@ -232,6 +248,11 @@ public class FirstPersonController : MonoBehaviour
             vertical += 1f;
         }
 
+        // The on-screen joystick. Analogue, so a half push walks at half speed.
+        Vector2 stick = AtomixInput.MoveAxis;
+        horizontal += stick.x;
+        vertical += stick.y;
+
         Vector3 forward = Vector3.ProjectOnPlane(cameraTransform.forward, Vector3.up).normalized;
         Vector3 right = Vector3.ProjectOnPlane(cameraTransform.right, Vector3.up).normalized;
 
@@ -249,7 +270,7 @@ public class FirstPersonController : MonoBehaviour
         moveDirection = Vector3.ClampMagnitude(moveDirection, 1f);
 
         float currentSpeed = moveSpeed;
-        if (Input.GetKey(KeyCode.LeftShift))
+        if (Input.GetKey(KeyCode.LeftShift) || AtomixInput.SprintToggled)
         {
             currentSpeed *= sprintMultiplier;
         }
@@ -276,12 +297,13 @@ public class FirstPersonController : MonoBehaviour
             float verticalAxis = 0f;
             if (enableVerticalFlyMovement)
             {
-                if (Input.GetKey(KeyCode.Space))
+                if (AtomixInput.Get(KeyCode.Space, AtomixAction.FlyUp))
                 {
                     verticalAxis += 1f;
                 }
 
-                if (Input.GetKey(KeyCode.LeftControl) || Input.GetKey(KeyCode.RightControl))
+                if (Input.GetKey(KeyCode.LeftControl) || Input.GetKey(KeyCode.RightControl) ||
+                    AtomixInput.Held(AtomixAction.FlyDown))
                 {
                     verticalAxis -= 1f;
                 }
@@ -401,10 +423,24 @@ public class FirstPersonController : MonoBehaviour
         SetCursorLock(false);
     }
 
-    public static bool IsCursorLocked => Cursor.lockState == CursorLockMode.Locked;
+    /// <summary>
+    /// True while gameplay owns the input: on the desktop, the cursor is locked for the crosshair;
+    /// on a phone, no menu is covering the touch controls. Every script that asks this means the
+    /// second thing, so on a phone it answers from <see cref="AtomixInput.MobileGameplayActive"/>.
+    /// </summary>
+    public static bool IsCursorLocked => AtomixInput.IsMobile
+        ? AtomixInput.MobileGameplayActive
+        : Cursor.lockState == CursorLockMode.Locked;
 
     public static void SetCursorLock(bool locked)
     {
+        if (AtomixInput.IsMobile)
+        {
+            // There is no pointer to hide on a touch screen.
+            AtomixInput.MobileGameplayActive = locked;
+            return;
+        }
+
         Cursor.lockState = locked ? CursorLockMode.Locked : CursorLockMode.None;
         Cursor.visible = !locked;
     }

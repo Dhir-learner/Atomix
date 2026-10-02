@@ -230,7 +230,7 @@ public class ReactionLearningController : MonoBehaviour
 
         // The panel stays where it was opened while the player walks and looks around; this
         // brings it back in front of them.
-        if (Input.GetKeyDown(RecentreKey))
+        if (AtomixInput.GetDown(RecentreKey, AtomixAction.RecentrePanel))
         {
             PositionUiInFrontOfCamera();
         }

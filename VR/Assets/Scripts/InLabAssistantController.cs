@@ -187,6 +187,24 @@ public class InLabAssistantController : MonoBehaviour
         get { return isActiveScene && (CloudReady || OfflineReady); }
     }
 
+    /// <summary>Whether the assistant exists in this scene at all - the phone hides its button otherwise.</summary>
+    public bool IsAvailableHere
+    {
+        get { return isActiveScene; }
+    }
+
+    /// <summary>True while the chat panel is open rather than tucked away.</summary>
+    public bool IsExpanded
+    {
+        get { return isActiveScene && !minimized; }
+    }
+
+    /// <summary>True while the microphone is capturing a spoken question.</summary>
+    public bool IsListening
+    {
+        get { return IsMicActive(); }
+    }
+
     private bool CloudReady
     {
         get { return convai != null && convai.IsReady && !cloudFailedOnce; }
@@ -275,17 +293,17 @@ public class InLabAssistantController : MonoBehaviour
             return;
         }
 
-        if (Input.GetKeyDown(minimizeKey))
+        if (AtomixInput.GetDown(minimizeKey, AtomixAction.AssistantToggle))
         {
             SetMinimized(!minimized);
         }
 
-        if (Input.GetKeyDown(typeKey))
+        if (AtomixInput.GetDown(typeKey, AtomixAction.AssistantType))
         {
             BeginTyping();
         }
 
-        if (Input.GetKeyDown(whyKey))
+        if (AtomixInput.GetDown(whyKey, AtomixAction.AssistantWhy))
         {
             AskWhyItWentWrong();
         }
@@ -351,7 +369,9 @@ public class InLabAssistantController : MonoBehaviour
         }
 
         AppendSystemLine(ChemistryKnowledgeBase.Greeting(cloudAvailable));
-        AppendSystemLine("[" + KeyLabel(whyKey) + "] asks why your last experiment went wrong.");
+        AppendSystemLine(AtomixInput.Hint(
+            "[" + KeyLabel(whyKey) + "] asks why your last experiment went wrong.",
+            "Tap WHY? to ask why your last experiment went wrong."));
     }
 
     /// <summary>
@@ -498,7 +518,9 @@ public class InLabAssistantController : MonoBehaviour
         ReactionHistoryRecorder active = ReactionHistoryRecorder.Active;
         if (active != null && active.Engine != null && active.Engine.IsAnyPouring)
         {
-            AppendSystemLine("Finish pouring first - then press [" + KeyLabel(typeKey) + "] and ask.");
+            AppendSystemLine(AtomixInput.Hint(
+                "Finish pouring first - then press [" + KeyLabel(typeKey) + "] and ask.",
+                "Finish pouring first - then tap TYPE and ask."));
             return;
         }
 
@@ -574,11 +596,11 @@ public class InLabAssistantController : MonoBehaviour
 
     private void HandlePushToTalkInput()
     {
-        if (Input.GetKeyDown(pushToTalkKey))
+        if (AtomixInput.GetDown(pushToTalkKey, AtomixAction.PushToTalk))
         {
             StartPushToTalk();
         }
-        else if (Input.GetKeyUp(pushToTalkKey))
+        else if (AtomixInput.GetUp(pushToTalkKey, AtomixAction.PushToTalk))
         {
             StopPushToTalk();
         }
@@ -711,13 +733,59 @@ public class InLabAssistantController : MonoBehaviour
         scaler.referenceResolution = new Vector2(1920.0f, 1080.0f);
         scaler.matchWidthOrHeight = 1.0f;
 
-        // Nothing in this panel is clickable - the cursor stays locked for the crosshair, so it
-        // must never intercept a raycast meant for the lab.
-        canvasObject.GetComponent<GraphicRaycaster>().enabled = false;
+        // Nothing in this panel is clickable on the desktop - the cursor stays locked for the
+        // crosshair, so it must never intercept a raycast meant for the lab. On a phone the
+        // panel carries its own buttons, which only work with the raycaster on.
+        canvasObject.GetComponent<GraphicRaycaster>().enabled = AtomixInput.IsMobile;
 
         BuildExpandedPanel(canvasObject.transform);
         BuildCollapsedTab(canvasObject.transform);
-        SetMinimized(false);
+
+        if (AtomixInput.IsMobile)
+        {
+            ArrangeForTouch();
+        }
+
+        // A phone screen is too small to give a third of it to a chat log nobody has opened yet;
+        // the AI button opens it.
+        SetMinimized(AtomixInput.IsMobile);
+    }
+
+    /// <summary>
+    /// The phone layout. The right edge belongs to the thumb buttons and the bottom left to the
+    /// joystick, so the panel moves to the top left, under the menu button, and gains the touch
+    /// buttons that stand in for the Enter, Y and M keys.
+    /// </summary>
+    private void ArrangeForTouch()
+    {
+        RectTransform rect = expandedRoot.GetComponent<RectTransform>();
+        rect.anchorMin = new Vector2(0.0f, 1.0f);
+        rect.anchorMax = new Vector2(0.0f, 1.0f);
+        rect.pivot = new Vector2(0.0f, 1.0f);
+        rect.anchoredPosition = new Vector2(24.0f, -130.0f);
+        rect.sizeDelta = new Vector2(500.0f, 430.0f);
+
+        // Lift the chat log clear of the button row.
+        RectTransform chatRect = chatText.rectTransform;
+        chatRect.offsetMin = new Vector2(16.0f, 80.0f);
+        chatText.fontSize = 20.0f;
+
+        footerText.gameObject.SetActive(false);
+
+        CreateTouchButton("TypeButton", "TYPE", -160.0f, () => AtomixInput.Press(AtomixAction.AssistantType));
+        CreateTouchButton("WhyButton", "WHY?", 0.0f, () => AtomixInput.Press(AtomixAction.AssistantWhy));
+        CreateTouchButton("HideButton", "HIDE", 160.0f, () => AtomixInput.Press(AtomixAction.AssistantToggle));
+    }
+
+    private void CreateTouchButton(string objectName, string label, float x, System.Action onClick)
+    {
+        Button button = LabPanelBuilder.CreateButton(objectName, expandedRoot.transform, label,
+            Vector2.zero, new Vector2(148.0f, 54.0f), 21.0f, onClick);
+
+        RectTransform rect = button.GetComponent<RectTransform>();
+        rect.anchorMin = new Vector2(0.5f, 0.0f);
+        rect.anchorMax = new Vector2(0.5f, 0.0f);
+        rect.anchoredPosition = new Vector2(x, 40.0f);
     }
 
     private void BuildExpandedPanel(Transform parent)
@@ -856,7 +924,8 @@ public class InLabAssistantController : MonoBehaviour
         }
         if (collapsedRoot != null)
         {
-            collapsedRoot.SetActive(minimized);
+            // On a phone the HUD's AI button is the collapsed state.
+            collapsedRoot.SetActive(minimized && !AtomixInput.IsMobile);
         }
     }
 

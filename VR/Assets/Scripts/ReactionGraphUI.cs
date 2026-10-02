@@ -115,7 +115,7 @@ public class ReactionGraphUI : MonoBehaviour
             return;
         }
 
-        if (Input.GetKeyDown(toggleKey) && IsEnabledScene())
+        if (AtomixInput.GetDown(toggleKey, AtomixAction.Graphs) && IsEnabledScene())
         {
             Toggle();
             return;

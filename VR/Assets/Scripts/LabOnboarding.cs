@@ -183,8 +183,9 @@ public class LabOnboarding : MonoBehaviour
         // Any deliberate action means the student has started playing and does not need this.
         // Movement keys are excluded on purpose - looking around while reading is normal.
         if (!LabTextInput.IsCapturing &&
-            (Input.GetKeyDown(KeyCode.B) || Input.GetKeyDown(KeyCode.F1) ||
-             Input.GetKeyDown(KeyCode.Escape) || Input.GetMouseButtonDown(0)))
+            (AtomixInput.GetDown(KeyCode.B, AtomixAction.Book) || Input.GetKeyDown(KeyCode.F1) ||
+             Input.GetKeyDown(KeyCode.Escape) || Input.GetMouseButtonDown(0) ||
+             AtomixInput.TryGetTap(out _)))
         {
             remaining = Mathf.Min(remaining, fadeSeconds);
         }
@@ -246,7 +247,9 @@ public class LabOnboarding : MonoBehaviour
 
         if (selected == null)
         {
-            return "Press <b>B</b> to open the reaction book and choose an experiment.";
+            return AtomixInput.Hint(
+                "Press <b>B</b> to open the reaction book and choose an experiment.",
+                "Tap <b>BOOK</b> to open the reaction book and choose an experiment.");
         }
 
         FreeHandReactionEngine engine = selected.Engine;
@@ -258,12 +261,16 @@ public class LabOnboarding : MonoBehaviour
 
         if (engine.HasSucceeded)
         {
-            return "Experiment complete. <b>F</b> for the science behind it, <b>B</b> to pick another.";
+            return AtomixInput.Hint(
+                "Experiment complete. <b>F</b> for the science behind it, <b>B</b> to pick another.",
+                "Experiment complete. <b>Menu > Scientific graphs</b> for the science, <b>BOOK</b> to pick another.");
         }
 
         if (engine.HasFailed)
         {
-            return "<b>F5</b> resets the bench to try again   -   <b>Y</b> asks the assistant what went wrong.";
+            return AtomixInput.Hint(
+                "<b>F5</b> resets the bench to try again   -   <b>Y</b> asks the assistant what went wrong.",
+                "<b>Menu > Retry</b> resets the bench   -   <b>AI > WHY?</b> asks what went wrong.");
         }
 
         string pending = engine.GetPendingSubstance();
@@ -338,18 +345,27 @@ public class LabOnboarding : MonoBehaviour
         body.alignment = TextAlignmentOptions.TopLeft;
         body.textWrappingMode = TextWrappingModes.Normal;
         body.lineSpacing = 12.0f;
-        body.text =
-            "You are a chemistry student, and this bench is yours.\n" +
-            "\n" +
-            "<b>1.</b>  Press <b>B</b> to open the reaction book and choose one of eight experiments.\n" +
-            "<b>2.</b>  Pick up the glassware with <b>left click</b>, tilt it with <b>Z</b> and <b>X</b> to pour.\n" +
-            "<b>3.</b>  <b>The amount is what is being judged.</b> Too much fails as surely as too little - " +
-            "watch the readout at the top of the screen.\n" +
-            "<b>4.</b>  When it goes wrong, press <b>Y</b> and the lab assistant will explain the chemistry.";
+        body.text = AtomixInput.IsMobile
+            ? "You are a chemistry student, and this bench is yours.\n" +
+              "\n" +
+              "<b>1.</b>  Tap <b>BOOK</b> to open the reaction book and choose one of eight experiments.\n" +
+              "<b>2.</b>  <b>Tap</b> glassware to pick it up, then hold <b>TILT L</b> or <b>TILT R</b> to pour.\n" +
+              "<b>3.</b>  <b>The amount is what is being judged.</b> Too much fails as surely as too little - " +
+              "watch the readout at the top of the screen.\n" +
+              "<b>4.</b>  When it goes wrong, tap <b>AI</b> then <b>WHY?</b> and the assistant will explain."
+            : "You are a chemistry student, and this bench is yours.\n" +
+              "\n" +
+              "<b>1.</b>  Press <b>B</b> to open the reaction book and choose one of eight experiments.\n" +
+              "<b>2.</b>  Pick up the glassware with <b>left click</b>, tilt it with <b>Z</b> and <b>X</b> to pour.\n" +
+              "<b>3.</b>  <b>The amount is what is being judged.</b> Too much fails as surely as too little - " +
+              "watch the readout at the top of the screen.\n" +
+              "<b>4.</b>  When it goes wrong, press <b>Y</b> and the lab assistant will explain the chemistry.";
 
         TMP_Text footer = MakeText(plate.transform, "Footer", new Vector2(0.0f, -146.0f),
             new Vector2(800.0f, 32.0f), 20.0f, LabPanelBuilder.MutedTextColour);
-        footer.text = "<b>F1</b> for settings and the full list of controls";
+        footer.text = AtomixInput.Hint(
+            "<b>F1</b> for settings and the full list of controls",
+            "The <b>menu button</b> (top left) has settings and everything else");
 
         plate.SetActive(false);
     }

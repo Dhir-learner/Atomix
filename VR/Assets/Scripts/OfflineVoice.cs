@@ -19,6 +19,10 @@ using UnityEngine;
 /// The text is piped through stdin rather than embedded in the command line. That is deliberate:
 /// an assistant reply can contain quotes, semicolons and newlines, and putting any of that into a
 /// -Command string would be both fragile and a command-injection hole.
+///
+/// On Android there is no PowerShell, but every phone ships a text-to-speech engine, reached here
+/// through android.speech.tts.TextToSpeech over JNI. Same Speak / Stop / IsSpeaking surface, so
+/// the assistant does not need to know which one it is talking to.
 /// </summary>
 public class OfflineVoice : MonoBehaviour
 {
@@ -60,7 +64,8 @@ public class OfflineVoice : MonoBehaviour
         get
         {
             return Application.platform == RuntimePlatform.WindowsPlayer ||
-                   Application.platform == RuntimePlatform.WindowsEditor;
+                   Application.platform == RuntimePlatform.WindowsEditor ||
+                   Application.platform == RuntimePlatform.Android;
         }
     }
 
@@ -68,6 +73,9 @@ public class OfflineVoice : MonoBehaviour
     {
         get
         {
+#if UNITY_ANDROID && !UNITY_EDITOR
+            return AndroidIsSpeaking();
+#else
             try
             {
                 return speaking != null && !speaking.HasExited;
@@ -76,6 +84,7 @@ public class OfflineVoice : MonoBehaviour
             {
                 return false;
             }
+#endif
         }
     }
 
@@ -105,6 +114,10 @@ public class OfflineVoice : MonoBehaviour
         {
             return false;
         }
+
+#if UNITY_ANDROID && !UNITY_EDITOR
+        return AndroidSpeak(spoken);
+#else
 
         try
         {
@@ -140,10 +153,14 @@ public class OfflineVoice : MonoBehaviour
             speaking = null;
             return false;
         }
+#endif
     }
 
     public void Stop()
     {
+#if UNITY_ANDROID && !UNITY_EDITOR
+        AndroidStop();
+#endif
         if (speaking == null)
         {
             return;
@@ -177,6 +194,9 @@ public class OfflineVoice : MonoBehaviour
     void OnDestroy()
     {
         Stop();
+#if UNITY_ANDROID && !UNITY_EDITOR
+        AndroidShutdown();
+#endif
     }
 
     void OnApplicationQuit()
@@ -212,4 +232,187 @@ public class OfflineVoice : MonoBehaviour
 
         return cleaned.Substring(0, cut + 1);
     }
+
+#if UNITY_ANDROID && !UNITY_EDITOR
+    // =========================================================
+    // ANDROID TEXT-TO-SPEECH
+    // =========================================================
+
+    private const int TtsSuccess = 0;
+    private const int TtsQueueFlush = 0;
+    private const int TtsNotReady = int.MinValue;
+
+    private AndroidJavaObject tts;
+
+    // Written from the Java UI thread by the init callback, read on Unity's main thread.
+    private volatile int ttsInitStatus = TtsNotReady;
+    private bool ttsConfigured;
+    private string pendingSpeech;
+
+    /// <summary>Receives TextToSpeech's asynchronous "engine is ready" callback.</summary>
+    private class TtsInitListener : AndroidJavaProxy
+    {
+        private readonly OfflineVoice owner;
+
+        public TtsInitListener(OfflineVoice owner)
+            : base("android.speech.tts.TextToSpeech$OnInitListener")
+        {
+            this.owner = owner;
+        }
+
+        // Called by Java on its own thread, so it only records the result; every call on the
+        // engine itself is made from Unity's main thread.
+        public void onInit(int status)
+        {
+            owner.ttsInitStatus = status;
+        }
+    }
+
+    private void EnsureTts()
+    {
+        if (tts != null)
+        {
+            return;
+        }
+
+        try
+        {
+            using (AndroidJavaClass player = new AndroidJavaClass("com.unity3d.player.UnityPlayer"))
+            {
+                AndroidJavaObject activity = player.GetStatic<AndroidJavaObject>("currentActivity");
+                tts = new AndroidJavaObject("android.speech.tts.TextToSpeech", activity,
+                                            new TtsInitListener(this));
+            }
+        }
+        catch (Exception error)
+        {
+            UnityEngine.Debug.LogWarning("OfflineVoice: Android speech unavailable (" + error.Message + ")");
+            unavailable = true;
+            tts = null;
+        }
+    }
+
+    /// <summary>
+    /// The engine starts asynchronously, so the first answer usually arrives before it is ready.
+    /// That answer is held and spoken from Update once it is, rather than being dropped.
+    /// </summary>
+    private bool AndroidSpeak(string spoken)
+    {
+        EnsureTts();
+        if (tts == null)
+        {
+            return false;
+        }
+
+        if (ttsInitStatus == TtsNotReady)
+        {
+            pendingSpeech = spoken;
+            return true;
+        }
+
+        return AndroidSpeakNow(spoken);
+    }
+
+    private bool AndroidSpeakNow(string spoken)
+    {
+        if (ttsInitStatus != TtsSuccess)
+        {
+            unavailable = true;
+            return false;
+        }
+
+        try
+        {
+            if (!ttsConfigured)
+            {
+                ttsConfigured = true;
+
+                // The knowledge base is written in English; read it with an English voice even
+                // when the phone itself is set to another language.
+                using (AndroidJavaObject locale = new AndroidJavaObject("java.util.Locale", "en", "US"))
+                {
+                    tts.Call<int>("setLanguage", locale);
+                }
+            }
+
+            using (AndroidJavaObject parameters = new AndroidJavaObject("android.os.Bundle"))
+            {
+                return tts.Call<int>("speak", spoken, TtsQueueFlush, parameters, "atomix-answer") == TtsSuccess;
+            }
+        }
+        catch (Exception error)
+        {
+            UnityEngine.Debug.LogWarning("OfflineVoice: Android speech failed (" + error.Message + ")");
+            return false;
+        }
+    }
+
+    void Update()
+    {
+        if (pendingSpeech != null && ttsInitStatus != TtsNotReady)
+        {
+            string spoken = pendingSpeech;
+            pendingSpeech = null;
+            AndroidSpeakNow(spoken);
+        }
+    }
+
+    private bool AndroidIsSpeaking()
+    {
+        if (pendingSpeech != null)
+        {
+            return true;
+        }
+
+        if (tts == null || ttsInitStatus != TtsSuccess)
+        {
+            return false;
+        }
+
+        try
+        {
+            return tts.Call<bool>("isSpeaking");
+        }
+        catch (Exception)
+        {
+            return false;
+        }
+    }
+
+    private void AndroidStop()
+    {
+        pendingSpeech = null;
+        if (tts == null || ttsInitStatus != TtsSuccess)
+        {
+            return;
+        }
+
+        try
+        {
+            tts.Call<int>("stop");
+        }
+        catch (Exception)
+        {
+        }
+    }
+
+    private void AndroidShutdown()
+    {
+        if (tts == null)
+        {
+            return;
+        }
+
+        try
+        {
+            tts.Call<int>("shutdown");
+        }
+        catch (Exception)
+        {
+        }
+
+        tts.Dispose();
+        tts = null;
+    }
+#endif
 }

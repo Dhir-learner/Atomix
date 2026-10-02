@@ -48,7 +48,7 @@ public class DesktopBootstrap : MonoBehaviour
             return;
         }
 
-        if (Input.GetKeyDown(KeyCode.B))
+        if (AtomixInput.GetDown(KeyCode.B, AtomixAction.Book))
         {
             ToggleBook();
         }

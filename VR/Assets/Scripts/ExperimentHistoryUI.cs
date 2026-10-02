@@ -65,7 +65,7 @@ public class ExperimentHistoryUI : MonoBehaviour
             return;
         }
 
-        if (Input.GetKeyDown(toggleKey))
+        if (AtomixInput.GetDown(toggleKey, AtomixAction.History))
         {
             Toggle();
             return;

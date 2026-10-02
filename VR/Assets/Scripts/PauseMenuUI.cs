@@ -102,7 +102,7 @@ public class PauseMenuUI : MonoBehaviour
             return;
         }
 
-        if (Input.GetKeyDown(toggleKey))
+        if (AtomixInput.GetDown(toggleKey, AtomixAction.PauseMenu))
         {
             Toggle();
         }
@@ -249,7 +249,9 @@ public class PauseMenuUI : MonoBehaviour
             new Vector2(900.0f, 56.0f), "Atomix", 42.0f, TextAlignmentOptions.Center, Color.white);
 
         LabPanelBuilder.CreateText("Subtitle", panel, new Vector2(0.0f, TitleY - 48.0f),
-            new Vector2(1200.0f, 28.0f), "Paused — press F1 or Resume to go back", 20.0f,
+            new Vector2(1200.0f, 28.0f),
+            AtomixInput.Hint("Paused — press F1 or Resume to go back",
+                             "Paused — tap Resume or press Back to go back"), 20.0f,
             TextAlignmentOptions.Center, LabPanelBuilder.MutedTextColour);
 
         tabButtons.Clear();
@@ -270,12 +272,13 @@ public class PauseMenuUI : MonoBehaviour
             new Vector2(1500.0f, 52.0f), string.Empty, 19.0f,
             TextAlignmentOptions.Center, LabPanelBuilder.MutedTextColour);
 
-        LabPanelBuilder.CreateButton("Resume", panel, "Resume  [F1]",
+        LabPanelBuilder.CreateButton("Resume", panel, AtomixInput.Hint("Resume  [F1]", "Resume"),
             new Vector2(-660.0f, FooterY), new Vector2(280.0f, 58.0f), 22.0f, Close);
 
         // A failed experiment used to be a dead end. This is the same thing F5 does, put where
         // someone who does not know the key will still find it.
-        restartButton = LabPanelBuilder.CreateButton("RestartExperiment", panel, "Retry experiment  [F5]",
+        restartButton = LabPanelBuilder.CreateButton("RestartExperiment", panel,
+            AtomixInput.Hint("Retry experiment  [F5]", "Retry experiment"),
             new Vector2(-330.0f, FooterY), new Vector2(340.0f, 58.0f), 22.0f,
             () =>
             {
@@ -381,10 +384,20 @@ public class PauseMenuUI : MonoBehaviour
         LabPanelBuilder.CreateSectionHeading(bodyRoot, "Controls", new Vector2(x, y), ColumnWidth, headingSize);
         y -= HeaderStep;
 
-        LabPanelBuilder.CreateStepperRow(bodyRoot, "Mouse sensitivity", new Vector2(x, y), ColumnWidth, labelSize,
-            () => AtomixSettings.MouseSensitivity.ToString("0.00"),
-            () => AtomixSettings.MouseSensitivity -= 0.25f,
-            () => AtomixSettings.MouseSensitivity += 0.25f);
+        if (AtomixInput.IsMobile)
+        {
+            LabPanelBuilder.CreateStepperRow(bodyRoot, "Look sensitivity", new Vector2(x, y), ColumnWidth, labelSize,
+                () => AtomixSettings.TouchSensitivity.ToString("0.00"),
+                () => AtomixSettings.TouchSensitivity -= 0.1f,
+                () => AtomixSettings.TouchSensitivity += 0.1f);
+        }
+        else
+        {
+            LabPanelBuilder.CreateStepperRow(bodyRoot, "Mouse sensitivity", new Vector2(x, y), ColumnWidth, labelSize,
+                () => AtomixSettings.MouseSensitivity.ToString("0.00"),
+                () => AtomixSettings.MouseSensitivity -= 0.25f,
+                () => AtomixSettings.MouseSensitivity += 0.25f);
+        }
         y -= RowStep;
 
         LabPanelBuilder.CreateToggleRow(bodyRoot, "Invert vertical look", new Vector2(x, y), ColumnWidth, labelSize,
@@ -433,9 +446,19 @@ public class PauseMenuUI : MonoBehaviour
             value => AtomixSettings.ColourBlindSafe = value);
         y -= RowStep;
 
-        LabPanelBuilder.CreateToggleRow(bodyRoot, "Show crosshair", new Vector2(x, y), ColumnWidth, labelSize,
-            () => AtomixSettings.ShowCrosshair,
-            value => AtomixSettings.ShowCrosshair = value);
+        if (AtomixInput.IsMobile)
+        {
+            LabPanelBuilder.CreateStepperRow(bodyRoot, "Touch controls size", new Vector2(x, y), ColumnWidth, labelSize,
+                () => Mathf.RoundToInt(AtomixSettings.TouchControlsSize * 100.0f) + "%",
+                () => AtomixSettings.TouchControlsSize -= 0.1f,
+                () => AtomixSettings.TouchControlsSize += 0.1f);
+        }
+        else
+        {
+            LabPanelBuilder.CreateToggleRow(bodyRoot, "Show crosshair", new Vector2(x, y), ColumnWidth, labelSize,
+                () => AtomixSettings.ShowCrosshair,
+                value => AtomixSettings.ShowCrosshair = value);
+        }
         y -= RowStep;
 
         LabPanelBuilder.CreateStepperRow(bodyRoot, "Menu size", new Vector2(x, y), ColumnWidth, labelSize,
@@ -467,13 +490,18 @@ public class PauseMenuUI : MonoBehaviour
             value => { AtomixSettings.PostFx = value; AtomixPostFx.Refresh(); });
         y -= RowStep;
 
-        LabPanelBuilder.CreateToggleRow(bodyRoot, "Fullscreen", new Vector2(x, y), ColumnWidth, labelSize,
-            () => AtomixSettings.Fullscreen,
-            value => AtomixSettings.Fullscreen = value);
-        y -= RowStep;
+        if (!AtomixInput.IsMobile)
+        {
+            LabPanelBuilder.CreateToggleRow(bodyRoot, "Fullscreen", new Vector2(x, y), ColumnWidth, labelSize,
+                () => AtomixSettings.Fullscreen,
+                value => AtomixSettings.Fullscreen = value);
+            y -= RowStep;
+        }
 
         LabPanelBuilder.CreateStepperRow(bodyRoot, "Frame rate limit", new Vector2(x, y), ColumnWidth, labelSize,
-            () => AtomixSettings.FrameCap <= 0 ? "Unlimited" : AtomixSettings.FrameCap + " fps",
+            () => AtomixSettings.FrameCap <= 0
+                ? AtomixInput.Hint("Unlimited", "Phone default")
+                : AtomixSettings.FrameCap + " fps",
             () => StepFrameCap(-1), () => StepFrameCap(1));
         y -= SectionStep;
 
@@ -648,37 +676,65 @@ public class PauseMenuUI : MonoBehaviour
 
     private void BuildControlsTab()
     {
-        string[,] rows =
-        {
-            { "W A S D", "Move" },
-            { "Mouse", "Look around" },
-            { "Space / Ctrl", "Move up / down" },
-            { "Left Shift", "Sprint" },
-            { "Left click", "Grab, release or activate" },
-            { "R", "Release held object" },
-            { "Q / E", "Rotate held object left or right" },
-            { "Z / X", "Tilt held object - steeper pours faster" },
-            { "C", "Roll held object (Shift to reverse) - also pours" },
-            { "T", "Reset held object pose" },
-            { "Mouse wheel", "Spin held object / move a panel" },
-            { "B", "Open or close the reaction book" },
-            { "1 - 8", "Jump straight to an experiment" },
-            { "F5", "Reset the bench and retry the experiment" },
-            { "Tab", "Experiment history" },
-            { "F", "Scientific graphs" },
-            { "P", "Periodic table" },
-            { "L", "Cycle the measurement label" },
-            { "V", "Hold to talk to the lab assistant" },
-            { "Enter", "Type a question - no microphone needed" },
-            { "Y", "Ask why the last experiment failed" },
-            { "M", "Minimise the assistant panel" },
-            { "F2 / F3 / F4", "Testing scene: hint, +30 seconds, skip" },
-            { "F1", "This menu" },
-            { "Escape", "Unlock cursor / close a panel" }
-        };
+        string[,] rows = AtomixInput.IsMobile ? TouchControlRows : KeyboardControlRows;
 
         // Two columns, so the text can be read at a comfortable size instead of being squeezed
         // into 21 single-file rows.
+        BuildControlRows(rows);
+    }
+
+    private static readonly string[,] TouchControlRows =
+    {
+        { "Left joystick", "Move - push further to walk faster" },
+        { "Drag the screen", "Look around" },
+        { "Tap an object", "Pick it up, or operate it" },
+        { "Tap a panel", "Press its buttons directly" },
+        { "RUN", "Sprint on or off - stops when you stop" },
+        { "UP / DOWN", "Move up or down" },
+        { "BOOK", "Open or close the reaction book" },
+        { "AI (tap)", "Open or close the lab assistant" },
+        { "AI (hold)", "Talk to the lab assistant" },
+        { "TYPE / WHY?", "Type a question / ask why it failed" },
+        { "TURN L / R", "Turn the held object" },
+        { "TILT L / R", "Tilt the held object - steeper pours faster" },
+        { "RESET", "Straighten the held object" },
+        { "DROP", "Put the held object down" },
+        { "Menu (top left)", "Periodic table, graphs, history, labels" },
+        { "Menu (top left)", "Retry, the testing shop, this screen" },
+        { "Back button", "Close the open panel or this menu" }
+    };
+
+    private static readonly string[,] KeyboardControlRows =
+    {
+        { "W A S D", "Move" },
+        { "Mouse", "Look around" },
+        { "Space / Ctrl", "Move up / down" },
+        { "Left Shift", "Sprint" },
+        { "Left click", "Grab, release or activate" },
+        { "R", "Release held object" },
+        { "Q / E", "Rotate held object left or right" },
+        { "Z / X", "Tilt held object - steeper pours faster" },
+        { "C", "Roll held object (Shift to reverse) - also pours" },
+        { "T", "Reset held object pose" },
+        { "Mouse wheel", "Spin held object / move a panel" },
+        { "B", "Open or close the reaction book" },
+        { "1 - 8", "Jump straight to an experiment" },
+        { "F5", "Reset the bench and retry the experiment" },
+        { "Tab", "Experiment history" },
+        { "F", "Scientific graphs" },
+        { "P", "Periodic table" },
+        { "L", "Cycle the measurement label" },
+        { "V", "Hold to talk to the lab assistant" },
+        { "Enter", "Type a question - no microphone needed" },
+        { "Y", "Ask why the last experiment failed" },
+        { "M", "Minimise the assistant panel" },
+        { "F2 / F3 / F4", "Testing scene: hint, +30 seconds, skip" },
+        { "F1", "This menu" },
+        { "Escape", "Unlock cursor / close a panel" }
+    };
+
+    private void BuildControlRows(string[,] rows)
+    {
         int total = rows.GetLength(0);
         int perColumn = (total + 1) / 2;
         const float rowHeight = 46.0f;

@@ -334,7 +334,8 @@ public class CameraJuice : MonoBehaviour
 
         bool sprinting = controller != null && controller.enabled &&
                          bobWeight > 0.35f &&
-                         (Input.GetKey(KeyCode.LeftShift) || Input.GetKey(KeyCode.RightShift)) &&
+                         (Input.GetKey(KeyCode.LeftShift) || Input.GetKey(KeyCode.RightShift) ||
+                          AtomixInput.SprintToggled) &&
                          !LabTextInput.IsCapturing;
 
         // Scaled by the walking-motion setting, not applied flat: a lens that zooms when you

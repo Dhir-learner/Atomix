@@ -44,6 +44,10 @@ public static class AtomixSettings
     private static int qualityLevel = -1;          // -1 = "whatever the project shipped with"
     private static bool fullscreen = true;
     private static int frameCap = 0;               // 0 = uncapped, left to vsync
+
+    // Phone-only. Look speed for a finger drag, and the size of the on-screen controls.
+    private static float touchSensitivity = 1.0f;
+    private static float touchControlsSize = 1.0f;
     private static bool loaded = false;
 
     /// <summary>
@@ -69,6 +73,18 @@ public static class AtomixSettings
     public const float MaxFov = 100.0f;
     public const float MinUiScale = 0.7f;
     public const float MaxUiScale = 1.8f;
+    public const float MinTouchSensitivity = 0.25f;
+    public const float MaxTouchSensitivity = 3.0f;
+    public const float MinTouchControlsSize = 0.7f;
+    public const float MaxTouchControlsSize = 1.4f;
+
+    /// <summary>
+    /// The mobile preset: what a phone gets until the player changes it. Post effects are the
+    /// single most expensive thing in the frame on a mobile GPU, and Android caps an uncapped
+    /// game at 30 fps, so 60 has to be asked for explicitly.
+    /// </summary>
+    private static bool DefaultPostFx { get { return !AtomixInput.IsMobile; } }
+    private static int DefaultFrameCap { get { return AtomixInput.IsMobile ? 60 : 0; } }
 
     /// <summary>Frame caps offered by the pause menu. 0 means "do not cap".</summary>
     public static readonly int[] FrameCapChoices = { 0, 30, 60, 90, 120, 144 };
@@ -79,6 +95,20 @@ public static class AtomixSettings
     {
         get { EnsureLoaded(); return mouseSensitivity; }
         set { EnsureLoaded(); mouseSensitivity = Mathf.Clamp(value, MinSensitivity, MaxSensitivity); Commit(); }
+    }
+
+    /// <summary>Phone look speed: 1.0 turns about 120 degrees for a drag the height of the screen.</summary>
+    public static float TouchSensitivity
+    {
+        get { EnsureLoaded(); return touchSensitivity; }
+        set { EnsureLoaded(); touchSensitivity = Mathf.Clamp(value, MinTouchSensitivity, MaxTouchSensitivity); Commit(); }
+    }
+
+    /// <summary>Scale of the joystick and buttons on a phone.</summary>
+    public static float TouchControlsSize
+    {
+        get { EnsureLoaded(); return touchControlsSize; }
+        set { EnsureLoaded(); touchControlsSize = Mathf.Clamp(value, MinTouchControlsSize, MaxTouchControlsSize); Commit(); }
     }
 
     public static bool InvertLook
@@ -287,10 +317,12 @@ public static class AtomixSettings
         ambienceVolume = PlayerPrefs.GetFloat(Prefix + "ambience", ambienceVolume);
         screenShake = PlayerPrefs.GetFloat(Prefix + "shake", screenShake);
         headBob = PlayerPrefs.GetFloat(Prefix + "headbob", headBob);
-        postFx = PlayerPrefs.GetInt(Prefix + "postfx", 1) == 1;
+        postFx = PlayerPrefs.GetInt(Prefix + "postfx", DefaultPostFx ? 1 : 0) == 1;
         qualityLevel = PlayerPrefs.GetInt(Prefix + "quality", -1);
         fullscreen = PlayerPrefs.GetInt(Prefix + "fullscreen", 1) == 1;
-        frameCap = PlayerPrefs.GetInt(Prefix + "framecap", 0);
+        frameCap = PlayerPrefs.GetInt(Prefix + "framecap", DefaultFrameCap);
+        touchSensitivity = PlayerPrefs.GetFloat(Prefix + "touchlook", touchSensitivity);
+        touchControlsSize = PlayerPrefs.GetFloat(Prefix + "touchsize", touchControlsSize);
 
         // A file written by an older build could hold anything.
         mouseSensitivity = Mathf.Clamp(mouseSensitivity, MinSensitivity, MaxSensitivity);
@@ -304,6 +336,8 @@ public static class AtomixSettings
         screenShake = Mathf.Clamp01(screenShake);
         headBob = Mathf.Clamp01(headBob);
         frameCap = Mathf.Max(0, frameCap);
+        touchSensitivity = Mathf.Clamp(touchSensitivity, MinTouchSensitivity, MaxTouchSensitivity);
+        touchControlsSize = Mathf.Clamp(touchControlsSize, MinTouchControlsSize, MaxTouchControlsSize);
 
         // A quality index saved by a build with more levels than this one would throw.
         if (qualityLevel >= QualitySettings.names.Length)
@@ -356,6 +390,8 @@ public static class AtomixSettings
         PlayerPrefs.SetInt(Prefix + "quality", qualityLevel);
         PlayerPrefs.SetInt(Prefix + "fullscreen", fullscreen ? 1 : 0);
         PlayerPrefs.SetInt(Prefix + "framecap", frameCap);
+        PlayerPrefs.SetFloat(Prefix + "touchlook", touchSensitivity);
+        PlayerPrefs.SetFloat(Prefix + "touchsize", touchControlsSize);
         PlayerPrefs.SetInt(Prefix + "version", CurrentSettingsVersion);
         PlayerPrefs.Save();
 
@@ -385,10 +421,12 @@ public static class AtomixSettings
         ambienceVolume = 0.0f;
         screenShake = 1.0f;
         headBob = 0.0f;
-        postFx = true;
+        postFx = DefaultPostFx;
         qualityLevel = -1;
         fullscreen = true;
-        frameCap = 0;
+        frameCap = DefaultFrameCap;
+        touchSensitivity = 1.0f;
+        touchControlsSize = 1.0f;
         Commit();
     }
 

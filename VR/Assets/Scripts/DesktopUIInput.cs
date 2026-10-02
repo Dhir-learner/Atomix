@@ -163,7 +163,9 @@ public class DesktopUIInput : MonoBehaviour
 
         // In the lab the crosshair owns UI clicks while the cursor is locked. Navigation
         // events stay off so movement keys (Space, Enter) can never activate a control.
-        bool cursorFree = !FirstPersonController.IsCursorLocked;
+        // A phone has no crosshair: every button and panel is pressed by touching it, which
+        // only the module can deliver, so there it stays on.
+        bool cursorFree = AtomixInput.IsMobile || !FirstPersonController.IsCursorLocked;
         eventSystem.sendNavigationEvents = false;
         SetModuleEnabled(cursorFree);
 

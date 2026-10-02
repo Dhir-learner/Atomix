@@ -116,6 +116,18 @@ public class ConvaiAssistantBackend : MonoBehaviour
             return;
         }
 
+#if UNITY_ANDROID && !UNITY_EDITOR
+        // Android asks the first time, not at install. Until it has been granted the microphone
+        // records silence, which Convai would answer with a confused reply. Reported as status,
+        // not as a failure: a failure switches the whole assistant to offline answers.
+        if (!UnityEngine.Android.Permission.HasUserAuthorizedPermission(UnityEngine.Android.Permission.Microphone))
+        {
+            UnityEngine.Android.Permission.RequestUserPermission(UnityEngine.Android.Permission.Microphone);
+            StatusDetail = "allow the microphone, then hold AI again";
+            return;
+        }
+#endif
+
         if (Microphone.devices == null || Microphone.devices.Length == 0)
         {
             RaiseFailure("No microphone was found. You can still type questions.");

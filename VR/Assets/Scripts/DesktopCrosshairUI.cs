@@ -184,7 +184,9 @@ public class DesktopCrosshairUI : MonoBehaviour
     {
         if (crosshairRoot != null)
         {
-            crosshairRoot.SetActive(FirstPersonController.IsCursorLocked && AtomixSettings.ShowCrosshair);
+            // A phone is aimed with a finger, not a crosshair.
+            crosshairRoot.SetActive(!AtomixInput.IsMobile &&
+                                    FirstPersonController.IsCursorLocked && AtomixSettings.ShowCrosshair);
         }
     }
 }

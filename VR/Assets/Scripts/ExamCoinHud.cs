@@ -150,15 +150,15 @@ public class ExamCoinHud : MonoBehaviour
 
     private void HandlePurchaseInput()
     {
-        if (Input.GetKeyDown(hintKey))
+        if (AtomixInput.GetDown(hintKey, AtomixAction.ExamHint))
         {
             BuyHint();
         }
-        else if (Input.GetKeyDown(extraTimeKey))
+        else if (AtomixInput.GetDown(extraTimeKey, AtomixAction.ExamExtraTime))
         {
             BuyExtraTime();
         }
-        else if (Input.GetKeyDown(skipKey))
+        else if (AtomixInput.GetDown(skipKey, AtomixAction.ExamSkip))
         {
             BuySkip();
         }
@@ -293,10 +293,12 @@ public class ExamCoinHud : MonoBehaviour
 
         if (shopText != null)
         {
-            shopText.text =
-                Price(hintKey, "Hint", AtomixCoinBank.PriceHint) + "   " +
-                Price(extraTimeKey, "+30s", AtomixCoinBank.PriceExtraTime) + "   " +
-                Price(skipKey, "Skip", AtomixCoinBank.PriceSkip);
+            shopText.text = AtomixInput.IsMobile
+                ? "Menu: hint " + AtomixCoinBank.PriceHint + "   +30s " + AtomixCoinBank.PriceExtraTime +
+                  "   skip " + AtomixCoinBank.PriceSkip
+                : Price(hintKey, "Hint", AtomixCoinBank.PriceHint) + "   " +
+                  Price(extraTimeKey, "+30s", AtomixCoinBank.PriceExtraTime) + "   " +
+                  Price(skipKey, "Skip", AtomixCoinBank.PriceSkip);
         }
 
         if (messageText != null && Time.unscaledTime > messageUntil && messageText.text.Length > 0)
@@ -380,6 +382,16 @@ public class ExamCoinHud : MonoBehaviour
         plateRect.pivot = new Vector2(0.0f, 0.0f);
         plateRect.anchoredPosition = new Vector2(22.0f, 22.0f);
 
+        // On a phone the bottom left is the joystick, so the strip moves to the top left,
+        // beside the menu button that holds the shop.
+        if (AtomixInput.IsMobile)
+        {
+            plateRect.anchorMin = new Vector2(0.0f, 1.0f);
+            plateRect.anchorMax = new Vector2(0.0f, 1.0f);
+            plateRect.pivot = new Vector2(0.0f, 1.0f);
+            plateRect.anchoredPosition = new Vector2(120.0f, -22.0f);
+        }
+
         // Wide enough for a full wallet line - balance, rank and streak - at 20 px. At 470 the
         // longer rank names auto-shrank the line to 14 px.
         plateRect.sizeDelta = new Vector2(540.0f, 80.0f);
@@ -403,6 +415,15 @@ public class ExamCoinHud : MonoBehaviour
         messageRect.pivot = new Vector2(0.0f, 0.0f);
         messageRect.anchoredPosition = new Vector2(22.0f, 112.0f);
         messageText.alignment = TextAlignmentOptions.BottomLeft;
+
+        if (AtomixInput.IsMobile)
+        {
+            messageRect.anchorMin = new Vector2(0.0f, 1.0f);
+            messageRect.anchorMax = new Vector2(0.0f, 1.0f);
+            messageRect.pivot = new Vector2(0.0f, 1.0f);
+            messageRect.anchoredPosition = new Vector2(120.0f, -112.0f);
+            messageText.alignment = TextAlignmentOptions.TopLeft;
+        }
         messageText.text = string.Empty;
     }
 

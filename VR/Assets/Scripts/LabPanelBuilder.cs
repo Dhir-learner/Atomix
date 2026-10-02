@@ -108,6 +108,9 @@ public static class LabPanelBuilder
         canvas.renderMode = RenderMode.ScreenSpaceOverlay;
         canvas.sortingOrder = sortingOrder;
 
+        // Tells the phone layout this is laid out edge to edge, so it must not be enlarged.
+        canvasObject.AddComponent<FullScreenPanelMarker>();
+
         scaler = canvasObject.GetComponent<CanvasScaler>();
         scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
         scaler.referenceResolution = referenceResolution;
