@@ -1,0 +1,346 @@
+=====================================================================================
+ ATOMIX: YOUR PERSONAL LAB WITH AI  -  COMPLETE PROJECT GUIDE
+ LY Innovation-Based Major Project-B, Department of Computer Engineering, KJSIT, 2026-27
+ Team : Kushal D. Soni, Kartik R. Verma, Dhir M. Thakar      Guide : Dr. Madhura Phadke
+=====================================================================================
+
+Read this file top to bottom and you will understand what Atomix is, why it exists,
+how every part of it works, where the code lives, how to run it, and what its limits are.
+
+-------------------------------------------------------------------------------------
+1. WHAT ATOMIX IS (ONE PARAGRAPH)
+-------------------------------------------------------------------------------------
+Atomix is a virtual chemistry laboratory built in Unity 6 (version 6000.3.7f1, Built-in
+Render Pipeline). It runs in VR on Meta Quest / OpenXR headsets and, with no headset, on
+a Windows PC using keyboard and mouse. A student picks one of 8 inorganic reactions from
+an in-game Reaction Book, can first watch a molecular-level explanation (recorded video
+or a live 3D ball-and-stick animation), then performs the experiment "free-hand" by
+actually pouring liquids, adding solids and heating. The lab measures the amounts used,
+judges the experiment (correct order? too much? too little? heated correctly?), explains
+any mistake in chemistry terms, and lets the student ask an AI Lab Assistant (voice or
+typed) that knows exactly what they just did - and still works offline. Every attempt is
+saved to a history, successful ones get an accuracy score and 1-3 stars, scientific
+graphs (energy profile, enthalpy, entropy, Gibbs energy) explain the reaction, and a
+separate test scene gives randomized timed practical + theory tasks with a coin economy
+and a downloadable HTML/CSV report.
+
+Learning cycle:  Choose -> Learn -> Experiment -> Make mistakes -> Understand ->
+                 Ask AI -> Review history -> Analyse graphs -> Try again
+
+-------------------------------------------------------------------------------------
+2. WHY IT EXISTS (PROBLEM)
+-------------------------------------------------------------------------------------
+* Real lab time is limited, reagents cost money, and dangerous reactions (sodium or
+  potassium in water) cannot be practised freely by students.
+* Students see the macroscopic change (fizzing, colour) but not the molecular cause.
+* Existing virtual labs judge "did the right objects touch", not "how much, in what
+  order, for how long", so they cannot explain realistic mistakes.
+* AI chatbots answer generic questions but do not know the student's live experiment,
+  and they stop working without internet.
+* VR-only systems exclude students without headsets.
+Atomix combines all the missing pieces in one app (see the report, Chapter 2).
+
+-------------------------------------------------------------------------------------
+3. THE 8 EXPERIMENTS AND THEIR RECIPES (exact shipped values)
+-------------------------------------------------------------------------------------
+ #  Reaction                                   Reagents (in required order)      Tolerance
+ 1  2Na + 2H2O -> 2NaOH + H2                   Water 50 ml, Sodium 5 g           +/-5 %
+ 2  H2SO4 + CuO -> CuSO4 + H2O                 H2SO4 20 ml, CuO 8 g              +/-8 %
+ 3  HCl + NaHCO3 -> NaCl + H2O + CO2           HCl 15 ml, NaHCO3 12 g            +/-10 %
+ 4  2K + 2H2O -> 2KOH + H2                     Water 50 ml, Potassium 3 g        +/-5 %
+ 5  2Al + 3I2 -> 2AlI3                         Al 5 g, Iodine 15 g, Water 2 ml   +/-10 %
+ 6  CaO + H2O -> Ca(OH)2                       Water 30 ml, CaO 15 g             +/-8 %
+ 7  CaCO3 -> CaO + CO2 (heat)                  Heating 10 s, balloon fitted 1st  +/-15 %
+ 8  2FeSO4 -> Fe2O3 + SO2 + SO3 (heat)         Heating 10 s                      +/-15 %
+
+Recipes are DATA, stored in VR/Assets/Resources/ReactionDefinitions/ReactionDefinition_1..8.asset
+(ScriptableObjects). Changing a target or tolerance needs no code change.
+
+Reaction categories in the book: Decomposition, Displacement, Neutralization, Redox,
+Precipitation, Combustion.
+
+-------------------------------------------------------------------------------------
+4. SCENES (4 Unity scenes, VR/Assets/Scenes)
+-------------------------------------------------------------------------------------
+MainMenuScene      Entry point. World-space menu: Practice, Testing, Lab Assistant,
+                   Settings, Exit. Scene changes load asynchronously behind a fade.
+LabScene           The practice laboratory: Reaction Book, 8 reactions, free-hand engine,
+                   history, graphs, in-lab AI, periodic table, onboarding.
+TestingPhaseLab    Assessment: randomized practical + theory tasks, timer, coins, report.
+LabAssistantScene  Dedicated AI tutor scene with the assistant character/avatar.
+
+-------------------------------------------------------------------------------------
+5. HOW A NORMAL SESSION WORKS (USER JOURNEY)
+-------------------------------------------------------------------------------------
+1. Launch -> Main menu -> Practice.
+2. First visit: an onboarding card explains the goal ("the AMOUNT is what is judged").
+   A live objective line at the top always says what to do next.
+3. Open the Reaction Book (B on desktop), flip pages (arrow keys) or press 1-8.
+4. Choose difficulty: Guided (tolerance x1.5, targets shown), Standard (x1.0),
+   Expert (x0.6, targets hidden; unlocked by passing Standard).
+5. LEARN: watch the MP4 molecular video, or press 3D VIEW for the live animation.
+   "ASK AI" asks the assistant about the exact step on screen.
+6. PERFORM: only that reaction's apparatus is enabled. Grab a vessel, tilt to pour
+   (pour rate depends on tilt angle), drop solids, light the Bunsen burner for heating.
+   A floating tooltip + tracker shows live amounts (L toggles full/compact/off).
+7. The engine decides: Success, or a failure with a chemistry-specific reason.
+8. Success -> balanced equation, accuracy %, stars, sound/effects, graphs unlocked,
+   molecular replay offered. Failure -> reason card; press Y to ask the AI why; F5 resets
+   the bench and re-selects the same experiment.
+9. Tab = experiment history, F = scientific graphs, P = periodic table, F1 = pause menu.
+
+-------------------------------------------------------------------------------------
+6. THE FREE-HAND REACTION ENGINE (the core algorithm)
+-------------------------------------------------------------------------------------
+File: VR/Assets/Scripts/FreeHandReactionEngine.cs (1,264 lines). Plain C# class; its only
+Unity dependency is Time.deltaTime, so the same engine is used in the lab AND the test
+scene, and it was tested outside Unity.
+
+Per reagent i: target T_i, tolerance tau_i (%), live quantity q_i(t), difficulty scale s.
+   q_min = T_i * (1 - s*tau_i/100)        q_max = T_i * (1 + s*tau_i/100)
+
+Evaluated every frame:
+ 1. Not configured / already decided -> return stored state.
+ 2. ORDER: reagent added while an earlier one is missing -> FailWrongOrder.
+ 3. OVERDOSE: any q_i > q_max -> FailOverdose IMMEDIATELY (even mid-pour).
+ 4. Still pouring -> state Pouring, settle timer reset, InProgress.
+ 5. Not every reagent added yet -> state WaitingForInputs, InProgress.
+ 6. SETTLING: add frame time to settle timer; until 1.5 s -> InProgress.
+    (So a student who pauses between reagents is never failed unfairly.)
+ 7. UNDERDOSE: any q_i < q_min -> FailUnderdose.
+ 8. PROCEDURE: heating time, and for CaCO3 the balloon must be fitted before heating
+    ("CO2 escaped into the room") -> procedure failure.
+ 9. Otherwise SUCCESS -> score -> record attempt.
+
+States: Idle -> WaitingForInputs -> Pouring <-> Settling -> Success / FailOverdose /
+        FailUnderdose / FailWrongOrder / FailProcedure ; F5 resets to Idle.
+
+-------------------------------------------------------------------------------------
+7. SCORING (ExperimentScoring.cs)
+-------------------------------------------------------------------------------------
+   a_i = clamp(1 - |q_i - T_i| / (T_i * tau_i/100), 0, 1)     (1 = exactly on target)
+   A   = 100 * min_i a_i                                       (worst reagent counts)
+   Stars: fail = 0; A >= 60 -> 3; 25 <= A < 60 -> 2; else 1.
+Why min, not average: one careful measurement must not hide a careless one, and a
+fixed lump (the sodium block, always exact) must not inflate the score. Scoring always
+uses the Standard tolerance so 3 stars mean the same precision on every level.
+Example: reaction 2, H2SO4 target 20 ml, tau 8 % -> accepted 18.4-21.6 ml; 3 stars need
+every reagent within +/-0.64 ml.
+
+-------------------------------------------------------------------------------------
+8. THE AI LAB ASSISTANT
+-------------------------------------------------------------------------------------
+Main files: InLabAssistantController.cs, ExperimentContextProvider.cs,
+            ConvaiAssistantBackend.cs, ChemistryKnowledgeBase.cs, OfflineVoice.cs,
+            LabTextInput.cs, LabAssistantCharacter.cs
+Inputs : hold V = push-to-talk; Enter = type a question (no mic needed); Y = "why did my
+         last experiment fail"; "Ask AI" buttons on graph and molecular panels; M minimises.
+Context sent with every question: current reaction, quantities used, targets and ranges,
+         verdict and failure reason, number of attempts and successes.
+Path 1 (online): POST https://api.convai.com/character/getResponse -> reply text + voice.
+Path 2 (offline, automatic on no credentials / no network / timeout / quota):
+         ChemistryKnowledgeBase classifies the question by keyword scoring into an intent
+         (WhyFailed, Quantities, Procedure, WhatHappened, Molecular, Graphs, Calculation,
+         Safety, Progress; Overview if nothing matches) and answers from the game's own
+         data, e.g. "you poured 27.4 ml where the equation needs 20.0, a 37% overdose".
+         Spoken by the Windows speech synthesiser (Windows only; text elsewhere).
+All Q&A is logged into the attempt history.
+Note: the very first prototype used the Inworld AI SDK; it was replaced by the lighter
+Convai REST integration. Leftover Inworld objects in LabAssistantScene may show
+missing-script warnings; they are inert.
+SECURITY: a real Convai API key was committed to Assets/Resources/LabAssistantSettings.asset
+and is in git history -> ROTATE IT before sharing the repository.
+
+-------------------------------------------------------------------------------------
+9. MOLECULAR LEARNING
+-------------------------------------------------------------------------------------
+* Recorded videos: ReactionLearningController + ReactionLearningVideoCatalog (Unity
+  VideoPlayer). 7 MP4 clips are in the project.
+* Live 3D view (all 8 reactions): MolecularSceneCatalog (stages authored in code) +
+  MolecularAnimationRenderer (renders to a RenderTexture).
+  Red thinning bond = breaking, green thickening bond = forming, yellow dot = electron
+  transfer. Only redox reactions (1, 4, 5, 8) show electron transfer; 2, 3, 6 show none.
+  Atoms use CPK colours with element symbols; heating stages shake and warm the scene.
+
+-------------------------------------------------------------------------------------
+10. EXPERIMENT HISTORY
+-------------------------------------------------------------------------------------
+ExperimentHistoryManager.cs / ExperimentHistoryUI.cs. Each attempt stores: id, reaction,
+timestamp, duration, outcome, quantities used, targets, every step (correct or not),
+accuracy, stars, AI questions/answers. Saved as JSON at
+Application.persistentDataPath/atomix_experiment_history.json, max 300 attempts (oldest
+dropped). UI (Tab): newest first, filter by reaction, expandable details, colour coded.
+
+-------------------------------------------------------------------------------------
+11. SCIENTIFIC GRAPHS (ReactionGraphCatalog / Renderer / UI, key F)
+-------------------------------------------------------------------------------------
+ #  Type         dH (kJ/mol)  Ea (kJ/mol)  dS (J/mol.K)  dG at 298 K (computed)
+ 1  Exothermic     -368.6        10          -15.5         -364.0
+ 2  Exothermic      -63.7        48          -43.0          -50.9
+ 3  Endothermic     +31.4        45         +241.0          -40.5  (entropy driven)
+ 4  Exothermic     -393.2         6          +44.7         -406.5
+ 5  Exothermic     -627.6        85          -86.9         -601.7
+ 6  Exothermic      -65.2        46          -26.3          -57.4
+ 7  Endothermic    +178.3       185         +160.7         +130.4  (needs heat)
+ 8  Endothermic    +340.1       365         +377.4         +227.6  (needs heat)
+Formulas: dG(T) = dH - T*dS/1000 ; crossover T* = 1000*dH/dS ; Ea_reverse = Ea - dH.
+Three graphs: energy profile (Ea, dH, transition state), exo/endothermic diagram, entropy
+comparison of all 8. "Ask AI to Explain" sends the graph values to the assistant.
+dH and dS come from standard thermodynamic data; Ea values are literature-plausible and
+editable.
+
+-------------------------------------------------------------------------------------
+12. TESTING SCENE, COINS AND REPORTS
+-------------------------------------------------------------------------------------
+* 8 practical tasks + 10 theory MCQs = 18 task types (TheoreticalTasksManager has the
+  questions, e.g. "What is the color of phenolphthalein in a basic solution?").
+* Setup screen: choose 3, 5, 8, 10 or all tasks (clamped: theory-only 10, practical-only
+  8, both 18). Timer waits until you choose.
+* Practical tasks use the SAME free-hand engine, with targets hidden.
+* Coins (AtomixCoinBank.cs, stored in PlayerPrefs, persistent):
+    earn 5-100 per task by time left; bonuses: first clear +25, 3-streak +30,
+    5-streak +60, perfect unaided run +50.
+    spend: F2 hint 40 (procedure only, never the amount), F3 +30 s 60, F4 skip 100.
+    ranks: Apprentice 0, Lab Technician 500, Chemist 1500, Senior Chemist 3500,
+    Lab Master 7000 (lifetime coins).
+* ExamSession records every task (passed, failed, skipped, timed out).
+* Report card + "Download this test report": Atomix_Test_Report_<date>_<time>.html and
+  .csv saved to Desktop (fallback Documents, then persistentDataPath). "Retake the test".
+
+-------------------------------------------------------------------------------------
+13. DESKTOP MODE (no headset)
+-------------------------------------------------------------------------------------
+DesktopBootstrap.cs uses [RuntimeInitializeOnLoadMethod] to inject desktop controls into
+the VR scenes at run time: FirstPersonController, crosshair, ray-based grabbing
+(ObjectInteraction / ObjectGrabbable / DesktopInteractable), LabBoundary (keeps you in
+the room), DesktopObjectSettler (drops floating glassware onto the bench).
+Controls:
+ W A S D move | Mouse look | Shift sprint | Space/Ctrl fly up/down
+ Left click grab/release/interact | R release | Q/E rotate | Z/X tilt | C roll
+ (Shift+C reverse) | T reset held pose | B book | Arrows flip pages | 1-8 quick select
+ F5 reset bench | Esc cursor lock / close learning UI
+ V hold to talk | Enter type question | Y why failed | M minimise assistant
+ Tab history | F graphs | P periodic table | L label mode | F1 pause menu
+ Test scene: F2 hint | F3 +30 s | F4 skip
+
+-------------------------------------------------------------------------------------
+14. VR MODE
+-------------------------------------------------------------------------------------
+XR Origin + XR Interaction Toolkit: grab interactables on glassware, ray interaction on
+world-space canvases, locomotion, Oculus hand models. OpenXR / Oculus loader for Quest
+(Android build). Because pour amounts come from tilt angle + time, the same reaction
+scripts work for controller grabs and desktop grabs.
+
+-------------------------------------------------------------------------------------
+15. POLISH, COMFORT AND PRESENTATION
+-------------------------------------------------------------------------------------
+* All sounds synthesised at run time (AtomixAudio.cs) from one D-major palette; grab
+  sounds pitched by object size; gentle failure tones (failure is normal in learning).
+* Three audio buses under master volume; laboratory room tone OFF by default.
+* Camera (CameraJuice.cs): shake on reactions; walking head-bob and sprint FOV kick are
+  OFF by default (motion sickness).
+* Post-processing (AtomixPostFx.cs): ambient occlusion, restrained bloom, antialiasing,
+  box-projected reflection probe; no colour grading.
+* Frame-rate-independent smoothing: x += (target - x) * (1 - exp(-k*dt)).
+* Interactive 118-element periodic table, 13 achievements, pause/settings menu,
+  async loading screen with tips, first-run onboarding.
+
+-------------------------------------------------------------------------------------
+16. ARCHITECTURE (layers)
+-------------------------------------------------------------------------------------
+ INPUT        XR Interaction Toolkit | DesktopBootstrap | Microphone + LabTextInput
+ PRESENTATION Reaction Book | Learning panel (video / 3D) | HUD, onboarding, menus
+ SIMULATION   ControlReactions + 8 reaction scripts | FreeHandReactionEngine |
+              ExperimentFeedbackDirector (effects, sound, camera)
+ INTELLIGENCE InLabAssistantController + ContextProvider | Convai <-> KnowledgeBase |
+              ExperimentScoring + Graph catalog/renderer
+ PERSISTENCE  ExperimentHistoryManager (JSON) | Randomize/ExamSession/Timer |
+              AtomixCoinBank (PlayerPrefs) + ExamReportExporter (HTML/CSV)
+
+Key scripts (VR/Assets/Scripts, 110 files, 39,601 lines of C#):
+ ControlReactions.cs            reaction selection and bench set-up
+ FlipPages.cs, BookCanvasManager.cs, OpenTheBook.cs   Reaction Book
+ Reaction.cs (Na), Reaction_h2so4_cuo.cs, Reaction_hcl_nahco3.cs, KOHReaction.cs,
+ ReactionAli3.cs, reactionCaOH.cs, CaCO3Reaction.cs, Feso4Reaction.cs  the 8 reactions
+ *Test.cs variants               test-scene versions of reactions
+ ReactionDefinition.cs           recipe asset
+ FreeHandReactionEngine.cs       judging logic
+ ExperimentScoring.cs            accuracy, stars, difficulty
+ ExperimentHistoryManager.cs / ExperimentHistoryUI.cs
+ InLabAssistantController.cs, ExperimentContextProvider.cs, ConvaiAssistantBackend.cs,
+ ChemistryKnowledgeBase.cs, OfflineVoice.cs, LabTextInput.cs
+ MolecularSceneCatalog.cs, MolecularAnimationRenderer.cs, ReactionLearningController.cs
+ ReactionGraphData.cs, ReactionGraphCatalog.cs, ReactionGraphRenderer.cs, ReactionGraphUI.cs
+ Randomize.cs, TheoreticalTasksManager.cs, CountdownTimer.cs, ExamSession.cs,
+ ExamSetupUI.cs, ExamCoinHud.cs, AtomixCoinBank.cs, ExamReportExporter.cs, TestResultsUI.cs
+ AchievementSystem.cs, PeriodicTableUI.cs, PauseMenuUI.cs, AtomixSettings.cs
+ DesktopBootstrap.cs, FirstPersonController.cs, ObjectInteraction.cs, LabBoundary.cs,
+ DesktopObjectSettler.cs
+ AtomixAudio.cs, CameraJuice.cs, AtomixPostFx.cs, LabReflections.cs, LabOnboarding.cs
+
+Code size by subsystem (lines / files):
+ Reactions & engine 15,567/43 | UI, settings, audio & polish 8,490/29 |
+ Desktop/XR interaction 3,786/12 | AI assistant 3,733/9 | Assessment & economy 3,667/10 |
+ History, scoring & graphs 2,566/4 | Molecular learning 1,792/3
+
+-------------------------------------------------------------------------------------
+17. TECHNOLOGY STACK
+-------------------------------------------------------------------------------------
+Unity 6000.3.7f1 | C# | OpenXR + Oculus XR | XR Interaction Toolkit | Unity Input System |
+TextMeshPro | Unity VideoPlayer | ScriptableObjects | JSON (persistentDataPath) |
+PlayerPrefs | Convai REST API | Windows speech synthesis | Git/GitHub.
+
+-------------------------------------------------------------------------------------
+18. HOW TO RUN / BUILD
+-------------------------------------------------------------------------------------
+1. Install Unity Hub + Unity 6000.3.7f1 (add Windows build support; add Android Build
+   Support for Quest).
+2. Open the folder "VR" (not the repo root) as the Unity project; let packages import.
+3. Optional AI: put Convai credentials/character in Assets/Resources/LabAssistantSettings.asset.
+   Without them the assistant uses the offline knowledge base.
+4. Play in editor from MainMenuScene. No headset -> desktop mode starts automatically.
+5. Windows build: File > Build Settings > PC, Mac & Linux Standalone > Build.
+6. Quest build: switch platform to Android, enable OpenXR/Oculus, build and deploy.
+More detail: README.md, START_HERE.md, ULTRA_DETAILED_SETUP_GUIDE.md, CONVAI_SETUP_GUIDE.md.
+
+-------------------------------------------------------------------------------------
+19. VERIFICATION DONE (facts from the project's task reports)
+-------------------------------------------------------------------------------------
+* Compiles against the real Unity 6000.3.7f1 assemblies: 0 errors; 68 pre-existing
+  warnings (CS0649/CS0414 in original reaction scripts), 0 new.
+* Reaction-engine outcome matrix (test-scene experiments): 111/111 checks passed
+  (correct amounts, overdose, underdose, wrong order, pause mid-procedure, no target leak).
+* Regression suite after molecular animation + offline AI: 167/167 (atom conservation,
+  bond lengths, knowledge base...).
+* Regression suite after coin economy + exam report: 226/226.
+* Synthesised-audio suite: 22/22.
+NOT yet done: a full Play-mode regression on headset, on-device FPS measurements, and a
+user study (usability / learning gain). Do not claim learning improvement numbers.
+
+-------------------------------------------------------------------------------------
+20. KNOWN LIMITATIONS
+-------------------------------------------------------------------------------------
+* Window title still says "UnityLab"/"AlinaInc" (legacy template name); renaming would
+  reset saved coins/history/settings unless a migration is written.
+* Cloud AI needs credentials + internet; offline answers only cover these 8 reactions.
+* Offline voice is Windows-only.
+* Re-selecting an experiment resets measurements but some visual substance may remain.
+* Coins are per machine (PlayerPrefs) - no accounts/leaderboard.
+* Floating glassware with no collider below stays floating.
+* Committed API key must be rotated.
+
+-------------------------------------------------------------------------------------
+21. FUTURE SCOPE
+-------------------------------------------------------------------------------------
+User study with pre/post tests and SUS; more reactions (organic, titration,
+electrochemistry); teacher dashboard + accounts; on-device small language model;
+multiplayer lab; mixed-reality passthrough; WebGL/Android tablet; Hindi/Marathi support.
+
+-------------------------------------------------------------------------------------
+22. FILES PRODUCED FOR SUBMISSION (folder: Report/)
+-------------------------------------------------------------------------------------
+ Atomix_Major_Project_B_Report.docx        KJSIT-format project report (72 pages)
+ Atomix_Major_Project_B_Report_preview.pdf PDF preview of the report
+ Atomix_IEEE_Paper.docx / .pdf             6-page IEEE-format research paper
+ Atomix_Project_Complete_Guide.txt         this file
+=====================================================================================
